@@ -1,0 +1,41 @@
+<launch>
+  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
+  <arg name="fcu_url" default="serial:///dev/px4_fcu:921600" />
+  <arg name="video_device" default="/dev/robotac_rgb_camera" />
+  <arg name="tags_config" default="$(arg config_root)/apriltag/tags.yaml" />
+  <arg name="use_config_tags" default="true" />
+  <arg name="tag_id" default="0" />
+  <arg name="tag_size" default="0.20" />
+  <arg name="rviz" default="false" />
+  <!-- MAVROS is opt-in so sensor and SLAM bench tests never open the FCU link. -->
+  <arg name="enable_mavros" default="false" />
+
+  <node pkg="robotac_bringup" type="check_hardware_config.sh"
+        name="check_hardware_config" args="$(arg config_root) $(arg enable_mavros)"
+        output="screen" required="true" />
+
+  <group if="$(arg enable_mavros)">
+    <include file="$(find robotac_bringup)/launch/mavros_px4.launch">
+      <arg name="config_root" value="$(arg config_root)" />
+      <arg name="fcu_url" value="$(arg fcu_url)" />
+    </include>
+  </group>
+  <include file="$(find robotac_bringup)/launch/lidar_mid360s.launch">
+    <arg name="config_root" value="$(arg config_root)" />
+  </include>
+  <include file="$(find robotac_bringup)/launch/camera_rgb.launch">
+    <arg name="config_root" value="$(arg config_root)" />
+    <arg name="video_device" value="$(arg video_device)" />
+  </include>
+  <include file="$(find robotac_bringup)/launch/fastlio_mid360s.launch">
+    <arg name="config_root" value="$(arg config_root)" />
+    <arg name="rviz" value="$(arg rviz)" />
+  </include>
+  <include file="$(find robotac_bringup)/launch/apriltag_rgb.launch">
+    <arg name="config_root" value="$(arg config_root)" />
+    <arg name="tags_config" value="$(arg tags_config)" />
+    <arg name="use_config_tags" value="$(arg use_config_tags)" />
+    <arg name="tag_id" value="$(arg tag_id)" />
+    <arg name="tag_size" value="$(arg tag_size)" />
+  </include>
+</launch>

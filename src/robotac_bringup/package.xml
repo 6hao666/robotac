@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>robotac_bringup</name>
+  <version>0.1.0</version>
+  <description>Bringup package for the Robotac ROS Noetic sensor workspace.</description>
+
+  <maintainer email="liyihan.xyz@gmail.com">Li Yihan</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>apriltag_ros</exec_depend>
+  <exec_depend>fast_lio</exec_depend>
+  <exec_depend>image_transport</exec_depend>
+  <exec_depend>image_proc</exec_depend>
+  <exec_depend>livox_ros_driver2</exec_depend>
+  <exec_depend>mavros</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>web_cam</exec_depend>
+</package>

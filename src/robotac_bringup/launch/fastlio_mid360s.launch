@@ -1,0 +1,15 @@
+<launch>
+  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
+  <arg name="fastlio_config" default="$(arg config_root)/fastlio/mid360s.yaml" />
+  <arg name="pcd_save" default="false" />
+  <arg name="rviz" default="false" />
+
+  <rosparam command="load" file="$(arg fastlio_config)" />
+  <param name="pcd_save/pcd_save_en" type="bool" value="$(arg pcd_save)" />
+  <node pkg="fast_lio" type="fastlio_mapping" name="fastlio_mapping" output="screen" />
+
+  <group if="$(arg rviz)">
+    <node pkg="rviz" type="rviz" name="fastlio_rviz"
+          args="-d $(find fast_lio)/rviz_cfg/loam_livox.rviz" output="screen" />
+  </group>
+</launch>

@@ -1,0 +1,23 @@
+<launch>
+  <arg name="fcu_url" default="serial:///dev/px4_fcu:921600" />
+  <arg name="gcs_url" default="" />
+  <arg name="tgt_system" default="1" />
+  <arg name="tgt_component" default="1" />
+  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
+  <arg name="check_geographiclib" default="true" />
+
+  <node if="$(arg check_geographiclib)" pkg="robotac_bringup" type="check_geographiclib.sh"
+        name="check_geographiclib" args="--hold" output="screen" required="true" />
+
+  <include file="$(find mavros)/launch/node.launch">
+    <arg name="pluginlists_yaml" value="$(arg config_root)/mavros/px4_pluginlists.yaml" />
+    <arg name="config_yaml" value="$(arg config_root)/mavros/px4.yaml" />
+    <arg name="fcu_url" value="$(arg fcu_url)" />
+    <arg name="gcs_url" value="$(arg gcs_url)" />
+    <arg name="tgt_system" value="$(arg tgt_system)" />
+    <arg name="tgt_component" value="$(arg tgt_component)" />
+    <arg name="log_output" value="screen" />
+    <arg name="fcu_protocol" value="v2.0" />
+    <arg name="respawn_mavros" value="false" />
+  </include>
+</launch>

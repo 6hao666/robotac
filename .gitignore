@@ -1,0 +1,9 @@
+build/
+devel/
+install/
+log/
+.catkin_tools/
+*.log
+.DS_Store
+__pycache__/
+*.py[cod]

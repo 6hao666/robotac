@@ -1,0 +1,1 @@
+The AprilTag CMake library is installed by scripts/bootstrap_ubuntu20.sh before catkin builds apriltag_ros.

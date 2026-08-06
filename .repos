@@ -1,0 +1,13 @@
+repositories:
+  src/mavros:
+    type: git
+    url: https://github.com/mavlink/mavros.git
+    version: b1a6f84bbd2137ea1a07d905df9e13edf5a002c5
+  src/apriltag:
+    type: git
+    url: https://github.com/AprilRobotics/apriltag.git
+    version: 0e16a12dd380fd607e4afd54712ee9b1ffb9ec8f
+  src/apriltag_ros:
+    type: git
+    url: https://github.com/AprilRobotics/apriltag_ros.git
+    version: 94b3b843324f6b64edc6ca59f9729e9021308406

@@ -1,0 +1,18 @@
+sunray_source:
+  repository: https://gitee.com/yundrone_sunray2023/Sunray_v2.git
+  revision: bd1e3c77be83cf02a28ab722c8d13aecc432e7a1
+  imported_paths:
+    - drivers/livox_ros_driver2
+    - drivers/Livox_SDK2
+    - localization/fast_lio
+    - drivers/web_cam
+mavros:
+  repository: https://github.com/mavlink/mavros.git
+  revision: b1a6f84bbd2137ea1a07d905df9e13edf5a002c5
+  version: 1.21.1
+apriltag:
+  repository: https://github.com/AprilRobotics/apriltag.git
+  revision: 0e16a12dd380fd607e4afd54712ee9b1ffb9ec8f
+apriltag_ros:
+  repository: https://github.com/AprilRobotics/apriltag_ros.git
+  revision: 94b3b843324f6b64edc6ca59f9729e9021308406

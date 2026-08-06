@@ -1,0 +1,15 @@
+# Robotac printed AprilTags. These are separate standalone tags, not a bundle:
+# no fixed transform between tag_0 and tag_1 has been measured.
+#
+# apriltag_ros `size` is the side length at the black/white border used for
+# pose estimation. It therefore uses the printed tag size (200 mm), not the
+# outer paper size including the white margin (250 mm).
+printing:
+  total_size_m: 0.25
+  tag_size_m: 0.20
+
+standalone_tags:
+  - {id: 0, size: 0.20, name: tag_0}
+  - {id: 1, size: 0.20, name: tag_1}
+
+tag_bundles: []

@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>robotac_servo</name>
+  <version>0.1.0</version>
+  <description>Single Boolean switch for the Robotac PWM servo controller.</description>
+
+  <maintainer email="liyihan.xyz@gmail.com">Li Yihan</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+</package>
