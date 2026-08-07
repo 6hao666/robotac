@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Offline MAVROS/PX4 surrogate for the local waypoint controller.
+
+This node never opens a serial device or starts MAVROS.  It provides the
+minimal topic/service contract expected by ``local_waypoint_flight.py`` and
+moves a simulated vehicle toward received local setpoints.  It is intended for
+the integration test that exercises takeoff, a sequence of local ENU waypoints,
+and the AUTO.LAND hand-off.
+"""
+
+import math
+import time
+
+import rospy
+from mavros_msgs.msg import EstimatorStatus, ExtendedState, PositionTarget, State
+from mavros_msgs.srv import CommandBool, CommandBoolResponse, SetMode, SetModeResponse
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool, String
+from tf.transformations import quaternion_from_euler
+
+
+class ClosedLoopMavrosSim(object):
+    def __init__(self):
+        self.rate_hz = float(rospy.get_param("~rate_hz", 40.0))
+        self.horizontal_speed = float(rospy.get_param("~horizontal_speed", 1.0))
+        self.vertical_speed = float(rospy.get_param("~vertical_speed", 0.8))
+        self.yaw_rate = float(rospy.get_param("~yaw_rate", math.radians(120.0)))
+        self.ground_z = float(rospy.get_param("~ground_z", 0.0))
+
+        self.mode = "STABILIZED"
+        self.armed = False
+        self.landed = True
+        self.position = [0.0, 0.0, self.ground_z]
+        self.yaw = 0.0
+        self.target = None
+        self.mode_requests = []
+        self.arm_requests = []
+        self.payload_commands = []
+        self.payload_command_targets = []
+        self.payload_sequence = 0
+        self.setpoint_targets = []
+        self.setpoint_count = 0
+        self.last_tick = time.monotonic()
+        self.completed = False
+
+        self.state_pub = rospy.Publisher("/mavros/state", State, queue_size=5)
+        self.extended_pub = rospy.Publisher("/mavros/extended_state", ExtendedState, queue_size=5)
+        self.estimator_pub = rospy.Publisher("/mavros/estimator_status", EstimatorStatus, queue_size=5)
+        self.local_pub = rospy.Publisher("/mavros/local_position/odom", Odometry, queue_size=5)
+        self.vision_pub = rospy.Publisher("/robotac/fastlio_vision/healthy", Bool, queue_size=1, latch=True)
+        self.output_pub = rospy.Publisher(
+            "/robotac/fastlio_vision/output_enabled", Bool, queue_size=1, latch=True)
+        self.payload_status_pub = rospy.Publisher(
+            "/robotac/servo/status", String, queue_size=5, latch=True)
+        # Mirror the servo node's startup closed command so the controller can
+        # establish its required status sequence baseline before mission start.
+        self.payload_sequence = 1
+        self.payload_status_pub.publish(
+            String(data="state=closed success=true seq=1 boot=sim"))
+        self.summary_pub = rospy.Publisher("/robotac/test/flight_summary", String, queue_size=1, latch=True)
+
+        rospy.Subscriber("/mavros/setpoint_raw/local", PositionTarget, self._setpoint_cb, queue_size=20)
+        rospy.Subscriber("/robotac/flight/status", String, self._status_cb, queue_size=10)
+        rospy.Subscriber("/robotac/servo/open", Bool, self._payload_cb, queue_size=5)
+        rospy.Service("/mavros/set_mode", SetMode, self._set_mode_cb)
+        rospy.Service("/mavros/cmd/arming", CommandBool, self._arming_cb)
+        self.timer = rospy.Timer(rospy.Duration(1.0 / max(1.0, self.rate_hz)), self._tick)
+
+    @staticmethod
+    def _move_toward(current, target, limit):
+        error = target - current
+        if abs(error) <= limit:
+            return target
+        return current + math.copysign(limit, error)
+
+    def _setpoint_cb(self, msg):
+        if msg.coordinate_frame != PositionTarget.FRAME_LOCAL_NED:
+            rospy.logerr("unexpected coordinate frame: %d", msg.coordinate_frame)
+            return
+        self.target = (msg.position.x, msg.position.y, msg.position.z, msg.yaw)
+        if not self.setpoint_targets or any(
+                abs(current - previous) > 1.0e-3
+                for current, previous in zip(self.target, self.setpoint_targets[-1])):
+            self.setpoint_targets.append(self.target)
+        self.setpoint_count += 1
+
+    def _set_mode_cb(self, request):
+        self.mode_requests.append(request.custom_mode)
+        if request.custom_mode in ("OFFBOARD", "AUTO.LAND"):
+            self.mode = request.custom_mode
+            if request.custom_mode == "AUTO.LAND":
+                self.landed = False
+        return SetModeResponse(mode_sent=True)
+
+    def _arming_cb(self, request):
+        self.arm_requests.append(bool(request.value))
+        self.armed = bool(request.value)
+        self.landed = not self.armed
+        return CommandBoolResponse(success=True, result=0)
+
+    def _payload_cb(self, msg):
+        is_open = bool(msg.data)
+        self.payload_commands.append(is_open)
+        self.payload_command_targets.append(self.target)
+        self.payload_sequence += 1
+        self.payload_status_pub.publish(String(data=(
+            "state=%s success=true seq=%d boot=sim" %
+            ("open" if is_open else "closed", self.payload_sequence))))
+
+    def _route_summary(self):
+        airborne = [target for target in self.setpoint_targets
+                    if target[2] > self.ground_z + 0.1]
+        return "->".join("(%.3f,%.3f,%.3f)" % target[:3] for target in airborne)
+
+    def _status_cb(self, msg):
+        if "state=COMPLETE" not in msg.data or self.completed:
+            return
+        self.completed = True
+        open_target = next((target for command, target in zip(
+            self.payload_commands, self.payload_command_targets) if command), None)
+        open_target_text = ("none" if open_target is None else
+                            "(%.3f,%.3f,%.3f)" % open_target[:3])
+        self.summary_pub.publish(String(data=(
+            "complete mode_requests=%s arm_requests=%s payload_commands=%s route=%s payload_open_at=%s setpoints=%d final=(%.3f,%.3f,%.3f,%.3f)" %
+            (",".join(self.mode_requests), ",".join(str(value) for value in self.arm_requests),
+             ",".join("open" if value else "closed" for value in self.payload_commands),
+             self._route_summary(), open_target_text, self.setpoint_count,
+             self.position[0], self.position[1], self.position[2], self.yaw))))
+
+    def _advance_vehicle(self, dt):
+        if self.mode == "AUTO.LAND":
+            self.position[2] = max(self.ground_z, self.position[2] - self.vertical_speed * dt)
+            if self.position[2] <= self.ground_z + 1.0e-3:
+                self.position[2] = self.ground_z
+                self.armed = False
+                self.landed = True
+            return
+        if self.mode != "OFFBOARD" or not self.armed or self.target is None:
+            return
+        self.position[0] = self._move_toward(
+            self.position[0], self.target[0], self.horizontal_speed * dt)
+        self.position[1] = self._move_toward(
+            self.position[1], self.target[1], self.horizontal_speed * dt)
+        self.position[2] = self._move_toward(
+            self.position[2], self.target[2], self.vertical_speed * dt)
+        yaw_error = math.atan2(math.sin(self.target[3] - self.yaw),
+                               math.cos(self.target[3] - self.yaw))
+        self.yaw += math.copysign(min(abs(yaw_error), self.yaw_rate * dt), yaw_error)
+        self.landed = False
+
+    def _tick(self, _event):
+        now_wall = time.monotonic()
+        dt = min(0.2, max(0.0, now_wall - self.last_tick))
+        self.last_tick = now_wall
+        self._advance_vehicle(dt)
+
+        now = rospy.Time.now()
+        state = State(connected=True, armed=self.armed, mode=self.mode)
+        self.state_pub.publish(state)
+        self.extended_pub.publish(ExtendedState(
+            landed_state=(ExtendedState.LANDED_STATE_ON_GROUND if self.landed
+                          else ExtendedState.LANDED_STATE_IN_AIR)))
+        self.estimator_pub.publish(EstimatorStatus(
+            attitude_status_flag=True,
+            pos_horiz_rel_status_flag=True,
+            pos_vert_abs_status_flag=True,
+            pos_vert_agl_status_flag=True))
+        odom = Odometry()
+        odom.header.stamp = now
+        odom.header.frame_id = "odom"
+        odom.child_frame_id = "base_link"
+        odom.pose.pose.position.x = self.position[0]
+        odom.pose.pose.position.y = self.position[1]
+        odom.pose.pose.position.z = self.position[2]
+        quaternion = quaternion_from_euler(0.0, 0.0, self.yaw)
+        odom.pose.pose.orientation.x = quaternion[0]
+        odom.pose.pose.orientation.y = quaternion[1]
+        odom.pose.pose.orientation.z = quaternion[2]
+        odom.pose.pose.orientation.w = quaternion[3]
+        self.local_pub.publish(odom)
+        self.vision_pub.publish(Bool(data=True))
+        self.output_pub.publish(Bool(data=True))
+        if not self.completed:
+            self.summary_pub.publish(String(data=(
+                "running mode=%s armed=%s setpoints=%d position=(%.3f,%.3f,%.3f)" %
+                (self.mode, self.armed, self.setpoint_count,
+                 self.position[0], self.position[1], self.position[2]))))
+
+
+if __name__ == "__main__":
+    rospy.init_node("robotac_flight_closed_loop_sim")
+    ClosedLoopMavrosSim()
+    rospy.spin()

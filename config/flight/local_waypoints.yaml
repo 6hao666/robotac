@@ -1,0 +1,73 @@
+local_waypoint_flight:
+  # x/y/z are FLU offsets relative to the aircraft heading captured by start:
+  # x forward, y left, z up. The controller converts them to local ENU before
+  # publishing to MAVROS. No global/GPS coordinate is used.
+  waypoint_frame: robotac_start_body
+  waypoints:
+    # Takeoff is handled separately at z=1.0, then perform the payload route.
+    - {x: 1.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 1.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: -1.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    # After reaching the rear point, wait 2 s, open the 45 degree payload
+    # servo, keep position for another 2 s, then fly back to the origin.
+    - {x: -1.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0,
+       payload_action: open, payload_settle: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+  takeoff_height: 1.0
+  position_tolerance: 0.25
+  yaw_tolerance_deg: 12.0
+  waypoint_timeout: 45.0
+  mission_timeout: 600.0
+  control_rate_hz: 20.0
+  prestream_seconds: 5.0
+  require_vision: true
+  require_vision_output: true
+  require_estimator_status: true
+  # Local ENU flight does not require GPS/global position. PX4 must still
+  # report a valid relative horizontal estimate and a vertical estimate.
+  require_horizontal_relative: true
+  require_vertical_estimate: true
+  max_waypoint_xy: 20.0
+  max_waypoint_z: 5.0
+  local_pose_timeout: 0.30
+  # Reject stale, replayed, or future-dated MAVROS local odometry.
+  local_stamp_timeout: 0.50
+  local_stamp_future_tolerance: 0.10
+  state_timeout: 1.0
+  extended_state_timeout: 1.0
+  vision_timeout: 0.50
+  estimator_timeout: 1.0
+  # Time allowed for an explicitly requested OFFBOARD transition and arming.
+  offboard_timeout: 15.0
+  arming_timeout: 15.0
+  takeoff_timeout: 45.0
+  # Critical health, estimator, payload, MAVROS, and OFFBOARD faults stop raw
+  # MAVROS setpoints. PX4 Offboard-loss failsafe must be validated before this
+  # route is allowed to control the aircraft. An operator abort can choose hold
+  # only while the operator is actively supervising the aircraft.
+  critical_fault_action: release
+  operator_abort_action: release
+  abort_land_mode_timeout: 8.0
+  auto_land_mode_timeout: 8.0
+  landing_timeout: 60.0
+  # This route is defined to land after returning to its start point. The launch
+  # must therefore explicitly pass auto_land:=true before /start is accepted.
+  require_auto_land: true
+  # The flight node emits payload commands only with the explicit launch
+  # argument enable_payload:=true. It first commands false (0 degrees), then
+  # this route publishes true (45 degrees) only at the rear waypoint.
+  payload_topic: /robotac/servo/open
+  # The servo status is a serial-write acknowledgement, not a physical angle
+  # measurement. Require it so a missing/failed controller blocks the mission.
+  payload_status_topic: /robotac/servo/status
+  payload_required_connection: true
+  payload_require_ack: true
+  payload_ack_timeout: 1.0
+  payload_preflight_close: true
+  payload_default_settle_seconds: 2.0
+  land_mode: AUTO.LAND
+  land_descent_rate: 0.30
+  land_switch_height: 0.50

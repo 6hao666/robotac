@@ -26,6 +26,7 @@ touch "${workspace_dir}/src/apriltag/CATKIN_IGNORE"
 "${sudo_cmd[@]}" apt-get update
 "${sudo_cmd[@]}" apt-get install -y \
   build-essential cmake geographiclib-tools git python3-rosdep python3-catkin-tools python3-serial \
+  python3-numpy \
   libapr1-dev libeigen3-dev libopencv-dev libpcl-dev libv4l-dev \
   ros-noetic-camera-info-manager ros-noetic-cmake-modules \
   ros-noetic-cv-bridge \

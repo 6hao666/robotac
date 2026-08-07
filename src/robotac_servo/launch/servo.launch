@@ -14,5 +14,6 @@
     <param name="initial_open" value="$(arg initial_open)" />
     <param name="close_on_shutdown" value="$(arg close_on_shutdown)" />
     <remap from="open" to="/robotac/servo/open" />
+    <remap from="status" to="/robotac/servo/status" />
   </node>
 </launch>

@@ -5,13 +5,31 @@
   <arg name="tags_config" default="$(arg config_root)/apriltag/tags.yaml" />
   <arg name="use_config_tags" default="true" />
   <arg name="tag_id" default="0" />
-  <arg name="tag_size" default="0.20" />
+  <arg name="tag_size" default="0.15" />
   <arg name="rviz" default="false" />
   <!-- MAVROS is opt-in so sensor and SLAM bench tests never open the FCU link. -->
   <arg name="enable_mavros" default="false" />
+  <arg name="enable_vision_bridge" default="false" />
+  <arg name="vision_enable_output" default="false" />
+  <arg name="enable_flight_controller" default="false" />
+  <arg name="flight_enable_control" default="false" />
+  <arg name="flight_auto_mode" default="false" />
+  <arg name="flight_auto_arm" default="false" />
+  <arg name="flight_auto_land" default="false" />
+  <arg name="flight_enable_payload" default="false" />
+  <!-- Servo hardware is independent and never starts unless explicitly asked. -->
+  <arg name="enable_servo" default="false" />
+  <arg name="servo_port" default="/dev/robotac_servo" />
+  <arg name="servo_open_angle" default="45" />
+  <arg name="servo_close_on_shutdown" default="true" />
+  <!-- Control/output requires an explicitly requested FCU connection. -->
+  <arg name="require_fcu" default="$(eval arg('enable_mavros') == 'true' or (arg('enable_vision_bridge') == 'true' and arg('vision_enable_output') == 'true') or (arg('enable_flight_controller') == 'true' and arg('flight_enable_control') == 'true'))" />
+  <arg name="require_flight" default="$(eval arg('enable_flight_controller') == 'true' and arg('flight_enable_control') == 'true')" />
+  <arg name="require_vision_output" default="$(eval arg('enable_vision_bridge') == 'true' and arg('vision_enable_output') == 'true')" />
+  <arg name="require_payload" default="$(eval arg('enable_servo') == 'true' or (arg('enable_flight_controller') == 'true' and arg('flight_enable_payload') == 'true'))" />
 
   <node pkg="robotac_bringup" type="check_hardware_config.sh"
-        name="check_hardware_config" args="$(arg config_root) $(arg enable_mavros)"
+        name="check_hardware_config" args="$(arg config_root) $(arg require_fcu) $(arg require_flight) $(arg require_vision_output) $(arg require_payload) $(arg enable_mavros)"
         output="screen" required="true" />
 
   <group if="$(arg enable_mavros)">
@@ -38,4 +56,28 @@
     <arg name="tag_id" value="$(arg tag_id)" />
     <arg name="tag_size" value="$(arg tag_size)" />
   </include>
+  <group if="$(arg enable_servo)">
+    <include file="$(find robotac_servo)/launch/servo.launch">
+      <arg name="port" value="$(arg servo_port)" />
+      <arg name="open_angle" value="$(arg servo_open_angle)" />
+      <arg name="initial_open" value="false" />
+      <arg name="close_on_shutdown" value="$(arg servo_close_on_shutdown)" />
+    </include>
+  </group>
+  <group if="$(arg enable_vision_bridge)">
+    <include file="$(find robotac_flight)/launch/fastlio_vision_bridge.launch">
+      <arg name="config_root" value="$(arg config_root)" />
+      <arg name="enable_mavros_output" value="$(arg vision_enable_output)" />
+    </include>
+  </group>
+  <group if="$(arg enable_flight_controller)">
+    <include file="$(find robotac_flight)/launch/local_waypoint_flight.launch">
+      <arg name="config_root" value="$(arg config_root)" />
+      <arg name="enable_control" value="$(arg flight_enable_control)" />
+      <arg name="auto_mode" value="$(arg flight_auto_mode)" />
+      <arg name="auto_arm" value="$(arg flight_auto_arm)" />
+      <arg name="auto_land" value="$(arg flight_auto_land)" />
+      <arg name="enable_payload" value="$(arg flight_enable_payload)" />
+    </include>
+  </group>
 </launch>

@@ -14,6 +14,8 @@
   <exec_depend>image_proc</exec_depend>
   <exec_depend>livox_ros_driver2</exec_depend>
   <exec_depend>mavros</exec_depend>
+  <exec_depend>robotac_flight</exec_depend>
+  <exec_depend>robotac_servo</exec_depend>
   <exec_depend>tf</exec_depend>
   <exec_depend>web_cam</exec_depend>
 </package>

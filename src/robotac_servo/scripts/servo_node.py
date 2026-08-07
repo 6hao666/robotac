@@ -12,9 +12,10 @@ from __future__ import annotations
 import threading
 import os
 import termios
+import uuid
 
 import rospy
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 
 try:
     import serial
@@ -109,6 +110,8 @@ class ServoSwitch:
         self.close_on_shutdown = bool_param("~close_on_shutdown", True)
         self._lock = threading.Lock()
         self._connection = None
+        self._command_sequence = 0
+        self._boot_id = uuid.uuid4().hex
 
         try:
             if serial is not None:
@@ -132,6 +135,9 @@ class ServoSwitch:
         self._subscriber = rospy.Subscriber(
             "open", Bool, self._on_open, queue_size=1
         )
+        # This is feedback only.  It confirms that the command frame was
+        # accepted by the USB serial device; it is not a measured servo angle.
+        self._status_pub = rospy.Publisher("status", String, queue_size=5, latch=True)
         self._send_open(self.initial_open)
         rospy.on_shutdown(self._shutdown)
         rospy.loginfo(
@@ -139,22 +145,33 @@ class ServoSwitch:
             self.port, self.open_angle,
         )
 
-    def _send_open(self, is_open: bool) -> None:
+    def _publish_status(self, is_open: bool, success: bool) -> None:
+        state = "open" if is_open else "closed"
+        self._status_pub.publish(String(data=(
+            "state=%s success=%s seq=%d boot=%s" %
+            (state, str(success).lower(), self._command_sequence, self._boot_id))))
+
+    def _send_open(self, is_open: bool) -> bool:
         angle = self.open_angle if is_open else CLOSED_ANGLE
         frame = make_frame(duty_for_angle(angle))
+        self._command_sequence += 1
         with self._lock:
             if self._connection is None or not self._connection.is_open:
                 rospy.logerr("servo serial connection is not open")
-                return
+                self._publish_status(is_open, False)
+                return False
             try:
                 self._connection.write(frame)
                 self._connection.flush()
             except SERIAL_ERRORS as exc:
                 rospy.logerr("failed to send servo command: %s", exc)
-                return
+                self._publish_status(is_open, False)
+                return False
         rospy.loginfo("servo %s: angle=%d duty=%d%% frame=%s",
                       "open" if is_open else "closed", angle,
                       duty_for_angle(angle), frame.hex(" ").upper())
+        self._publish_status(is_open, True)
+        return True
 
     def _on_open(self, message: Bool) -> None:
         self._send_open(bool(message.data))

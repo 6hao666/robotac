@@ -1,0 +1,18 @@
+<launch>
+  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
+  <arg name="enable_control" default="false" />
+  <arg name="auto_mode" default="false" />
+  <arg name="auto_arm" default="false" />
+  <arg name="auto_land" default="false" />
+  <arg name="enable_payload" default="false" />
+  <arg name="deployment_file" default="$(arg config_root)/deployment.yaml" />
+  <rosparam command="load" file="$(arg deployment_file)" />
+  <rosparam command="load" file="$(arg config_root)/flight/local_waypoints.yaml" />
+  <node pkg="robotac_flight" type="local_waypoint_flight.py" name="local_waypoint_flight" output="screen">
+    <param name="enable_control" value="$(arg enable_control)" />
+    <param name="auto_mode" value="$(arg auto_mode)" />
+    <param name="auto_arm" value="$(arg auto_arm)" />
+    <param name="auto_land" value="$(arg auto_land)" />
+    <param name="enable_payload" value="$(arg enable_payload)" />
+  </node>
+</launch>

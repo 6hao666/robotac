@@ -1,0 +1,25 @@
+fastlio_vision_bridge:
+  frame_alignment_approved: false
+  expected_input_parent: camera_init
+  expected_input_child: body
+  output_parent_frame: odom
+  output_child_frame: base_link
+  strict_input_frames: true
+  max_age: 0.30
+  max_future: 0.10
+  health_timeout: 0.50
+  min_rate_hz: 5.0
+  min_samples: 5
+  max_position_speed: 8.0
+  max_yaw_rate: 6.0
+  # Transform points from FAST-LIO's startup world into the local ENU world:
+  # p_output = R * p_input + t.  Keep identity only after axis alignment has
+  # been checked on the aircraft.
+  input_world_to_output_quaternion: [0.0, 0.0, 0.0, 1.0]
+  input_world_to_output_translation: [0.0, 0.0, 0.0]
+  # Transform FAST-LIO's IMU/body origin into the airframe base_link.
+  # Identity is a bench default and is not approval for flight.
+  input_child_to_output_child_quaternion: [0.0, 0.0, 0.0, 1.0]
+  input_child_to_output_child_translation: [0.0, 0.0, 0.0]
+  default_position_variance: 0.04
+  default_angle_variance: 0.03

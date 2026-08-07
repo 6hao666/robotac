@@ -6,7 +6,7 @@
   <arg name="tags_config" default="$(arg config_root)/apriltag/tags.yaml" />
   <arg name="use_config_tags" default="true" />
   <arg name="tag_id" default="0" />
-  <arg name="tag_size" default="0.20" />
+  <arg name="tag_size" default="0.15" />
   <arg name="tag_frame" default="tag_$(arg tag_id)" />
   <arg name="publish_tf" default="true" />
   <arg name="transport_hint" default="raw" />
