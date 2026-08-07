@@ -112,8 +112,13 @@ complete. No arming, mode, setpoint, takeoff, or other flight-control command
 is sent by this workspace's launch files.
 
 The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
-rectified `/camera/rgb/image_rect`. JPEG compressed image transport is disabled
-for this camera. AprilTag consumes the rectified topic by default.
+rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG
+1920x1080 at 30 Hz; YUYV at this resolution is only 5 Hz on the tested camera.
+This camera's MJPEG stream decodes as YUV422, so the driver profile uses
+`color_format: yuv422p`. JPEG compressed image transport is disabled for this
+camera. AprilTag consumes the rectified topic by default. The checked-in
+1920x1080 calibration has 30 valid samples and 0.1000 px RMS reprojection error.
+The original calibration is retained as `config/camera/rgb_640x480.yaml`.
 AprilTag defaults to `tag36h11` and loads standalone IDs `0` and `1` from
 `config/apriltag/tags.yaml`. Each tag uses `0.20 m` for pose estimation; the
 print's total outer size is recorded as `0.25 m`. To temporarily test one

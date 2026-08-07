@@ -1,15 +1,15 @@
 start_service_name: start_capture
 stop_service_name: stop_capture
 io_method: mmap
-pixel_format: yuyv
-color_format: yuv420p
+pixel_format: mjpeg
+color_format: yuv422p
 create_suspended: false
 full_ffmpeg_log: false
 camera_name: robotac_rgb
 camera_frame_id: camera_rgb_optical_frame
 camera_transport_suffix: image_raw
-image_width: 640
-image_height: 480
+image_width: 1920
+image_height: 1080
 framerate: 30
 intrinsic_controls:
   focus_auto: true

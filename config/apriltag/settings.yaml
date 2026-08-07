@@ -5,6 +5,7 @@ tag_blur: 0.0
 tag_refine_edges: 1
 tag_debug: 0
 max_hamming_dist: 2
+remove_duplicates: true
 publish_tf: true
 publish_tag_detections_image: true
 transport_hint: raw

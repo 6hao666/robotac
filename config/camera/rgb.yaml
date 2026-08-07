@@ -1,15 +1,17 @@
-image_width: 640
-image_height: 480
+# Calibrated at 1920x1080: 30 valid chessboard samples, RMS reprojection
+# error 0.1000 px.
+image_width: 1920
+image_height: 1080
 camera_name: robotac_rgb
 camera_matrix:
   rows: 3
   cols: 3
-  data: [607.8430888589952, 0, 328.8965475232032, 0, 607.6498900959788, 234.662524332214, 0, 0, 1]
+  data: [1377.00111, 0, 866.680812, 0, 1376.06455, 553.518700, 0, 0, 1]
 distortion_model: plumb_bob
 distortion_coefficients:
   rows: 1
   cols: 5
-  data: [-0.02662544988925387, 0.002462800698326053, 0.002867291073526289, 0.0007856023017094266, 0]
+  data: [-0.02528598, -0.01133927, 0.00019289, -0.00077216, 0.03408396]
 rectification_matrix:
   rows: 3
   cols: 3
@@ -17,4 +19,4 @@ rectification_matrix:
 projection_matrix:
   rows: 3
   cols: 4
-  data: [602.61083984375, 0, 328.9241231960186, 0, 0, 603.940185546875, 234.9569757244826, 0, 0, 0, 1, 0]
+  data: [1377.00111, 0, 866.680812, 0, 0, 1376.06455, 553.518700, 0, 0, 0, 1, 0]
