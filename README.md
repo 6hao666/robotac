@@ -576,8 +576,10 @@ seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and
 the analyzer rejects evidence that lacks a reached-and-dwelled record for any
 configured waypoint. It also requires active-flight `/mavros/vision_pose/pose_cov`
 samples, a seen `fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision
-status by default. If `require_payload_open:=true`, it additionally requires a
-successful payload-open acknowledgement.
+status by default. Active evidence must also show MAVROS connected, armed, and
+in `OFFBOARD` during the mission window before ending disarmed/on-ground. If
+`require_payload_open:=true`, it additionally requires a successful payload-open
+acknowledgement.
 
 After the observer exits, analyze the evidence offline:
 

@@ -170,6 +170,22 @@ def _base_phase(data, args):
         if summary.get("active_fastlio_vision_status_ok_seen") is not True:
             missing.append("active_fastlio_vision_status_ok_seen")
 
+    if args.require_active_mavros_control:
+        active_mavros_count = _int(summary.get("active_mavros_state_count"))
+        if active_mavros_count is None or active_mavros_count < 1:
+            missing.append("active_mavros_state_missing")
+        if summary.get("active_mavros_connected_seen") is not True:
+            missing.append("active_mavros_connected_seen")
+        if summary.get("active_mavros_armed_seen") is not True:
+            missing.append("active_mavros_armed_seen")
+        if summary.get("active_mavros_offboard_seen") is not True:
+            missing.append("active_mavros_offboard_seen")
+        if active_mavros_count is not None and active_mavros_count >= 1:
+            modes = summary.get("active_mavros_modes")
+            notes.append("active_mavros_states=%d modes=%s" % (
+                active_mavros_count,
+                "/".join(str(mode) for mode in modes) if isinstance(modes, list) else "unknown"))
+
     if summary.get("final_armed") is not False:
         missing.append("final_disarmed")
     if summary.get("final_landed_state") != LANDED_STATE_ON_GROUND:
@@ -235,6 +251,9 @@ def _build_parser():
                         help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
     parser.add_argument("--min-active-vision-pose-count", type=int, default=5,
                         help="Require at least this many /mavros/vision_pose/pose_cov samples during active flight; 0 disables")
+    parser.add_argument("--no-require-active-mavros-control", dest="require_active_mavros_control",
+                        action="store_false", default=True,
+                        help="Do not require active evidence to show MAVROS connected, armed, and OFFBOARD")
     parser.add_argument("--json", action="store_true")
     return parser
 

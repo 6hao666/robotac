@@ -992,7 +992,8 @@ script = sys.argv[1]
 def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    payload_open=False, state="COMPLETE", abort_reason=None,
                    target_reached=True, missing_waypoint_index=None,
-                   target_dwell_s=1.0, active_vision=True):
+                   target_dwell_s=1.0, active_vision=True,
+                   active_mavros_control=True):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
          "waypoint_total": 8, "min_distance_m": 0.08,
@@ -1047,6 +1048,11 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "initial_local_yaw": 0.0,
             "initial_local_z": 0.0,
             "max_relative_local_z": 1.02,
+            "active_mavros_state_count": 12 if active_mavros_control else 0,
+            "active_mavros_connected_seen": bool(active_mavros_control),
+            "active_mavros_armed_seen": bool(active_mavros_control),
+            "active_mavros_offboard_seen": bool(active_mavros_control),
+            "active_mavros_modes": ["OFFBOARD"] if active_mavros_control else [],
             "final_armed": False,
             "final_landed_state": 1,
             "payload_open_seen": payload_open,
@@ -1075,6 +1081,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if no_vision.returncode == 0 or "active_vision_pose_count_below_5" not in no_vision.stdout:
         raise SystemExit("Active flight evidence analyzer accepted missing active vision pose evidence")
+    write_evidence(evidence, active_mavros_control=False)
+    no_mavros_control = subprocess.run([sys.executable, script, str(root)], text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if no_mavros_control.returncode == 0 or "active_mavros_offboard_seen" not in no_mavros_control.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted missing active MAVROS OFFBOARD evidence")
     write_evidence(evidence, target_reached=False)
     unreached = subprocess.run([sys.executable, script, str(root)], text=True,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1210,6 +1221,11 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "initial_local_position": [0.50 if corrupt_initial_origin else 0.0, 0.0, 0.0],
         "initial_local_yaw": 0.0,
         "max_relative_local_z": 1.02,
+        "active_mavros_state_count": 12,
+        "active_mavros_connected_seen": True,
+        "active_mavros_armed_seen": True,
+        "active_mavros_offboard_seen": True,
+        "active_mavros_modes": ["OFFBOARD"],
         "final_armed": False,
         "final_landed_state": 1,
         "payload_open_seen": payload_open,

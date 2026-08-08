@@ -64,6 +64,8 @@ class ActiveFlightObserver(object):
         self.require_active_vision_pose = _as_bool(rospy.get_param("~require_active_vision_pose", True))
         self.min_active_vision_pose_count = int(rospy.get_param("~min_active_vision_pose_count", 5))
         self.expected_vision_parent = str(rospy.get_param("~expected_vision_parent", "odom")).strip()
+        self.require_active_mavros_control = _as_bool(
+            rospy.get_param("~require_active_mavros_control", True))
         self.require_waypoints_complete = _as_bool(rospy.get_param("~require_waypoints_complete", True))
         self.require_final_disarmed = _as_bool(rospy.get_param("~require_final_disarmed", True))
         self.require_final_on_ground = _as_bool(rospy.get_param("~require_final_on_ground", True))
@@ -119,6 +121,11 @@ class ActiveFlightObserver(object):
 
         self.mavros_state = None
         self.mavros_state_receive = None
+        self.active_mavros_state_count = 0
+        self.active_mavros_connected_seen = False
+        self.active_mavros_armed_seen = False
+        self.active_mavros_offboard_seen = False
+        self.active_mavros_modes = []
         self.extended_state = None
         self.extended_state_receive = None
 
@@ -312,6 +319,19 @@ class ActiveFlightObserver(object):
     def _mavros_state_cb(self, msg):
         self.mavros_state = msg
         self.mavros_state_receive = time.monotonic()
+        if self._mission_active():
+            self.active_mavros_state_count += 1
+            if bool(msg.connected):
+                self.active_mavros_connected_seen = True
+            if bool(msg.armed):
+                self.active_mavros_armed_seen = True
+            mode = str(msg.mode).strip()
+            if mode and (not self.active_mavros_modes or self.active_mavros_modes[-1] != mode):
+                self.active_mavros_modes.append(mode)
+                if len(self.active_mavros_modes) > 20:
+                    self.active_mavros_modes = self.active_mavros_modes[-20:]
+            if mode == "OFFBOARD":
+                self.active_mavros_offboard_seen = True
 
     def _extended_state_cb(self, msg):
         self.extended_state = msg
@@ -436,6 +456,15 @@ class ActiveFlightObserver(object):
             if (not final and
                     not self._fresh(self.active_vision_pose_receive, self.stream_timeout)):
                 return "active_vision_pose_missing_or_stale"
+        if self.require_active_mavros_control:
+            if self.active_mavros_state_count < 1:
+                return "active_mavros_state_missing"
+            if not self.active_mavros_connected_seen:
+                return "active_mavros_connected_missing"
+            if not self.active_mavros_armed_seen:
+                return "active_mavros_armed_missing"
+            if not self.active_mavros_offboard_seen:
+                return "active_mavros_offboard_missing"
         target_issue = self._target_reach_issue()
         if target_issue is not None:
             return target_issue
@@ -483,6 +512,11 @@ class ActiveFlightObserver(object):
             "max_relative_local_z": self.max_relative_local_z,
             "final_local_position": self.final_local_position,
             "final_local_yaw": self.final_local_yaw,
+            "active_mavros_state_count": self.active_mavros_state_count,
+            "active_mavros_connected_seen": self.active_mavros_connected_seen,
+            "active_mavros_armed_seen": self.active_mavros_armed_seen,
+            "active_mavros_offboard_seen": self.active_mavros_offboard_seen,
+            "active_mavros_modes": self.active_mavros_modes,
             "final_armed": None if self.mavros_state is None else bool(self.mavros_state.armed),
             "final_mode": None if self.mavros_state is None else self.mavros_state.mode,
             "final_landed_state": None if self.extended_state is None else self.extended_state.landed_state,
@@ -497,6 +531,7 @@ class ActiveFlightObserver(object):
                 "require_active_vision_pose": self.require_active_vision_pose,
                 "min_active_vision_pose_count": self.min_active_vision_pose_count,
                 "expected_vision_parent": self.expected_vision_parent,
+                "require_active_mavros_control": self.require_active_mavros_control,
                 "require_waypoints_complete": self.require_waypoints_complete,
                 "require_final_disarmed": self.require_final_disarmed,
                 "require_final_on_ground": self.require_final_on_ground,

@@ -312,6 +312,8 @@ def _check_evidence_surface(root):
         "active_vision_pose_count_below",
         "active_vision_output_enabled_seen",
         "active_fastlio_vision_status_ok_seen",
+        "active_mavros_armed_seen",
+        "active_mavros_offboard_seen",
         "final_disarmed",
         "final_on_ground",
     )))

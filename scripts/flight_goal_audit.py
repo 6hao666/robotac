@@ -95,6 +95,7 @@ def _active_report(args, configured_waypoints):
         waypoint_reach_tolerance=args.waypoint_reach_tolerance,
         min_target_dwell_s=args.min_target_dwell_s,
         min_active_vision_pose_count=args.min_active_vision_pose_count,
+        require_active_mavros_control=args.require_active_mavros_control,
         json=False,
     )
     return analyze_active_flight_evidence.build_report(active_args)
@@ -469,6 +470,9 @@ def _build_parser():
                         help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
     parser.add_argument("--min-active-vision-pose-count", type=int, default=5,
                         help="Require active-flight evidence to include this many MAVROS vision pose samples; 0 disables")
+    parser.add_argument("--no-require-active-mavros-control", dest="require_active_mavros_control",
+                        action="store_false", default=True,
+                        help="Do not require active evidence to show MAVROS connected, armed, and OFFBOARD")
     parser.add_argument("--require-phase", default="active_local_flight",
                         choices=("configuration", "active_preflight",
                                  "active_local_flight", "payload_local_flight"))

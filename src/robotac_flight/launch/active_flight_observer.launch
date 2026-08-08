@@ -11,6 +11,7 @@
   <arg name="require_active_vision_pose" default="true" />
   <arg name="min_active_vision_pose_count" default="5" />
   <arg name="expected_vision_parent" default="odom" />
+  <arg name="require_active_mavros_control" default="true" />
   <arg name="require_waypoints_complete" default="true" />
   <arg name="require_final_disarmed" default="true" />
   <arg name="require_final_on_ground" default="true" />
@@ -38,6 +39,7 @@
     <param name="require_active_vision_pose" value="$(arg require_active_vision_pose)" />
     <param name="min_active_vision_pose_count" value="$(arg min_active_vision_pose_count)" />
     <param name="expected_vision_parent" value="$(arg expected_vision_parent)" />
+    <param name="require_active_mavros_control" value="$(arg require_active_mavros_control)" />
     <param name="require_waypoints_complete" value="$(arg require_waypoints_complete)" />
     <param name="require_final_disarmed" value="$(arg require_final_disarmed)" />
     <param name="require_final_on_ground" value="$(arg require_final_on_ground)" />
