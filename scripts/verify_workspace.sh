@@ -66,6 +66,10 @@ if ! bash "${hardware_check}" "${workspace_dir}/config" false false false false 
   echo "Passive full-system hardware check unexpectedly failed." >&2
   exit 1
 fi
+if ! bash "${hardware_check}" "${workspace_dir}/config" false false false false true false; then
+  echo "Read-only MAVROS hardware check unexpectedly required flight calibration." >&2
+  exit 1
+fi
 if bash "${hardware_check}" "${workspace_dir}/config" true true false false true true >/dev/null 2>&1; then
   echo "Active full-system hardware check unexpectedly bypassed deployment gates." >&2
   exit 1
