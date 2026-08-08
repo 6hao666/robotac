@@ -188,6 +188,19 @@ It reports separate readiness for `vision_output`, `active_local_flight`, and
 `--require-phase payload_local_flight` when you want the command to fail closed
 until that stage is truly ready.
 
+To check the source/configuration contract for the whole local-flight goal
+without ROS or aircraft access, run:
+
+```bash
+./scripts/check_flight_contract.py
+```
+
+It verifies that MAVROS remains local-only, the configured mission is local and
+relative, the controller cannot publish raw setpoints before explicit control
+enable plus `/robotac/flight/start`, FAST-LIO vision output is gated before
+`/mavros/vision_pose/pose_cov`, and the read-only/active evidence tools still
+cover target reach, landing, and payload evidence.
+
 ## FAST-LIO vision input
 
 `fastlio_vision_bridge.py` converts `/Odometry` from

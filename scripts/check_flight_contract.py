@@ -1,0 +1,372 @@
+#!/usr/bin/env python3
+"""Offline contract check for Robotac local MAVROS flight.
+
+This script verifies the source/configuration contract for the current flight
+goal: local relative MAVROS waypoint flight with takeoff/landing and FAST-LIO
+as MAVROS external-vision pose input. It is intentionally read-only: it never
+starts ROS, opens serial/network devices, publishes topics, calls services,
+changes modes, arms, lands, or sends setpoints.
+"""
+
+import argparse
+import json
+import pathlib
+import sys
+from types import SimpleNamespace
+
+import yaml
+
+
+SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+WORKSPACE_DIR = SCRIPT_DIR.parent
+FLIGHT_SCRIPT_DIR = WORKSPACE_DIR / "src" / "robotac_flight" / "scripts"
+if str(FLIGHT_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(FLIGHT_SCRIPT_DIR))
+
+import audit_local_mission  # noqa: E402
+
+
+MAVROS_REQUIRED_WHITELIST = {
+    "command",
+    "imu",
+    "local_position",
+    "param",
+    "setpoint_raw",
+    "sys_status",
+    "sys_time",
+    "vision_pose_estimate",
+}
+
+MAVROS_FORBIDDEN_GLOBAL_PLUGINS = {
+    "fake_gps",
+    "global_position",
+    "gps_input",
+    "gps_status",
+    "waypoint",
+}
+
+FORBIDDEN_FLIGHT_SOURCE_TOKENS = {
+    "CommandTOL",
+    "CommandTOLLocal",
+    "WaypointPush",
+    "WaypointPull",
+    "WaypointSetCurrent",
+    "/mavros/global_position",
+    "/mavros/mission",
+    "/mavros/cmd/takeoff",
+    "/mavros/cmd/land",
+}
+
+
+def _load_yaml(path):
+    with open(path, "r", encoding="utf-8") as stream:
+        data = yaml.safe_load(stream) or {}
+    if not isinstance(data, dict):
+        raise ValueError("%s must be a YAML mapping" % path)
+    return data
+
+
+def _read(path):
+    return pathlib.Path(path).read_text(encoding="utf-8")
+
+
+def _phase(name, ready, missing=None, notes=None):
+    return {
+        "name": name,
+        "ready": bool(ready),
+        "missing": list(missing or []),
+        "notes": list(notes or []),
+    }
+
+
+def _contains_all(source, tokens):
+    return [token for token in tokens if token not in source]
+
+
+def _check_mavros_local_only(root):
+    missing = []
+    notes = []
+    plugin_path = root / "config" / "mavros" / "px4_pluginlists.yaml"
+    px4_path = root / "config" / "mavros" / "px4.yaml"
+    launch_path = root / "src" / "robotac_bringup" / "launch" / "mavros_px4.launch"
+
+    plugins = _load_yaml(plugin_path)
+    whitelist = set(plugins.get("plugin_whitelist") or [])
+    blacklist = set(plugins.get("plugin_blacklist") or [])
+    for name in sorted(MAVROS_REQUIRED_WHITELIST):
+        if name not in whitelist:
+            missing.append("mavros_plugin_whitelist:%s" % name)
+    for name in sorted(MAVROS_FORBIDDEN_GLOBAL_PLUGINS):
+        if name in whitelist:
+            missing.append("mavros_global_plugin_whitelisted:%s" % name)
+        if name not in blacklist:
+            missing.append("mavros_global_plugin_not_blacklisted:%s" % name)
+
+    px4 = _load_yaml(px4_path)
+    local_position = px4.get("local_position", {})
+    if not isinstance(local_position, dict):
+        missing.append("mavros_px4_local_position_mapping")
+    else:
+        if local_position.get("frame_id") != "map":
+            missing.append("mavros_local_position_frame_id")
+        local_tf = local_position.get("tf", {}) or {}
+        if not isinstance(local_tf, dict) or local_tf.get("child_frame_id") != "base_link":
+            missing.append("mavros_local_position_child_frame_id")
+    vision_pose = px4.get("vision_pose", {})
+    if not isinstance(vision_pose, dict):
+        missing.append("mavros_px4_vision_pose_mapping")
+    else:
+        tf_cfg = vision_pose.get("tf", {}) or {}
+        if not isinstance(tf_cfg, dict):
+            missing.append("mavros_vision_pose_tf_mapping")
+        elif tf_cfg.get("listen") not in (False, "false", "False", 0):
+            missing.append("mavros_vision_pose_tf_listen_disabled")
+
+    launch = _read(launch_path)
+    if '<arg name="check_geographiclib" default="false" />' not in launch:
+        missing.append("mavros_geographiclib_optional_for_local_only")
+    if "serial:///dev/px4_fcu:921600" not in launch:
+        missing.append("mavros_stable_fcu_default")
+    if not missing:
+        notes.append("MAVROS surface is local-only: setpoint_raw + vision_pose_estimate, no GPS/global mission")
+    return _phase("mavros_local_only_contract", not missing, missing, notes)
+
+
+def _check_local_route(root):
+    missing = []
+    notes = []
+    route_file = root / "config" / "flight" / "local_waypoints.yaml"
+    route = _load_yaml(route_file).get("local_waypoint_flight", {})
+    if not isinstance(route, dict):
+        return _phase("local_relative_route_contract", False, ["local_waypoint_flight_mapping"])
+
+    audit_args = SimpleNamespace(
+        file=str(route_file),
+        origin_x=0.0,
+        origin_y=0.0,
+        origin_z=0.0,
+        origin_yaw=None,
+        origin_yaw_deg=0.0,
+        no_takeoff=False,
+        require_auto_land=True,
+        require_payload_open=True,
+        json=False,
+    )
+    try:
+        summary = audit_local_mission._build_summary(audit_args)
+    except Exception as exc:  # pragma: no cover - surfaced in script output
+        return _phase("local_relative_route_contract", False, ["mission_audit:%s" % exc])
+
+    if summary.get("frame") != "robotac_start_body":
+        missing.append("route_frame_robotac_start_body")
+    if abs(float(summary.get("takeoff_height_m", 0.0)) - 1.0) > 1.0e-6:
+        missing.append("takeoff_height_1m")
+    if summary.get("auto_land_required") is not True:
+        missing.append("require_auto_land_true")
+    if summary.get("land_mode") != "AUTO.LAND":
+        missing.append("land_mode_AUTO.LAND")
+    if int(summary.get("targets_with_takeoff", 0)) < 2:
+        missing.append("route_targets_with_takeoff")
+    if "setpoint_topic" in route and route.get("setpoint_topic") != "/mavros/setpoint_raw/local":
+        missing.append("route_setpoint_topic")
+    for key in (
+            "require_vision",
+            "require_vision_output",
+            "require_estimator_status",
+            "require_horizontal_relative",
+            "require_vertical_estimate",
+            "require_vision_output_consumer",
+            "require_setpoint_consumer",
+            "require_timesync"):
+        if route.get(key) is not True:
+            missing.append("route_%s" % key)
+
+    if not missing:
+        notes.extend([
+            "route is local relative to captured start heading",
+            "takeoff=1.0m targets=%d payload_events=%d" % (
+                summary["targets_with_takeoff"], len(summary["payload_events"])),
+        ])
+    return _phase("local_relative_route_contract", not missing, missing, notes)
+
+
+def _check_controller_source(root):
+    missing = []
+    notes = []
+    path = root / "src" / "robotac_flight" / "scripts" / "local_waypoint_flight.py"
+    launch_path = root / "src" / "robotac_flight" / "launch" / "local_waypoint_flight.launch"
+    source = _read(path)
+    launch = _read(launch_path)
+
+    forbidden_present = [token for token in sorted(FORBIDDEN_FLIGHT_SOURCE_TOKENS) if token in source]
+    if forbidden_present:
+        missing.extend("controller_forbidden_token:%s" % token for token in forbidden_present)
+    missing.extend("controller_missing:%s" % token for token in _contains_all(source, (
+        "PositionTarget.FRAME_LOCAL_NED",
+        "msg.position.x, msg.position.y, msg.position.z = target[:3]",
+        "if self.enable_control and self.control_tx_enabled and self.setpoint_pub is not None:",
+        "self.setpoint_pub = (rospy.Publisher(self.setpoint_topic, PositionTarget, queue_size=10)",
+        "if self.enable_control else None)",
+        "rospy.ServiceProxy(\"/mavros/set_mode\", SetMode)",
+        "rospy.ServiceProxy(\"/mavros/cmd/arming\", CommandBool)",
+        "auto_land_required_for_this_route",
+        "mavros_setpoint_raw_consumer_unavailable",
+        "mavros_vision_pose_consumer_unavailable",
+        "mavros_setpoint_raw_consumer_lost",
+        "mavros_vision_pose_consumer_lost",
+    )))
+    missing.extend("launch_missing:%s" % token for token in _contains_all(launch, (
+        '<arg name="enable_control" default="false" />',
+        '<arg name="auto_mode" default="false" />',
+        '<arg name="auto_arm" default="false" />',
+        '<arg name="auto_land" default="false" />',
+        '<arg name="enable_payload" default="false" />',
+    )))
+    if not missing:
+        notes.append("controller publishes MAVROS raw setpoints only after explicit enable_control and /start")
+    return _phase("waypoint_controller_contract", not missing, missing, notes)
+
+
+def _check_fastlio_vision_bridge(root):
+    missing = []
+    notes = []
+    config_path = root / "config" / "fastlio" / "vision_bridge.yaml"
+    launch_path = root / "src" / "robotac_flight" / "launch" / "fastlio_vision_bridge.launch"
+    source_path = root / "src" / "robotac_flight" / "scripts" / "fastlio_vision_bridge.py"
+    config = _load_yaml(config_path).get("fastlio_vision_bridge", {})
+    if not isinstance(config, dict):
+        return _phase("fastlio_vision_pose_contract", False, ["fastlio_vision_bridge_mapping"])
+
+    for key, expected in (
+            ("expected_input_parent", "camera_init"),
+            ("expected_input_child", "body"),
+            ("output_parent_frame", "odom")):
+        if config.get(key) != expected:
+            missing.append("vision_bridge_%s" % key)
+    if config.get("strict_input_frames") is not True:
+        missing.append("vision_bridge_strict_input_frames")
+    if config.get("frame_alignment_approved") is True:
+        missing.append("real_config_frame_alignment_should_not_be_preapproved")
+
+    launch = _read(launch_path)
+    missing.extend("vision_launch_missing:%s" % token for token in _contains_all(launch, (
+        '<arg name="input_topic" default="/Odometry" />',
+        '<arg name="output_topic" default="/mavros/vision_pose/pose_cov" />',
+        '<arg name="enable_mavros_output" default="false" />',
+    )))
+    source = _read(source_path)
+    missing.extend("vision_source_missing:%s" % token for token in _contains_all(source, (
+        "requested_output = _as_bool(rospy.get_param(\"~enable_mavros_output\", False))",
+        "self.enable_mavros_output = requested_output and self.frame_alignment_approved",
+        "self.pose_pub = rospy.Publisher(self.output_topic, PoseWithCovarianceStamped, queue_size=10)",
+        "self.preview_pub = rospy.Publisher(self.preview_topic, PoseWithCovarianceStamped, queue_size=10)",
+        "if self.enable_mavros_output and self.healthy:",
+        "self.pose_pub.publish(output)",
+        "self.status_pub.publish(String(data=reason))",
+    )))
+    if not missing:
+        notes.append("FAST-LIO /Odometry camera_init->body is gated before /mavros/vision_pose/pose_cov")
+    return _phase("fastlio_vision_pose_contract", not missing, missing, notes)
+
+
+def _check_evidence_surface(root):
+    missing = []
+    notes = []
+    required_files = (
+        "src/robotac_flight/scripts/local_flight_preflight.py",
+        "src/robotac_flight/scripts/ev_acceptance_observer.py",
+        "src/robotac_flight/scripts/active_flight_observer.py",
+        "scripts/collect_readonly_flight_evidence.sh",
+        "scripts/analyze_readonly_flight_evidence.py",
+        "scripts/analyze_active_flight_evidence.py",
+        "scripts/flight_goal_audit.py",
+        "scripts/flight_test_ladder.sh",
+    )
+    for relative in required_files:
+        if not (root / relative).exists():
+            missing.append("missing:%s" % relative)
+
+    readonly = _read(root / "scripts" / "analyze_readonly_flight_evidence.py")
+    active = _read(root / "scripts" / "analyze_active_flight_evidence.py")
+    ladder = _read(root / "scripts" / "flight_test_ladder.sh")
+    missing.extend("readonly_analyzer_missing:%s" % token for token in _contains_all(readonly, (
+        "mavros_safe_state",
+        "vision_to_mavros",
+        "active_preflight_evidence",
+        "ev_acceptance_observer.json",
+        "read_only_no_setpoint_publishers",
+    )))
+    missing.extend("active_analyzer_missing:%s" % token for token in _contains_all(active, (
+        "active_local_flight",
+        "payload_local_flight",
+        "waypoints_incomplete",
+        "target_records_missing",
+        "target_records_unreached",
+        "final_disarmed",
+        "final_on_ground",
+    )))
+    missing.extend("ladder_missing:%s" % token for token in _contains_all(ladder, (
+        "active flight commands hidden",
+        "Read-only evidence did not pass active_preflight_evidence",
+        "rosservice call /robotac/flight/start",
+        "flight_auto_arm:=false",
+        "flight_auto_mode:=false",
+        "flight_auto_land:=true",
+    )))
+    if not missing:
+        notes.append("read-only and active evidence gates cover vision input, target reach, landing, and payload")
+    return _phase("evidence_gate_contract", not missing, missing, notes)
+
+
+def build_report(args):
+    root = pathlib.Path(args.workspace).expanduser().resolve()
+    phases = [
+        _check_mavros_local_only(root),
+        _check_local_route(root),
+        _check_controller_source(root),
+        _check_fastlio_vision_bridge(root),
+        _check_evidence_surface(root),
+    ]
+    return {
+        "workspace": str(root),
+        "overall_ready": all(phase["ready"] for phase in phases),
+        "phases": phases,
+    }
+
+
+def _print_text(report):
+    print("ROBOTAC_FLIGHT_CONTRACT_CHECK workspace=%s" % report["workspace"])
+    for phase in report["phases"]:
+        print("%s=%s" % (phase["name"], "READY" if phase["ready"] else "BLOCKED"))
+        if phase["missing"]:
+            print("  missing=%s" % ",".join(phase["missing"]))
+        if phase["notes"]:
+            print("  notes=%s" % "; ".join(phase["notes"]))
+    print("overall_ready=%s" % report["overall_ready"])
+
+
+def _build_parser():
+    parser = argparse.ArgumentParser(
+        description="Check the offline Robotac local MAVROS/FAST-LIO flight contract.")
+    parser.add_argument("--workspace", default=str(WORKSPACE_DIR),
+                        help="Robotac workspace/repository root, default: this script's parent")
+    parser.add_argument("--json", action="store_true")
+    return parser
+
+
+def main():
+    args = _build_parser().parse_args()
+    report = build_report(args)
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        _print_text(report)
+    return 0 if report["overall_ready"] else 2
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        sys.exit(1)

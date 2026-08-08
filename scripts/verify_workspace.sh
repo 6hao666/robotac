@@ -40,6 +40,7 @@ required_paths=(
   config/udev/99-robotac-rgb-camera.rules.template
   scripts/analyze_active_flight_evidence.py
   scripts/analyze_readonly_flight_evidence.py
+  scripts/check_flight_contract.py
   scripts/collect_readonly_flight_evidence.sh
   scripts/flight_goal_audit.py
   scripts/flight_test_ladder.sh
@@ -258,6 +259,16 @@ readiness_report=$(python3 "${workspace_dir}/src/robotac_flight/scripts/local_fl
 printf '%s\n' "${readiness_report}"
 [[ "${readiness_report}" == *"LOCAL_FLIGHT_READINESS"* ]]
 [[ "${readiness_report}" == *"local_mission_file=READY"* ]]
+
+contract_report=$(python3 "${workspace_dir}/scripts/check_flight_contract.py" \
+  --workspace "${workspace_dir}")
+printf '%s\n' "${contract_report}"
+[[ "${contract_report}" == *"mavros_local_only_contract=READY"* ]]
+[[ "${contract_report}" == *"local_relative_route_contract=READY"* ]]
+[[ "${contract_report}" == *"waypoint_controller_contract=READY"* ]]
+[[ "${contract_report}" == *"fastlio_vision_pose_contract=READY"* ]]
+[[ "${contract_report}" == *"evidence_gate_contract=READY"* ]]
+echo "Validated offline local flight goal contract."
 [[ "${readiness_report}" == *"mavros_local_only=READY"* ]]
 [[ "${readiness_report}" == *"fastlio_vision_bridge_config=BLOCKED"* ]]
 [[ "${readiness_report}" == *"vision_output=BLOCKED"* ]]
