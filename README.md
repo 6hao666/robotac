@@ -551,6 +551,19 @@ waypoints to be consumed, relative airborne altitude to have been observed, MAVR
 finish disarmed/on-ground, and, if `require_payload_open:=true`, a successful
 payload-open acknowledgement.
 
+After the observer exits, analyze the evidence offline:
+
+```bash
+./scripts/analyze_active_flight_evidence.py "${flight_evidence_dir}"
+./scripts/analyze_active_flight_evidence.py \
+  "${flight_evidence_dir}" --require-phase payload_local_flight
+```
+
+The first command proves the local waypoint/takeoff/landing contract. The
+payload phase additionally requires a successful servo open acknowledgement.
+Like the read-only evidence analyzer, it only reads JSON and never interacts
+with ROS, MAVROS, or the aircraft.
+
 The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
 rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG
 1920x1080 at 30 Hz; YUYV at this resolution is only 5 Hz on the tested camera.

@@ -293,6 +293,9 @@ roslaunch robotac_flight active_flight_observer.launch \
 
 # Explicit operator start after preflight/visual checks pass:
 rosservice call /robotac/flight/start
+
+# After the observer exits, verify the captured completion evidence:
+./scripts/analyze_active_flight_evidence.py "${flight_evidence_dir}"
 EOF
 
   if ! python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
@@ -324,6 +327,8 @@ roslaunch robotac_flight active_flight_observer.launch \
   require_payload_open:=true \
   evidence_file:="${payload_flight_evidence_dir}/active_flight_observer.json"
 rosservice call /robotac/flight/start
+./scripts/analyze_active_flight_evidence.py \
+  "${payload_flight_evidence_dir}" --require-phase payload_local_flight
 EOF
 else
   print_section "active flight commands hidden"

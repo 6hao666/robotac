@@ -38,6 +38,7 @@ required_paths=(
   config/deployment_sim.yaml
   config/udev/99-robotac-servo.rules.template
   config/udev/99-robotac-rgb-camera.rules.template
+  scripts/analyze_active_flight_evidence.py
   scripts/analyze_readonly_flight_evidence.py
   scripts/collect_readonly_flight_evidence.sh
   scripts/flight_test_ladder.sh
@@ -802,6 +803,43 @@ if re.search(r"subprocess\.run|subprocess\.Popen|os\.system", source):
 print("Validated read-only flight evidence analyzer safety surface.")
 PY
 
+python3 - "${workspace_dir}/scripts/analyze_active_flight_evidence.py" <<'PY'
+import pathlib
+import re
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+for expected in (
+    "ACTIVE_FLIGHT_EVIDENCE_ANALYSIS",
+    "active_local_flight",
+    "payload_local_flight",
+    "active_flight_observer.json",
+    "active_local_flight_passed",
+    "waypoints_incomplete",
+    "final_disarmed",
+    "final_on_ground",
+):
+    if expected not in source:
+        raise SystemExit(f"Active flight evidence analyzer check failed: missing {expected}")
+for forbidden in (
+    "rospy",
+    "rosservice",
+    "roslaunch",
+    "rostopic pub",
+    "ServiceProxy",
+    "Publisher",
+    "/mavros/cmd/arming",
+    "/mavros/set_mode",
+    "/mavros/setpoint_raw/local",
+    "/robotac/flight/start",
+):
+    if forbidden in source:
+        raise SystemExit(f"Active flight evidence analyzer must not reference control path {forbidden}")
+if re.search(r"subprocess\.run|subprocess\.Popen|os\.system", source):
+    raise SystemExit("Active flight evidence analyzer must only read files, not execute commands")
+print("Validated active flight evidence analyzer safety surface.")
+PY
+
 python3 - "${workspace_dir}/scripts/analyze_readonly_flight_evidence.py" <<'PY'
 import pathlib
 import subprocess
@@ -880,6 +918,63 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
     if unsafe.returncode == 0 or "read_only_no_setpoint_publishers=BLOCKED" not in unsafe.stdout:
         raise SystemExit("Read-only evidence analyzer unexpectedly accepted a setpoint publisher")
 print("Validated read-only flight evidence analyzer with synthetic evidence.")
+PY
+
+python3 - "${workspace_dir}/scripts/analyze_active_flight_evidence.py" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+script = sys.argv[1]
+
+def write_evidence(path, *, success=True, reason="active_local_flight_passed",
+                   payload_open=False, state="COMPLETE", abort_reason=None):
+    path.write_text(json.dumps({
+        "observer": "active_flight_observer",
+        "success": success,
+        "reason": reason,
+        "summary": {
+            "last_status": {"state": state, "waypoint": "8/8"},
+            "state_history": ["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "LANDING", "COMPLETE"],
+            "abort_reason": abort_reason,
+            "max_waypoint_index": 8,
+            "total_waypoints": 8,
+            "setpoint_count": 120,
+            "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
+            "local_count": 240,
+            "initial_local_z": 0.0,
+            "max_relative_local_z": 1.02,
+            "final_armed": False,
+            "final_landed_state": 1,
+            "payload_open_seen": payload_open,
+        },
+    }, indent=2), encoding="utf-8")
+
+with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as directory:
+    root = pathlib.Path(directory)
+    evidence = root / "active_flight_observer.json"
+    write_evidence(evidence)
+    ok = subprocess.run([sys.executable, script, str(root)], text=True,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if ok.returncode != 0 or "active_local_flight=READY" not in ok.stdout:
+        raise SystemExit("Active flight evidence analyzer rejected valid evidence:\n%s\n%s" % (ok.stdout, ok.stderr))
+    payload_missing = subprocess.run([sys.executable, script, str(root), "--require-phase", "payload_local_flight"],
+                                     text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if payload_missing.returncode == 0 or "payload_local_flight=BLOCKED" not in payload_missing.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted missing payload evidence")
+    write_evidence(evidence, payload_open=True)
+    payload_ok = subprocess.run([sys.executable, script, str(root), "--require-phase", "payload_local_flight"],
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if payload_ok.returncode != 0 or "payload_local_flight=READY" not in payload_ok.stdout:
+        raise SystemExit("Active flight evidence analyzer rejected valid payload evidence")
+    write_evidence(evidence, success=False, reason="flight_aborted:test", abort_reason="test", state="ABORT")
+    failed = subprocess.run([sys.executable, script, str(root)], text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if failed.returncode == 0 or "active_local_flight=BLOCKED" not in failed.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted failed/aborted evidence")
+print("Validated active flight evidence analyzer with synthetic evidence.")
 PY
 
 for script in "${workspace_dir}"/scripts/*.sh "${workspace_dir}"/src/robotac_bringup/scripts/*.sh; do
