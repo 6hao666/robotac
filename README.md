@@ -253,6 +253,27 @@ serial device and never starts MAVROS:
 src/robotac_flight/test/run_closed_loop_sim.sh
 ```
 
+The corresponding FAST-LIO bridge regression starts only a loopback ROS master
+and publishes simulated `camera_init -> body` odometry. It verifies that the
+bridge preserves the FAST-LIO timestamp, emits the configured local pose, and
+requires a new health window after an invalid input frame. It never starts
+MAVROS or opens a hardware device:
+
+```bash
+src/robotac_flight/test/run_vision_bridge_sim.sh
+```
+
+The controller also has an isolated FAST-LIO-health-loss regression. It
+deliberately stops the fake vision-health stream after OFFBOARD/arming, then
+verifies that the controller enters `ABORT` and sends no raw MAVROS setpoints
+whose source timestamp is later than the controller's abort-status timestamp.
+This covers the controller's health-timeout behavior; it is separate from the
+bridge regression above:
+
+```bash
+src/robotac_flight/test/run_flight_fault_sim.sh
+```
+
 For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
 `auto_land` are independent gates. Keep all automatic gates false for the first
 connected test. The checked-in route has `require_auto_land: true`, so an active

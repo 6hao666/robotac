@@ -144,15 +144,19 @@ class FastlioVisionBridge(object):
 
     def _reject(self, reason):
         self.drop_count += 1
-        self._reset_health_window()
+        self._reset_health_window(reset_pose_baseline=True)
         self._set_status(reason)
 
-    def _reset_health_window(self):
+    def _reset_health_window(self, reset_pose_baseline=True):
         """Require a new consecutive sample window after a fault or timeout."""
         self.healthy = False
         self.valid_count = 0
         self.rate_hz = 0.0
         self.last_rate_stamp = None
+        if reset_pose_baseline:
+            self.last_stamp = None
+            self.last_position = None
+            self.last_quaternion = None
 
     def _normal_covariance(self, values, quaternion):
         try:

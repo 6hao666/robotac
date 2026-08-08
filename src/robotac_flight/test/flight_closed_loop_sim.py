@@ -26,6 +26,10 @@ class ClosedLoopMavrosSim(object):
         self.vertical_speed = float(rospy.get_param("~vertical_speed", 0.8))
         self.yaw_rate = float(rospy.get_param("~yaw_rate", math.radians(120.0)))
         self.ground_z = float(rospy.get_param("~ground_z", 0.0))
+        self.fault = str(rospy.get_param("~fault", "")).strip().lower()
+        self.fault_delay = float(rospy.get_param("~fault_delay", 0.8))
+        if self.fault not in ("", "vision_loss"):
+            raise ValueError("unsupported simulated fault: %s" % self.fault)
 
         self.mode = "STABILIZED"
         self.armed = False
@@ -42,6 +46,14 @@ class ClosedLoopMavrosSim(object):
         self.setpoint_count = 0
         self.last_tick = time.monotonic()
         self.completed = False
+        self.flight_started = None
+        self.fault_active = False
+        self.abort_seen = False
+        self.abort_reason = ""
+        self.abort_seen_time = None
+        self.abort_source_stamp = None
+        self.setpoint_source_stamps = []
+        self.fault_summary_published = False
 
         self.state_pub = rospy.Publisher("/mavros/state", State, queue_size=5)
         self.extended_pub = rospy.Publisher("/mavros/extended_state", ExtendedState, queue_size=5)
@@ -58,6 +70,8 @@ class ClosedLoopMavrosSim(object):
         self.payload_status_pub.publish(
             String(data="state=closed success=true seq=1 boot=sim"))
         self.summary_pub = rospy.Publisher("/robotac/test/flight_summary", String, queue_size=1, latch=True)
+        self.fault_summary_pub = rospy.Publisher(
+            "/robotac/test/flight_fault_summary", String, queue_size=1, latch=True)
 
         rospy.Subscriber("/mavros/setpoint_raw/local", PositionTarget, self._setpoint_cb, queue_size=20)
         rospy.Subscriber("/robotac/flight/status", String, self._status_cb, queue_size=10)
@@ -83,6 +97,7 @@ class ClosedLoopMavrosSim(object):
                 for current, previous in zip(self.target, self.setpoint_targets[-1])):
             self.setpoint_targets.append(self.target)
         self.setpoint_count += 1
+        self.setpoint_source_stamps.append(msg.header.stamp.to_sec())
 
     def _set_mode_cb(self, request):
         self.mode_requests.append(request.custom_mode)
@@ -113,6 +128,25 @@ class ClosedLoopMavrosSim(object):
         return "->".join("(%.3f,%.3f,%.3f)" % target[:3] for target in airborne)
 
     def _status_cb(self, msg):
+        if "state=ABORT" in msg.data and not self.abort_seen:
+            self.abort_seen = True
+            self.abort_seen_time = time.monotonic()
+            # ``PositionTarget`` carries the controller's source timestamp.
+            # Count messages generated after this status callback, rather than
+            # discarding an arbitrary receive-time window that could hide a
+            # continuing setpoint stream.
+            self.abort_source_stamp = None
+            for field in msg.data.split():
+                if field.startswith("error="):
+                    self.abort_reason = field.split("=", 1)[1]
+                elif field.startswith("stamp="):
+                    try:
+                        self.abort_source_stamp = float(field.split("=", 1)[1])
+                    except ValueError:
+                        pass
+            if self.abort_source_stamp is None:
+                self.abort_source_stamp = rospy.Time.now().to_sec()
+            return
         if "state=COMPLETE" not in msg.data or self.completed:
             return
         self.completed = True
@@ -148,11 +182,39 @@ class ClosedLoopMavrosSim(object):
         self.yaw += math.copysign(min(abs(yaw_error), self.yaw_rate * dt), yaw_error)
         self.landed = False
 
+    def _fault_due(self):
+        if not self.fault:
+            return False
+        if self.flight_started is None:
+            if self.mode == "OFFBOARD" and self.armed:
+                self.flight_started = time.monotonic()
+            return False
+        return time.monotonic() - self.flight_started >= self.fault_delay
+
+    def _publish_fault_summary(self):
+        if not self.abort_seen or self.fault_summary_published:
+            return
+        now = time.monotonic()
+        # Observe long enough for a faulty 20 Hz controller to emit several
+        # messages. Source stamps distinguish a pre-ABORT transport backlog
+        # from a message generated after the controller reported ABORT.
+        if now - self.abort_seen_time < 0.8:
+            return
+        post_abort_setpoints = sum(
+            1 for stamp in self.setpoint_source_stamps
+            if stamp > self.abort_source_stamp)
+        self.fault_summary_pub.publish(String(data=(
+            "abort fault=%s error=%s post_abort_setpoints=%d mode=%s armed=%s" %
+            (self.fault, self.abort_reason, post_abort_setpoints, self.mode, self.armed))))
+        self.fault_summary_published = True
+
     def _tick(self, _event):
         now_wall = time.monotonic()
         dt = min(0.2, max(0.0, now_wall - self.last_tick))
         self.last_tick = now_wall
         self._advance_vehicle(dt)
+        if self._fault_due():
+            self.fault_active = True
 
         now = rospy.Time.now()
         state = State(connected=True, armed=self.armed, mode=self.mode)
@@ -167,7 +229,7 @@ class ClosedLoopMavrosSim(object):
             pos_vert_agl_status_flag=True))
         odom = Odometry()
         odom.header.stamp = now
-        odom.header.frame_id = "odom"
+        odom.header.frame_id = "map"
         odom.child_frame_id = "base_link"
         odom.pose.pose.position.x = self.position[0]
         odom.pose.pose.position.y = self.position[1]
@@ -178,8 +240,10 @@ class ClosedLoopMavrosSim(object):
         odom.pose.pose.orientation.z = quaternion[2]
         odom.pose.pose.orientation.w = quaternion[3]
         self.local_pub.publish(odom)
-        self.vision_pub.publish(Bool(data=True))
+        if not (self.fault_active and self.fault == "vision_loss"):
+            self.vision_pub.publish(Bool(data=True))
         self.output_pub.publish(Bool(data=True))
+        self._publish_fault_summary()
         if not self.completed:
             self.summary_pub.publish(String(data=(
                 "running mode=%s armed=%s setpoints=%d position=(%.3f,%.3f,%.3f)" %

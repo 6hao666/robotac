@@ -36,6 +36,15 @@ local_waypoint_flight:
   # Reject stale, replayed, or future-dated MAVROS local odometry.
   local_stamp_timeout: 0.50
   local_stamp_future_tolerance: 0.10
+  # These must match MAVROS local_position in config/mavros/px4.yaml. The
+  # controller uses this local ENU frame, never a GPS/global frame.
+  strict_local_frames: true
+  expected_local_parent: map
+  expected_local_child: base_link
+  # Reject an EKF/local-position reset or implausible pose jump rather than
+  # continuing to send an old OFFBOARD target. Tune only from ground logs.
+  max_local_position_speed: 6.0
+  max_local_yaw_rate: 6.0
   state_timeout: 1.0
   extended_state_timeout: 1.0
   vision_timeout: 0.50

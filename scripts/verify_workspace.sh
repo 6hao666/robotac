@@ -20,6 +20,7 @@ required_paths=(
   config/camera/rgb.yaml
   config/fastlio/mid360s.yaml
   config/fastlio/vision_bridge.yaml
+  config/fastlio/vision_bridge_sim.yaml
   config/flight/local_waypoints.yaml
   config/mavros/px4.yaml
   config/apriltag/settings.yaml
@@ -123,8 +124,13 @@ for directory in (pathlib.Path(value) for value in sys.argv[1:]):
         print(f"Validated flight Python syntax: {path.name}")
 PY
 
-bash -n "${workspace_dir}/src/robotac_flight/test/run_closed_loop_sim.sh"
-echo "Validated closed-loop flight simulation shell syntax."
+for script in \
+  "${workspace_dir}/src/robotac_flight/test/run_closed_loop_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/test/run_flight_fault_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/test/run_vision_bridge_sim.sh"; do
+  bash -n "${script}"
+  echo "Validated simulation shell syntax: ${script##*/}"
+done
 
 python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" <<'PY'
 import pathlib

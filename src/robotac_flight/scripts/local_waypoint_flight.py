@@ -99,6 +99,15 @@ class LocalWaypointFlight(object):
         self.local_stamp_timeout = float(rospy.get_param("~local_stamp_timeout", 0.50))
         self.local_stamp_future_tolerance = float(
             rospy.get_param("~local_stamp_future_tolerance", 0.10))
+        # MAVROS local_position publishes ROS ENU odometry in these configured
+        # frames. Rejecting a mismatched producer prevents an unrelated odom
+        # source from silently becoming the control reference.
+        self.strict_local_frames = _as_bool(rospy.get_param("~strict_local_frames", True))
+        self.expected_local_parent = str(rospy.get_param("~expected_local_parent", "map")).strip()
+        self.expected_local_child = str(rospy.get_param("~expected_local_child", "base_link")).strip()
+        self.max_local_position_speed = float(
+            rospy.get_param("~max_local_position_speed", 6.0))
+        self.max_local_yaw_rate = float(rospy.get_param("~max_local_yaw_rate", 6.0))
         self.state_timeout = float(rospy.get_param("~state_timeout", 1.0))
         self.extended_state_timeout = float(rospy.get_param("~extended_state_timeout", 1.0))
         self.vision_timeout = float(rospy.get_param("~vision_timeout", 0.50))
@@ -155,6 +164,9 @@ class LocalWaypointFlight(object):
         self.local_odom = None
         self.local_receive_time = None
         self.last_local_stamp = None
+        self.last_local_position = None
+        self.last_local_yaw = None
+        self.local_rejection_reason = None
         self.vision_healthy = False
         self.vision_receive_time = None
         self.vision_output_enabled = False
@@ -287,22 +299,64 @@ class LocalWaypointFlight(object):
         self.estimator = msg
         self.estimator_receive_time = time.monotonic()
 
+    def _reject_local_odom(self, reason):
+        """Discard unsafe local odometry and abort an active mission immediately."""
+        self.local_rejection_reason = reason
+        self.local_odom = None
+        self.local_receive_time = None
+        self.last_local_stamp = None
+        self.last_local_position = None
+        self.last_local_yaw = None
+        if self.state not in (self.IDLE, self.COMPLETE, self.ABORT):
+            self._abort("local_position_%s" % reason)
+
     def _local_cb(self, msg):
+        if self.strict_local_frames and (
+                msg.header.frame_id != self.expected_local_parent or
+                msg.child_frame_id != self.expected_local_child):
+            self._reject_local_odom(
+                "unexpected_frames:%s->%s" % (msg.header.frame_id, msg.child_frame_id))
+            return
         if not self._finite_pose(msg):
+            self._reject_local_odom("nonfinite_pose")
             return
         normalized = self._normalized_quaternion(msg.pose.pose.orientation)
         if normalized is None:
+            self._reject_local_odom("invalid_quaternion")
             return
         stamp = msg.header.stamp
         if stamp == rospy.Time(0):
+            self._reject_local_odom("zero_timestamp")
             return
         if self.last_local_stamp is not None and stamp <= self.last_local_stamp:
+            self._reject_local_odom("non_monotonic_timestamp")
             return
         now = rospy.Time.now()
         if now != rospy.Time(0):
             age = (now - stamp).to_sec()
             if age > self.local_stamp_timeout or age < -self.local_stamp_future_tolerance:
+                self._reject_local_odom("timestamp_age:%.3f" % age)
                 return
+        position = (float(msg.pose.pose.position.x), float(msg.pose.pose.position.y),
+                    float(msg.pose.pose.position.z))
+        _, _, yaw = euler_from_quaternion(normalized)
+        if self.last_local_stamp is not None:
+            dt = (stamp - self.last_local_stamp).to_sec()
+            if dt <= 0.0:
+                self._reject_local_odom("non_monotonic_timestamp")
+                return
+            if self.last_local_position is not None:
+                speed = math.sqrt(sum(
+                    (position[index] - self.last_local_position[index]) ** 2
+                    for index in range(3))) / dt
+                if speed > self.max_local_position_speed:
+                    self._reject_local_odom("position_jump_speed:%.2f" % speed)
+                    return
+            if self.last_local_yaw is not None:
+                yaw_rate = abs(self._angle_error(yaw, self.last_local_yaw)) / dt
+                if yaw_rate > self.max_local_yaw_rate:
+                    self._reject_local_odom("yaw_jump_rate:%.2f" % yaw_rate)
+                    return
         msg.pose.pose.orientation.x = normalized[0]
         msg.pose.pose.orientation.y = normalized[1]
         msg.pose.pose.orientation.z = normalized[2]
@@ -310,6 +364,9 @@ class LocalWaypointFlight(object):
         self.local_odom = msg
         self.local_receive_time = time.monotonic()
         self.last_local_stamp = stamp
+        self.last_local_position = position
+        self.last_local_yaw = yaw
+        self.local_rejection_reason = None
 
     def _vision_cb(self, msg):
         self.vision_healthy = bool(msg.data)
@@ -393,7 +450,8 @@ class LocalWaypointFlight(object):
         if self.extended.landed_state != ExtendedState.LANDED_STATE_ON_GROUND:
             return TriggerResponse(False, "vehicle_not_reported_on_ground")
         if self.local_odom is None:
-            return TriggerResponse(False, "local_position_unavailable")
+            reason = self.local_rejection_reason or "unavailable"
+            return TriggerResponse(False, "local_position_%s" % reason)
         if time.monotonic() - self.local_receive_time > self.local_pose_timeout:
             return TriggerResponse(False, "local_position_stale")
         if self.require_vision and (not self.vision_healthy or self.vision_receive_time is None or
@@ -510,6 +568,15 @@ class LocalWaypointFlight(object):
                 return False
         if self.input_frame not in ("robotac_local_enu", "robotac_start_body"):
             self.last_error = "invalid_waypoint_frame"
+            return False
+        if self.strict_local_frames and (
+                not self.expected_local_parent or not self.expected_local_child):
+            self.last_error = "invalid_expected_local_frames"
+            return False
+        if (not math.isfinite(self.max_local_position_speed) or
+                not math.isfinite(self.max_local_yaw_rate) or
+                self.max_local_position_speed <= 0.0 or self.max_local_yaw_rate <= 0.0):
+            self.last_error = "invalid_local_jump_limits"
             return False
         if self.takeoff_height <= 0.1 or self.takeoff_height > self.max_z:
             self.last_error = "invalid_takeoff_height"
@@ -906,11 +973,12 @@ class LocalWaypointFlight(object):
         self._publish_status()
 
     def _publish_status(self):
-        self.status_pub.publish(String(data="state=%s waypoint=%d/%d connected=%s armed=%s mode=%s vision=%s estimator=%s payload=%s abort_action=%s tx=%s error=%s" %
+        event_stamp = rospy.Time.now().to_sec()
+        self.status_pub.publish(String(data="state=%s waypoint=%d/%d connected=%s armed=%s mode=%s vision=%s estimator=%s payload=%s abort_action=%s tx=%s error=%s stamp=%.9f" %
                                       (self.state, self.index, len(self.waypoints), self.fcu.connected,
                                        self.fcu.armed, self.fcu.mode, self.vision_healthy,
                                        self._estimator_ok(), self.payload_state, self.abort_action,
-                                       self.control_tx_enabled, self.last_error)))
+                                       self.control_tx_enabled, self.last_error, event_stamp)))
         self.active_pub.publish(Bool(data=self.state not in (self.IDLE, self.COMPLETE, self.ABORT)))
 
 
