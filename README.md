@@ -644,6 +644,7 @@ roslaunch robotac_flight active_flight_observer.launch \
 
 The observer subscribes only to `/robotac/flight/status`,
 `/robotac/flight/setpoint_preview`, `/robotac/flight/route_manifest`,
+`/mavros/setpoint_raw/local`,
 `/mavros/local_position/odom`, `/mavros/vision_pose/pose_cov`,
 `/robotac/fastlio_vision/output_enabled`, `/robotac/fastlio_vision/status`,
 `/mavros/state`, `/mavros/extended_state`, and servo status. It never publishes
@@ -657,7 +658,10 @@ observed within the configured `waypoint_reach_tolerance` by
 `/mavros/local_position/odom` for at least `min_target_dwell_s` continuous
 seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and the
 analyzer rejects evidence that lacks a reached-and-dwelled record for any
-configured waypoint. The standalone active-evidence analyzer also checks that
+configured waypoint. The standalone active-evidence analyzer also requires
+actual `/mavros/setpoint_raw/local` samples and at least two unique raw
+setpoint targets, so a preview-only dry run cannot satisfy active-flight
+evidence. It also checks that
 the manifest target route matches the observed active setpoint targets and that
 the controller status `route_revision` / `route_fingerprint` matches the
 manifest, so stale manifests from an earlier run cannot satisfy a new flight. It also

@@ -5,6 +5,8 @@
   <arg name="observe_timeout" default="900.0" />
   <arg name="stream_timeout" default="1.0" />
   <arg name="min_setpoints" default="20" />
+  <arg name="require_raw_setpoints" default="true" />
+  <arg name="min_raw_setpoints" default="20" />
   <arg name="min_airborne_altitude" default="0.50" />
   <arg name="waypoint_reach_tolerance" default="0.35" />
   <arg name="min_target_dwell_s" default="0.25" />
@@ -27,6 +29,7 @@
   <arg name="evidence_file" default="" />
   <arg name="flight_status_topic" default="/robotac/flight/status" />
   <arg name="setpoint_preview_topic" default="/robotac/flight/setpoint_preview" />
+  <arg name="raw_setpoint_topic" default="/mavros/setpoint_raw/local" />
   <arg name="local_position_topic" default="/mavros/local_position/odom" />
   <arg name="mavros_state_topic" default="/mavros/state" />
   <arg name="extended_state_topic" default="/mavros/extended_state" />
@@ -41,6 +44,8 @@
     <param name="observe_timeout" value="$(arg observe_timeout)" />
     <param name="stream_timeout" value="$(arg stream_timeout)" />
     <param name="min_setpoints" value="$(arg min_setpoints)" />
+    <param name="require_raw_setpoints" value="$(arg require_raw_setpoints)" />
+    <param name="min_raw_setpoints" value="$(arg min_raw_setpoints)" />
     <param name="min_airborne_altitude" value="$(arg min_airborne_altitude)" />
     <param name="waypoint_reach_tolerance" value="$(arg waypoint_reach_tolerance)" />
     <param name="min_target_dwell_s" value="$(arg min_target_dwell_s)" />
@@ -63,6 +68,7 @@
     <param name="evidence_file" value="$(arg evidence_file)" />
     <param name="flight_status_topic" value="$(arg flight_status_topic)" />
     <param name="setpoint_preview_topic" value="$(arg setpoint_preview_topic)" />
+    <param name="raw_setpoint_topic" value="$(arg raw_setpoint_topic)" />
     <param name="local_position_topic" value="$(arg local_position_topic)" />
     <param name="mavros_state_topic" value="$(arg mavros_state_topic)" />
     <param name="extended_state_topic" value="$(arg extended_state_topic)" />

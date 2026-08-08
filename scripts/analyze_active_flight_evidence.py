@@ -148,6 +148,24 @@ def _base_phase(data, args):
     else:
         notes.append("unique_setpoints=%d" % unique_count)
 
+    if args.require_raw_setpoints:
+        raw_setpoint_count = _int(summary.get("raw_setpoint_count"))
+        if raw_setpoint_count is None or raw_setpoint_count < args.min_raw_setpoints:
+            missing.append("raw_setpoint_count_below_%d" % args.min_raw_setpoints)
+        else:
+            notes.append("raw_setpoints=%d" % raw_setpoint_count)
+        unique_raw_setpoints = summary.get("unique_raw_setpoints")
+        unique_raw_count = len(unique_raw_setpoints) if isinstance(unique_raw_setpoints, list) else 0
+        if unique_raw_count < args.min_unique_raw_setpoints:
+            missing.append("unique_raw_setpoints_below_%d" % args.min_unique_raw_setpoints)
+        else:
+            notes.append("unique_raw_setpoints=%d" % unique_raw_count)
+        raw_frame_mismatches = _int(summary.get("raw_setpoint_frame_mismatch_count"))
+        if raw_frame_mismatches is None:
+            missing.append("raw_setpoint_frame_mismatch_count_missing")
+        elif raw_frame_mismatches > 0:
+            missing.append("raw_setpoint_frame_mismatch_count:%d" % raw_frame_mismatches)
+
     target_records = summary.get("target_records")
     flight_targets = []
     if isinstance(target_records, list):
@@ -391,6 +409,13 @@ def _build_parser():
                         help="Require the observed mission waypoint count to exactly match this value; 0 disables exact matching")
     parser.add_argument("--min-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
+    parser.add_argument("--no-require-raw-setpoints", dest="require_raw_setpoints",
+                        action="store_false", default=True,
+                        help="Do not require evidence from the actual /mavros/setpoint_raw/local topic")
+    parser.add_argument("--min-raw-setpoints", type=int, default=20,
+                        help="Require at least this many actual /mavros/setpoint_raw/local samples")
+    parser.add_argument("--min-unique-raw-setpoints", type=int, default=2,
+                        help="Require at least this many unique actual MAVROS raw setpoint targets")
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
     parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--min-target-dwell-s", type=float, default=0.25,
@@ -422,6 +447,8 @@ def main():
     args = _build_parser().parse_args()
     if args.min_waypoints < 1 or args.min_setpoints < 1 or args.min_unique_setpoints < 1:
         raise ValueError("minimum waypoint/setpoint counts must be positive")
+    if args.require_raw_setpoints and (args.min_raw_setpoints < 1 or args.min_unique_raw_setpoints < 1):
+        raise ValueError("minimum raw setpoint counts must be positive when raw setpoints are required")
     if args.min_active_vision_pose_count < 0:
         raise ValueError("min-active-vision-pose-count must be non-negative")
     if args.min_active_vision_local_pairs < 0:

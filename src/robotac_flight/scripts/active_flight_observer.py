@@ -2,9 +2,9 @@
 """Read-only observer for a real Robotac local waypoint flight.
 
 This node is an evidence recorder, not a controller. It only subscribes to the
-flight controller, MAVROS state, MAVROS local position, and optional servo
-status topics. It never publishes setpoints, calls services, changes modes,
-arms, lands, or writes PX4 parameters.
+flight controller, MAVROS state, MAVROS local position, the actual MAVROS raw
+setpoint topic, and optional servo status topics. It never publishes setpoints,
+calls services, changes modes, arms, lands, or writes PX4 parameters.
 """
 
 import json
@@ -58,6 +58,8 @@ class ActiveFlightObserver(object):
         self.observe_timeout = float(rospy.get_param("~observe_timeout", 900.0))
         self.stream_timeout = float(rospy.get_param("~stream_timeout", 1.0))
         self.min_setpoints = int(rospy.get_param("~min_setpoints", 20))
+        self.require_raw_setpoints = _as_bool(rospy.get_param("~require_raw_setpoints", True))
+        self.min_raw_setpoints = int(rospy.get_param("~min_raw_setpoints", 20))
         self.min_airborne_altitude = float(rospy.get_param("~min_airborne_altitude", 0.50))
         self.waypoint_reach_tolerance = float(rospy.get_param("~waypoint_reach_tolerance", 0.35))
         self.min_target_dwell_s = float(rospy.get_param("~min_target_dwell_s", 0.25))
@@ -106,6 +108,10 @@ class ActiveFlightObserver(object):
         self.setpoint_count = 0
         self.setpoint_receive = None
         self.unique_setpoints = []
+        self.raw_setpoint_count = 0
+        self.raw_setpoint_receive = None
+        self.unique_raw_setpoints = []
+        self.raw_setpoint_frame_mismatch_count = 0
         self.target_records = []
         self.route_manifest = None
         self.route_manifest_history = []
@@ -167,6 +173,8 @@ class ActiveFlightObserver(object):
                          String, self._flight_status_cb, queue_size=20)
         rospy.Subscriber(rospy.get_param("~setpoint_preview_topic", "/robotac/flight/setpoint_preview"),
                          PositionTarget, self._setpoint_preview_cb, queue_size=50)
+        rospy.Subscriber(rospy.get_param("~raw_setpoint_topic", "/mavros/setpoint_raw/local"),
+                         PositionTarget, self._raw_setpoint_cb, queue_size=50)
         rospy.Subscriber(rospy.get_param("~local_position_topic", "/mavros/local_position/odom"),
                          Odometry, self._local_position_cb, queue_size=50)
         rospy.Subscriber(rospy.get_param("~mavros_state_topic", "/mavros/state"),
@@ -192,6 +200,8 @@ class ActiveFlightObserver(object):
             raise ValueError("stream_timeout must be finite and positive")
         if self.min_setpoints < 1:
             raise ValueError("min_setpoints must be positive")
+        if self.require_raw_setpoints and self.min_raw_setpoints < 1:
+            raise ValueError("min_raw_setpoints must be positive when raw setpoints are required")
         if not math.isfinite(self.min_airborne_altitude) or self.min_airborne_altitude < 0.0:
             raise ValueError("min_airborne_altitude must be finite and non-negative")
         if not math.isfinite(self.waypoint_reach_tolerance) or self.waypoint_reach_tolerance <= 0.0:
@@ -346,6 +356,17 @@ class ActiveFlightObserver(object):
         target = tuple(float(value) for value in values)
         self._append_unique(self.unique_setpoints, target)
         self._append_target_record_if_needed(target)
+
+    def _raw_setpoint_cb(self, msg):
+        values = (msg.position.x, msg.position.y, msg.position.z, msg.yaw)
+        if not _finite(values):
+            return
+        self.raw_setpoint_count += 1
+        self.raw_setpoint_receive = time.monotonic()
+        target = tuple(float(value) for value in values)
+        self._append_unique(self.unique_raw_setpoints, target)
+        if msg.coordinate_frame != PositionTarget.FRAME_LOCAL_NED:
+            self.raw_setpoint_frame_mismatch_count += 1
 
     def _update_target_hits(self, position, sample_time=None):
         for record in self.target_records:
@@ -630,6 +651,13 @@ class ActiveFlightObserver(object):
             return "setpoint_preview_missing_or_stale"
         if not final and not self._fresh(self.setpoint_receive, self.stream_timeout):
             return "setpoint_preview_missing_or_stale"
+        if self.require_raw_setpoints:
+            if self.raw_setpoint_count < self.min_raw_setpoints:
+                return "raw_setpoint_count_below_%d" % self.min_raw_setpoints
+            if self.raw_setpoint_frame_mismatch_count > 0:
+                return "raw_setpoint_frame_mismatch"
+            if not final and not self._fresh(self.raw_setpoint_receive, self.stream_timeout):
+                return "raw_setpoint_missing_or_stale"
         if self.local_count < 1:
             return "local_position_missing_or_stale"
         if not final and not self._fresh(self.local_receive, self.stream_timeout):
@@ -705,6 +733,9 @@ class ActiveFlightObserver(object):
             "current_waypoint_total": self.current_waypoint_total,
             "setpoint_count": self.setpoint_count,
             "unique_setpoints": self.unique_setpoints,
+            "raw_setpoint_count": self.raw_setpoint_count,
+            "unique_raw_setpoints": self.unique_raw_setpoints,
+            "raw_setpoint_frame_mismatch_count": self.raw_setpoint_frame_mismatch_count,
             "target_records": self._public_target_records(),
             "route_manifest": self.route_manifest,
             "route_manifest_history": self.route_manifest_history,
@@ -749,6 +780,8 @@ class ActiveFlightObserver(object):
                 "observe_timeout": self.observe_timeout,
                 "stream_timeout": self.stream_timeout,
                 "min_setpoints": self.min_setpoints,
+                "require_raw_setpoints": self.require_raw_setpoints,
+                "min_raw_setpoints": self.min_raw_setpoints,
                 "min_airborne_altitude": self.min_airborne_altitude,
                 "waypoint_reach_tolerance": self.waypoint_reach_tolerance,
                 "min_target_dwell_s": self.min_target_dwell_s,

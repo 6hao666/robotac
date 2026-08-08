@@ -609,6 +609,10 @@ for expected in (
     "active_flight_observer",
     "flight_status_topic",
     "setpoint_preview_topic",
+    "raw_setpoint_topic",
+    "raw_setpoint_count",
+    "unique_raw_setpoints",
+    "raw_setpoint_frame_mismatch_count",
     "local_position_topic",
     "active_vision_local_pair_count",
     "active_vision_local_max_delta_error_m",
@@ -642,7 +646,6 @@ for forbidden in (
     "CommandBool",
     "/mavros/set_mode",
     "/mavros/cmd/arming",
-    "/mavros/setpoint_raw/local",
     "/robotac/flight/start",
 ):
     if forbidden in active_observer_source:
@@ -991,6 +994,9 @@ for expected in (
     "route_manifest_target_route_missing",
     "route_manifest_observed_target_mismatch",
     "route_status_fingerprint_mismatch",
+    "raw_setpoint_count_below",
+    "unique_raw_setpoints_below",
+    "raw_setpoint_frame_mismatch_count",
     "route-manifest-target-tolerance",
     "waypoints_incomplete",
     "final_disarmed",
@@ -1007,7 +1013,6 @@ for forbidden in (
     "Publisher",
     "/mavros/cmd/arming",
     "/mavros/set_mode",
-    "/mavros/setpoint_raw/local",
     "/robotac/flight/start",
 ):
     if forbidden in source:
@@ -1045,7 +1050,6 @@ for forbidden in (
     "Publisher",
     "/mavros/cmd/arming",
     "/mavros/set_mode",
-    "/mavros/setpoint_raw/local",
     "/robotac/flight/start",
 ):
     if forbidden in source:
@@ -1182,6 +1186,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    target_dwell_s=1.0, active_vision=True,
                    active_vision_local_error=0.05,
                    active_mavros_control=True, include_landing_state=True,
+                   raw_setpoints=True, raw_frame_mismatch=False,
                    omit_route_manifest=False, corrupt_route_manifest_target=False,
                    corrupt_route_status_fingerprint=False):
     target_records = [
@@ -1254,6 +1259,10 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "total_waypoints": 8,
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
+            "raw_setpoint_count": 120 if raw_setpoints else 0,
+            "unique_raw_setpoints": ([[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]]
+                                     if raw_setpoints else []),
+            "raw_setpoint_frame_mismatch_count": 1 if raw_frame_mismatch else 0,
             "target_records": target_records,
             "route_manifest": route_manifest,
             "active_vision_pose_count": 24 if active_vision else 0,
@@ -1316,6 +1325,16 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if bad_status_fingerprint.returncode == 0 or "route_status_fingerprint_mismatch" not in bad_status_fingerprint.stdout:
         raise SystemExit("Active flight evidence analyzer accepted status/manifest fingerprint mismatch")
+    write_evidence(evidence, raw_setpoints=False)
+    missing_raw = subprocess.run([sys.executable, script, str(root)], text=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_raw.returncode == 0 or "raw_setpoint_count_below_20" not in missing_raw.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted missing actual MAVROS raw setpoint evidence")
+    write_evidence(evidence, raw_frame_mismatch=True)
+    bad_raw_frame = subprocess.run([sys.executable, script, str(root)], text=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if bad_raw_frame.returncode == 0 or "raw_setpoint_frame_mismatch_count" not in bad_raw_frame.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted a MAVROS raw setpoint frame mismatch")
     write_evidence(evidence)
     payload_missing = subprocess.run([sys.executable, script, str(root), "--require-phase", "payload_local_flight"],
                                      text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1500,6 +1519,9 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "total_waypoints": waypoint_count,
         "setpoint_count": 120,
         "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
+        "raw_setpoint_count": 120,
+        "unique_raw_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
+        "raw_setpoint_frame_mismatch_count": 0,
         "target_records": target_records,
         "active_vision_pose_count": 24,
         "active_vision_pose_parent": "odom",

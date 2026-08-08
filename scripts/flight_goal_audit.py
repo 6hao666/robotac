@@ -93,6 +93,9 @@ def _active_report(args, configured_waypoints):
         expected_waypoints=expected_waypoints,
         min_setpoints=args.min_setpoints,
         min_unique_setpoints=args.min_unique_setpoints,
+        require_raw_setpoints=args.require_raw_setpoints,
+        min_raw_setpoints=args.min_raw_setpoints,
+        min_unique_raw_setpoints=args.min_unique_raw_setpoints,
         min_airborne_altitude=args.min_airborne_altitude,
         waypoint_reach_tolerance=args.waypoint_reach_tolerance,
         min_target_dwell_s=args.min_target_dwell_s,
@@ -521,6 +524,11 @@ def _build_parser():
                         help="Yaw tolerance in degrees for matching active evidence targets to the configured route")
     parser.add_argument("--min-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
+    parser.add_argument("--no-require-raw-setpoints", dest="require_raw_setpoints",
+                        action="store_false", default=True,
+                        help="Do not require active evidence from /mavros/setpoint_raw/local")
+    parser.add_argument("--min-raw-setpoints", type=int, default=20)
+    parser.add_argument("--min-unique-raw-setpoints", type=int, default=2)
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
     parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--min-target-dwell-s", type=float, default=0.25,
@@ -553,6 +561,8 @@ def main():
         raise ValueError("route target/yaw tolerances must be non-negative")
     if args.min_target_dwell_s < 0.0:
         raise ValueError("min-target-dwell-s must be non-negative")
+    if args.require_raw_setpoints and (args.min_raw_setpoints < 1 or args.min_unique_raw_setpoints < 1):
+        raise ValueError("minimum raw setpoint counts must be positive when raw setpoints are required")
     if args.min_active_vision_pose_count < 0:
         raise ValueError("min-active-vision-pose-count must be non-negative")
     if args.min_active_vision_local_pairs < 0:
