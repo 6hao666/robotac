@@ -622,6 +622,7 @@ for expected in (
     "route_manifest_target_route_missing",
     "route_manifest_target_tolerance",
     "route_manifest_observed_target_mismatch",
+    "route_manifest_raw_setpoint_missing",
     "route_status_fingerprint_mismatch",
     "active_local_flight_passed",
     "target_records",
@@ -993,6 +994,7 @@ for expected in (
     "route_manifest_missing",
     "route_manifest_target_route_missing",
     "route_manifest_observed_target_mismatch",
+    "route_manifest_raw_setpoint_missing",
     "route_status_fingerprint_mismatch",
     "raw_setpoint_count_below",
     "unique_raw_setpoints_below",
@@ -1187,6 +1189,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    active_vision_local_error=0.05,
                    active_mavros_control=True, include_landing_state=True,
                    raw_setpoints=True, raw_frame_mismatch=False,
+                   corrupt_raw_setpoint_target=False,
                    omit_route_manifest=False, corrupt_route_manifest_target=False,
                    corrupt_route_status_fingerprint=False):
     target_records = [
@@ -1243,6 +1246,9 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "origin_yaw": 0.0,
             "target_route": manifest_route,
         }
+    raw_targets = [[0, 0, 0, 0]] + [list(record["target"]) for record in target_records]
+    if corrupt_raw_setpoint_target and len(raw_targets) > 4:
+        raw_targets[4][0] += 0.50
     status_fingerprint = "wrong" if corrupt_route_status_fingerprint else "synthetic"
     path.write_text(json.dumps({
         "observer": "active_flight_observer",
@@ -1260,8 +1266,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
             "raw_setpoint_count": 120 if raw_setpoints else 0,
-            "unique_raw_setpoints": ([[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]]
-                                     if raw_setpoints else []),
+            "unique_raw_setpoints": raw_targets if raw_setpoints else [],
             "raw_setpoint_frame_mismatch_count": 1 if raw_frame_mismatch else 0,
             "target_records": target_records,
             "route_manifest": route_manifest,
@@ -1335,6 +1340,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if bad_raw_frame.returncode == 0 or "raw_setpoint_frame_mismatch_count" not in bad_raw_frame.stdout:
         raise SystemExit("Active flight evidence analyzer accepted a MAVROS raw setpoint frame mismatch")
+    write_evidence(evidence, corrupt_raw_setpoint_target=True)
+    bad_raw_target = subprocess.run([sys.executable, script, str(root)], text=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if bad_raw_target.returncode == 0 or "route_manifest_raw_setpoint_missing:waypoints2" not in bad_raw_target.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted a raw setpoint route/manifest mismatch")
     write_evidence(evidence)
     payload_missing = subprocess.run([sys.executable, script, str(root), "--require-phase", "payload_local_flight"],
                                      text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1508,6 +1518,7 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
             "max_continuous_reach_s": 1.0,
             "reached": True,
         })
+    raw_targets = [[0, 0, 0, 0]] + [list(record["target"]) for record in target_records]
     summary = {
         "last_status": {"state": "COMPLETE" if success else "ABORT",
                         "waypoint": "%d/%d" % (waypoint_count, waypoint_count),
@@ -1520,7 +1531,7 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "setpoint_count": 120,
         "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
         "raw_setpoint_count": 120,
-        "unique_raw_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
+        "unique_raw_setpoints": raw_targets,
         "raw_setpoint_frame_mismatch_count": 0,
         "target_records": target_records,
         "active_vision_pose_count": 24,

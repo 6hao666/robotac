@@ -99,6 +99,21 @@ def _angle_error(a, b):
     return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
+def _target_present(targets, expected, tolerance, yaw_tolerance):
+    if not isinstance(targets, list):
+        return False
+    for record in targets:
+        actual = _target_tuple({"target": record})
+        if actual is None:
+            continue
+        position_delta = math.sqrt(sum((actual[index] - expected[index]) ** 2
+                                       for index in range(3)))
+        yaw_delta = abs(_angle_error(actual[3], expected[3]))
+        if position_delta <= tolerance and yaw_delta <= yaw_tolerance:
+            return True
+    return False
+
+
 def _base_phase(data, args):
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     last_status = summary.get("last_status") if isinstance(summary.get("last_status"), dict) else {}
@@ -356,6 +371,11 @@ def _route_manifest_phase(data, args):
             if position_delta > tolerance or yaw_delta > yaw_tolerance:
                 missing.append("route_manifest_observed_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
                     key[0].lower(), key[1], position_delta, math.degrees(yaw_delta)))
+            if (args.require_raw_setpoints and
+                    not _target_present(summary.get("unique_raw_setpoints"), expected,
+                                        tolerance, yaw_tolerance)):
+                missing.append("route_manifest_raw_setpoint_missing:%s%d" % (
+                    key[0].lower(), key[1]))
         if not missing:
             notes.append("route_manifest_targets=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f" % (
                 len(manifest_targets), max_position_delta, math.degrees(max_yaw_delta)))

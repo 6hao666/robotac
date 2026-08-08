@@ -275,7 +275,11 @@ class ActiveFlightObserver(object):
         if not isinstance(record, dict):
             return None
         target = record.get("target")
-        if not isinstance(target, list) or len(target) < 4:
+        return ActiveFlightObserver._target_values(target)
+
+    @staticmethod
+    def _target_values(target):
+        if not isinstance(target, (list, tuple)) or len(target) < 4:
             return None
         try:
             values = tuple(float(value) for value in target[:4])
@@ -293,6 +297,18 @@ class ActiveFlightObserver(object):
             if key is not None and target is not None:
                 targets[key] = target
         return targets
+
+    def _target_present_in_raw_setpoints(self, expected):
+        for raw_target in self.unique_raw_setpoints:
+            actual = self._target_values(raw_target)
+            if actual is None:
+                continue
+            position_delta = self._distance3(actual[:3], expected[:3])
+            yaw_delta = abs(self._angle_error(actual[3], expected[3]))
+            if (position_delta <= self.route_manifest_target_tolerance and
+                    yaw_delta <= self.route_manifest_yaw_tolerance):
+                return True
+        return False
 
     def _flight_status_cb(self, msg):
         fields = _parse_fields(msg.data)
@@ -640,6 +656,8 @@ class ActiveFlightObserver(object):
                     yaw_delta > self.route_manifest_yaw_tolerance):
                 return "route_manifest_observed_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
                     key[0].lower(), key[1], position_delta, math.degrees(yaw_delta))
+            if self.require_raw_setpoints and not self._target_present_in_raw_setpoints(expected):
+                return "route_manifest_raw_setpoint_missing:%s%d" % (key[0].lower(), key[1])
         return None
 
     def _failure_reason(self, final=False):
