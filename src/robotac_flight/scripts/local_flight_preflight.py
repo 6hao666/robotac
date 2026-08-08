@@ -129,6 +129,9 @@ class LocalFlightPreflight(object):
         self.require_ev_offsets_zero = _as_bool(
             rospy.get_param("~require_ev_offsets_zero", True))
         self.ev_offset_tolerance_m = float(rospy.get_param("~ev_offset_tolerance_m", 0.01))
+        self.require_ev_delay = _as_bool(rospy.get_param("~require_ev_delay", False))
+        self.expected_ev_delay_ms = float(rospy.get_param("~expected_ev_delay_ms", 0.0))
+        self.ev_delay_tolerance_ms = float(rospy.get_param("~ev_delay_tolerance_ms", 20.0))
         self.require_vision_output_consumer = _as_bool(
             rospy.get_param("~require_vision_output_consumer", self.require_vision_output))
         self.vision_output_consumer_node = str(rospy.get_param(
@@ -237,6 +240,8 @@ class LocalFlightPreflight(object):
             raise ValueError("require_vision_output_consumer requires require_vision_output=true")
         if self.require_vision_output_consumer and not self.vision_output_consumer_node:
             raise ValueError("vision_output_consumer_node must be non-empty")
+        if self.require_ev_delay and not self.check_px4_vision_params:
+            raise ValueError("require_ev_delay requires check_px4_vision_params=true")
         if self.require_setpoint_consumer and (
                 not self.setpoint_topic or not self.setpoint_consumer_node):
             raise ValueError("setpoint_topic and setpoint_consumer_node must be non-empty")
@@ -244,6 +249,10 @@ class LocalFlightPreflight(object):
             raise ValueError("max_timesync_rtt_ms must be finite and non-negative")
         if not math.isfinite(self.ev_offset_tolerance_m) or self.ev_offset_tolerance_m < 0.0:
             raise ValueError("ev_offset_tolerance_m must be finite and non-negative")
+        if (not math.isfinite(self.expected_ev_delay_ms) or
+                not math.isfinite(self.ev_delay_tolerance_ms) or
+                self.ev_delay_tolerance_ms < 0.0):
+            raise ValueError("expected_ev_delay_ms and ev_delay_tolerance_ms must be finite; tolerance must be non-negative")
 
     def _stamp_is_current(self, stamp, age_limit):
         if stamp == rospy.Time(0):
@@ -489,9 +498,22 @@ class LocalFlightPreflight(object):
                         break
                     offsets.append(float(value))
                 if self.px4_params_issue == "ok" and any(
+                        not math.isfinite(value) for value in offsets):
+                    self.px4_params_issue = "EV_POS_nonfinite:%s" % ",".join(
+                        str(value) for value in offsets)
+                if self.px4_params_issue == "ok" and any(
                         abs(value) > self.ev_offset_tolerance_m for value in offsets):
                     self.px4_params_issue = "EV_POS_nonzero:%s" % ",".join(
                         "%.4f" % value for value in offsets)
+            if self.px4_params_issue == "ok" and self.require_ev_delay:
+                value = self._get_px4_param(get, "EKF2_EV_DELAY")
+                if value is None:
+                    self.px4_params_issue = "EKF2_EV_DELAY_unavailable"
+                elif not math.isfinite(float(value)):
+                    self.px4_params_issue = "EKF2_EV_DELAY_nonfinite"
+                elif abs(float(value) - self.expected_ev_delay_ms) > self.ev_delay_tolerance_ms:
+                    self.px4_params_issue = "EKF2_EV_DELAY_mismatch:%.3f_expected_%.3f_tol_%.3f" % (
+                        float(value), self.expected_ev_delay_ms, self.ev_delay_tolerance_ms)
         except (rospy.ROSException, rospy.ServiceException) as exc:
             self.px4_params_issue = "param_get_failed:%s" % exc
         self.px4_params_checked = True

@@ -32,6 +32,16 @@ def _as_bool(value):
     return bool(value)
 
 
+def _finite_float(value, name):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("%s must be numeric" % name)
+    if not math.isfinite(number):
+        raise ValueError("%s must be finite" % name)
+    return number
+
+
 def _require_deployment_gates(names):
     """Refuse active control unless the aircraft-level checks are explicit."""
     deployment = rospy.get_param("/deployment", {})
@@ -283,20 +293,31 @@ class LocalWaypointFlight(object):
 
     def _load_waypoints(self):
         raw = rospy.get_param("~waypoints", [])
+        if not isinstance(raw, list):
+            raise ValueError("waypoints must be a list")
         result = []
-        for item in raw:
+        for index, item in enumerate(raw):
             if not isinstance(item, dict):
                 raise ValueError("waypoints must be dictionaries")
+            yaw_keys = [key for key in ("yaw", "yaw_deg") if key in item]
+            if len(yaw_keys) > 1:
+                raise ValueError("waypoint %d must use yaw or yaw_deg, not both" % index)
+            if "yaw_deg" in item:
+                yaw = math.radians(_finite_float(item["yaw_deg"], "waypoint %d yaw_deg" % index))
+            else:
+                yaw = _finite_float(item.get("yaw", 0.0), "waypoint %d yaw" % index)
             action = str(item.get("payload_action", "none")).strip().lower()
             result.append({
-                "x": float(item.get("x", 0.0)),
-                "y": float(item.get("y", 0.0)),
-                "z": float(item.get("z", 0.0)),
-                "yaw": math.radians(float(item.get("yaw_deg", item.get("yaw", 0.0)))),
-                "hold": float(item.get("hold", self.hold_seconds)),
+                "x": _finite_float(item.get("x", 0.0), "waypoint %d x" % index),
+                "y": _finite_float(item.get("y", 0.0), "waypoint %d y" % index),
+                "z": _finite_float(item.get("z", 0.0), "waypoint %d z" % index),
+                "yaw": yaw,
+                "hold": _finite_float(item.get("hold", self.hold_seconds),
+                                      "waypoint %d hold" % index),
                 "payload_action": action,
-                "payload_settle": float(item.get(
-                    "payload_settle", self.payload_default_settle)),
+                "payload_settle": _finite_float(
+                    item.get("payload_settle", self.payload_default_settle),
+                    "waypoint %d payload_settle" % index),
             })
         return result
 

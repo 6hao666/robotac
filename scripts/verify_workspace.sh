@@ -241,7 +241,13 @@ for expected in (
     "setpoint_topic",
     "require_ev_offsets_zero",
     "ev_offset_tolerance_m",
+    "require_ev_delay",
+    "expected_ev_delay_ms",
+    "ev_delay_tolerance_ms",
+    "require_ev_delay requires check_px4_vision_params=true",
     "EKF2_EV_POS_X",
+    "EKF2_EV_DELAY",
+    "EV_POS_nonfinite",
     "EV_POS_nonzero",
     "TimesyncStatus",
     "timesync_issue",
@@ -256,6 +262,16 @@ for source, name in ((flight_source, "flight controller"),
         raise SystemExit(f"{name} must reject an unavailable ROS clock")
 if "msg.header.frame_id != self.input_frame" not in flight_source:
     raise SystemExit("Dynamic waypoint messages must require their declared frame")
+for expected in (
+    "waypoint %d must use yaw or yaw_deg, not both",
+    '"yaw": yaw',
+    '"waypoint %d yaw_deg"',
+    '"waypoint %d yaw"',
+):
+    if expected not in flight_source:
+        raise SystemExit(f"Configured waypoint yaw parsing check failed: missing {expected}")
+if "math.radians(float(item.get(\"yaw_deg\", item.get(\"yaw\", 0.0))))" in flight_source:
+    raise SystemExit("Configured waypoint yaw parser must not treat yaw radians as degrees")
 for expected in (
     "PoseWithCovarianceStamped",
     "vision_status_receive_time",
@@ -290,7 +306,12 @@ for expected in (
 for expected in (
     "require_ev_offsets_zero",
     "ev_offset_tolerance_m",
+    "require_ev_delay",
+    "expected_ev_delay_ms",
+    "ev_delay_tolerance_ms",
     "EKF2_EV_POS_X",
+    "EKF2_EV_DELAY",
+    "EV_POS offsets must be finite",
     "EV_POS offsets must be zero",
 ):
     if expected not in px4_check_source:

@@ -199,7 +199,8 @@ Waypoints are metres relative to the MAVROS local position captured by the
 explicit start request. The default `robotac_start_body` frame uses the captured
 aircraft FLU axes: `x` forward, `y` left, and `z` up. The controller converts
 those fixed start-heading offsets into local ENU before publishing the MAVROS
-setpoint; `yaw_deg` is also relative to the captured takeoff heading.
+setpoint. Use `yaw_deg` for degrees or `yaw` for radians; either one is
+relative to the captured takeoff heading, and a waypoint must not define both.
 `robotac_local_enu` remains available for clients that deliberately want fixed
 ENU axes. No GPS, latitude, longitude, global mission item, or `CommandTOL`
 takeoff/land service is used. The estimator gate requires relative horizontal
@@ -370,9 +371,11 @@ This also checks that `/mavros` is subscribed to the exact vision-pose and
 setpoint_raw topics. The PX4 parameter query is read-only and, by default, also
 requires `EKF2_EV_POS_X/Y/Z` to be zero within 0.01 m; Robotac's bridge already
 outputs the airframe `base_link` pose, so non-zero PX4 EV offsets would apply
-the external-vision lever arm twice. The following regression exercises that
-preflight against a loopback ROS graph; it opens no serial device and starts no
-MAVROS:
+the external-vision lever arm twice. After measuring the FAST-LIO to FCU timing
+chain, add `require_ev_delay:=true expected_ev_delay_ms:=...` with a suitable
+`ev_delay_tolerance_ms:=...` so `EKF2_EV_DELAY` is checked instead of merely
+printed. The following regression exercises that preflight against a loopback
+ROS graph; it opens no serial device and starts no MAVROS:
 
 ```bash
 src/robotac_flight/test/run_flight_preflight_sim.sh

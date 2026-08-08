@@ -39,8 +39,15 @@ def main():
     require_yaw = as_bool(rospy.get_param("~require_yaw_fusion", False))
     require_ev_offsets_zero = as_bool(rospy.get_param("~require_ev_offsets_zero", True))
     ev_offset_tolerance_m = float(rospy.get_param("~ev_offset_tolerance_m", 0.01))
+    require_ev_delay = as_bool(rospy.get_param("~require_ev_delay", False))
+    expected_ev_delay_ms = float(rospy.get_param("~expected_ev_delay_ms", 0.0))
+    ev_delay_tolerance_ms = float(rospy.get_param("~ev_delay_tolerance_ms", 20.0))
     if not math.isfinite(ev_offset_tolerance_m) or ev_offset_tolerance_m < 0.0:
         print("FAIL: ev_offset_tolerance_m must be finite and non-negative")
+        return 3
+    if (not math.isfinite(expected_ev_delay_ms) or
+            not math.isfinite(ev_delay_tolerance_ms) or ev_delay_tolerance_ms < 0.0):
+        print("FAIL: expected_ev_delay_ms and ev_delay_tolerance_ms must be finite; tolerance must be non-negative")
         return 3
     try:
         rospy.wait_for_service(service_name, timeout=5.0)
@@ -72,6 +79,19 @@ def main():
         for name in ("EKF2_EV_DELAY", "EKF2_EV_POS_X", "EKF2_EV_POS_Y", "EKF2_EV_POS_Z"):
             value = get_param(get, name)
             print("%s=%s" % (name, "unavailable" if value is None else value))
+        if require_ev_delay:
+            value = get_param(get, "EKF2_EV_DELAY")
+            if value is None:
+                print("FAIL: EKF2_EV_DELAY is unavailable; cannot verify external-vision delay")
+                return 2
+            actual = float(value)
+            if not math.isfinite(actual):
+                print("FAIL: EKF2_EV_DELAY must be finite")
+                return 2
+            if abs(actual - expected_ev_delay_ms) > ev_delay_tolerance_ms:
+                print("FAIL: EKF2_EV_DELAY %.3f ms is outside expected %.3f +/- %.3f ms" %
+                      (actual, expected_ev_delay_ms, ev_delay_tolerance_ms))
+                return 2
         if require_ev_offsets_zero:
             offsets = []
             for name in ("EKF2_EV_POS_X", "EKF2_EV_POS_Y", "EKF2_EV_POS_Z"):
@@ -80,6 +100,10 @@ def main():
                     print("FAIL: %s is unavailable; cannot verify zero PX4 EV lever arm" % name)
                     return 2
                 offsets.append(float(value))
+            if any(not math.isfinite(value) for value in offsets):
+                print("FAIL: PX4 EV_POS offsets must be finite; offsets=%s" %
+                      ",".join(str(value) for value in offsets))
+                return 2
             if any(abs(value) > ev_offset_tolerance_m for value in offsets):
                 print("FAIL: PX4 EV_POS offsets must be zero when Robotac bridge outputs base_link pose; offsets=%s tolerance=%.3f" %
                       (",".join("%.4f" % value for value in offsets), ev_offset_tolerance_m))
