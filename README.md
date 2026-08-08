@@ -169,6 +169,18 @@ script refuses to print them until the active-flight deployment gates in
 iterating on the printed route/command ladder and have just run the full
 workspace verification separately.
 
+To inspect the same evidence matrix directly, run the offline readiness report:
+
+```bash
+rosrun robotac_flight local_flight_readiness.py --config-root ~/robotac_ws/config
+```
+
+It reports separate readiness for `vision_output`, `active_local_flight`, and
+`payload_local_flight`. By default it only reports; add
+`--require-phase vision_output`, `--require-phase active_local_flight`, or
+`--require-phase payload_local_flight` when you want the command to fail closed
+until that stage is truly ready.
+
 ## FAST-LIO vision input
 
 `fastlio_vision_bridge.py` converts `/Odometry` from

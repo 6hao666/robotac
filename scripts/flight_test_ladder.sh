@@ -158,6 +158,12 @@ python3 "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" \
   --origin-yaw-deg "${origin_yaw_deg}" \
   --require-payload-open
 
+print_section "readiness report"
+python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
+  --config-root "${config_root}" \
+  --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
+  --origin-yaw-deg "${origin_yaw_deg}"
+
 print_section "route preview"
 python3 "${workspace_dir}/src/robotac_flight/scripts/preview_local_route.py" \
   --file "${route_file}" \

@@ -19,6 +19,7 @@ required_paths=(
   src/robotac_flight/launch/local_flight_preflight.launch
   src/robotac_flight/scripts/audit_local_mission.py
   src/robotac_flight/scripts/ev_acceptance_observer.py
+  src/robotac_flight/scripts/local_flight_readiness.py
   src/robotac_flight/scripts/preview_local_route.py
   src/robotac_servo
   config/lidar/mid360s.json
@@ -234,6 +235,24 @@ with tempfile.TemporaryDirectory(prefix="robotac-mission-audit.") as directory:
         raise SystemExit("Mission audit unexpectedly accepted a global/GPS waypoint key.")
 PY
 echo "Validated local mission audit rejects global/GPS keys."
+
+readiness_report=$(python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
+  --config-root "${workspace_dir}/config" \
+  --origin-x 3.0 --origin-y -2.0 --origin-yaw-deg 90.0)
+printf '%s\n' "${readiness_report}"
+[[ "${readiness_report}" == *"LOCAL_FLIGHT_READINESS"* ]]
+[[ "${readiness_report}" == *"local_mission_file=READY"* ]]
+[[ "${readiness_report}" == *"mavros_local_only=READY"* ]]
+[[ "${readiness_report}" == *"fastlio_vision_bridge_config=BLOCKED"* ]]
+[[ "${readiness_report}" == *"vision_output=BLOCKED"* ]]
+[[ "${readiness_report}" == *"active_local_flight=BLOCKED"* ]]
+[[ "${readiness_report}" == *"payload_local_flight=BLOCKED"* ]]
+if python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
+  --config-root "${workspace_dir}/config" --require-phase active_local_flight >/dev/null 2>&1; then
+  echo "Readiness report unexpectedly marked active local flight ready." >&2
+  exit 1
+fi
+echo "Validated offline local flight readiness report."
 
 python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/mavros/mavros/src/plugins/setpoint_raw.cpp" \
