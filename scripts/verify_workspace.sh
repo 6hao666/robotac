@@ -18,6 +18,7 @@ required_paths=(
   src/robotac_flight/launch/ev_acceptance_observer.launch
   src/robotac_flight/launch/local_flight_preflight.launch
   src/robotac_flight/scripts/ev_acceptance_observer.py
+  src/robotac_flight/scripts/preview_local_route.py
   src/robotac_servo
   config/lidar/mid360s.json
   config/camera/rgb.yaml
@@ -150,6 +151,15 @@ if python3 "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" \
   exit 1
 fi
 echo "Validated PoseArray publisher rejects payload/hold mission metadata by default."
+
+route_preview=$(python3 "${workspace_dir}/src/robotac_flight/scripts/preview_local_route.py" \
+  --file "${workspace_dir}/config/flight/local_waypoints.yaml" \
+  --origin-x 3.0 --origin-y -2.0 --origin-yaw-deg 90.0)
+printf '%s\n' "${route_preview}"
+[[ "${route_preview}" == *"target_enu_route=(3.000,-2.000,1.000)->(3.000,-1.000,1.000)->(3.000,-2.000,1.000)->(2.000,-2.000,1.000)->(3.000,-2.000,1.000)->(4.000,-2.000,1.000)->(3.000,-2.000,1.000)->(3.000,-3.000,1.000)->(3.000,-2.000,1.000)"* ]]
+[[ "${route_preview}" == *"mavlink_ned_route=(-2.000,3.000,-1.000)->(-1.000,3.000,-1.000)->(-2.000,3.000,-1.000)->(-2.000,2.000,-1.000)->(-2.000,3.000,-1.000)->(-2.000,4.000,-1.000)->(-2.000,3.000,-1.000)->(-3.000,3.000,-1.000)->(-2.000,3.000,-1.000)"* ]]
+[[ "${route_preview}" == *"payload_events=wp6:open@(3.000,-3.000,1.000)"* ]]
+echo "Validated offline local route preview."
 
 python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/mavros/mavros/src/plugins/setpoint_raw.cpp" \
