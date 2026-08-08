@@ -77,6 +77,7 @@ class ActiveFlightObserver(object):
         self.require_takeoff_landing_states = _as_bool(
             rospy.get_param("~require_takeoff_landing_states", True))
         self.require_waypoints_complete = _as_bool(rospy.get_param("~require_waypoints_complete", True))
+        self.require_route_manifest = _as_bool(rospy.get_param("~require_route_manifest", True))
         self.require_final_disarmed = _as_bool(rospy.get_param("~require_final_disarmed", True))
         self.require_final_on_ground = _as_bool(rospy.get_param("~require_final_on_ground", True))
         self.require_payload_open = _as_bool(rospy.get_param("~require_payload_open", False))
@@ -512,6 +513,39 @@ class ActiveFlightObserver(object):
             return "target_records_unreached:%s" % ";".join(unreached)
         return None
 
+    def _route_manifest_issue(self):
+        if not self.require_route_manifest:
+            return None
+        if not isinstance(self.route_manifest, dict):
+            return "route_manifest_missing"
+        if self.route_manifest.get("event") != "mission_started":
+            return "route_manifest_not_started"
+        if self.route_manifest.get("route_source") not in ("configured", "posearray"):
+            return "route_manifest_source_invalid"
+        if not self.route_manifest.get("route_fingerprint"):
+            return "route_manifest_fingerprint_missing"
+        if not isinstance(self.route_manifest.get("origin"), list):
+            return "route_manifest_origin_missing"
+        if self.route_manifest.get("origin_yaw") is None:
+            return "route_manifest_origin_yaw_missing"
+        target_route = self.route_manifest.get("target_route")
+        if not isinstance(target_route, list) or not target_route:
+            return "route_manifest_target_route_missing"
+        waypoint_count = self.route_manifest.get("waypoint_count")
+        try:
+            waypoint_count_int = int(waypoint_count)
+        except (TypeError, ValueError):
+            return "route_manifest_waypoint_count_invalid"
+        if self.total_waypoints is not None and waypoint_count_int != self.total_waypoints:
+            return "route_manifest_waypoint_count_mismatch:%d/%d" % (
+                waypoint_count_int, self.total_waypoints)
+        waypoint_targets = [item for item in target_route
+                            if isinstance(item, dict) and item.get("state") == "WAYPOINTS"]
+        if len(waypoint_targets) != waypoint_count_int:
+            return "route_manifest_target_count_mismatch:%d/%d" % (
+                len(waypoint_targets), waypoint_count_int)
+        return None
+
     def _failure_reason(self, final=False):
         if self.abort_reason:
             return "flight_aborted:%s" % self.abort_reason
@@ -538,6 +572,9 @@ class ActiveFlightObserver(object):
                 return "waypoint_progress_unavailable"
             if self.max_waypoint_index < self.total_waypoints:
                 return "waypoints_incomplete:%d/%d" % (self.max_waypoint_index, self.total_waypoints)
+        route_manifest_issue = self._route_manifest_issue()
+        if route_manifest_issue is not None:
+            return route_manifest_issue
         if self.require_active_vision_pose:
             if self.active_vision_pose_count < self.min_active_vision_pose_count:
                 return "active_vision_pose_count_below_%d" % self.min_active_vision_pose_count
@@ -650,6 +687,7 @@ class ActiveFlightObserver(object):
                 "require_active_mavros_control": self.require_active_mavros_control,
                 "require_takeoff_landing_states": self.require_takeoff_landing_states,
                 "require_waypoints_complete": self.require_waypoints_complete,
+                "require_route_manifest": self.require_route_manifest,
                 "require_final_disarmed": self.require_final_disarmed,
                 "require_final_on_ground": self.require_final_on_ground,
                 "require_payload_open": self.require_payload_open,

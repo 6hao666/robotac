@@ -18,6 +18,7 @@
   <arg name="require_active_mavros_control" default="true" />
   <arg name="require_takeoff_landing_states" default="true" />
   <arg name="require_waypoints_complete" default="true" />
+  <arg name="require_route_manifest" default="true" />
   <arg name="require_final_disarmed" default="true" />
   <arg name="require_final_on_ground" default="true" />
   <arg name="require_payload_open" default="false" />
@@ -51,6 +52,7 @@
     <param name="require_active_mavros_control" value="$(arg require_active_mavros_control)" />
     <param name="require_takeoff_landing_states" value="$(arg require_takeoff_landing_states)" />
     <param name="require_waypoints_complete" value="$(arg require_waypoints_complete)" />
+    <param name="require_route_manifest" value="$(arg require_route_manifest)" />
     <param name="require_final_disarmed" value="$(arg require_final_disarmed)" />
     <param name="require_final_on_ground" value="$(arg require_final_on_ground)" />
     <param name="require_payload_open" value="$(arg require_payload_open)" />

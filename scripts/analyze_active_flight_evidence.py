@@ -65,6 +65,40 @@ def _target_reached(record, tolerance, min_dwell_s):
             dwell is not None and dwell >= min_dwell_s)
 
 
+def _target_tuple(record):
+    target = record.get("target") if isinstance(record, dict) else None
+    if not isinstance(target, list) or len(target) < 4:
+        return None
+    values = tuple(_number(value) for value in target[:4])
+    return values if all(value is not None for value in values) else None
+
+
+def _targets_by_key(records):
+    result = {}
+    if not isinstance(records, list):
+        return result
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        if record.get("state") == "TAKEOFF":
+            key = ("TAKEOFF", 0)
+        elif record.get("state") == "WAYPOINTS":
+            waypoint_index = _int(record.get("waypoint_index"))
+            if waypoint_index is None:
+                continue
+            key = ("WAYPOINTS", waypoint_index)
+        else:
+            continue
+        target = _target_tuple(record)
+        if target is not None:
+            result[key] = target
+    return result
+
+
+def _angle_error(a, b):
+    return math.atan2(math.sin(a - b), math.cos(a - b))
+
+
 def _base_phase(data, args):
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     last_status = summary.get("last_status") if isinstance(summary.get("last_status"), dict) else {}
@@ -232,14 +266,88 @@ def _payload_phase(data):
     return _phase("payload_local_flight", not missing, missing, notes)
 
 
+def _route_manifest_phase(data, args):
+    if not args.require_route_manifest:
+        return _phase("active_route_manifest", True, [], ["route manifest check disabled"])
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    manifest = summary.get("route_manifest") if isinstance(summary.get("route_manifest"), dict) else None
+    missing = []
+    notes = []
+    if manifest is None:
+        return _phase("active_route_manifest", False,
+                      ["route_manifest_missing"],
+                      ["active_flight_observer must capture /robotac/flight/route_manifest"])
+    if manifest.get("event") != "mission_started":
+        missing.append("route_manifest_not_started")
+    route_source = manifest.get("route_source")
+    if route_source not in ("configured", "posearray"):
+        missing.append("route_manifest_source_invalid:%s" % route_source)
+    if not manifest.get("route_fingerprint"):
+        missing.append("route_manifest_fingerprint_missing")
+    if not isinstance(manifest.get("origin"), list) or len(manifest.get("origin")) < 3:
+        missing.append("route_manifest_origin_missing")
+    if _number(manifest.get("origin_yaw")) is None:
+        missing.append("route_manifest_origin_yaw_missing")
+
+    total_waypoints = _int(summary.get("total_waypoints"))
+    manifest_count = _number(manifest.get("waypoint_count"))
+    manifest_count_int = None if manifest_count is None else int(manifest_count)
+    if manifest_count is None or abs(manifest_count - manifest_count_int) > 1.0e-9:
+        missing.append("route_manifest_waypoint_count_invalid")
+    elif total_waypoints is not None and manifest_count_int != total_waypoints:
+        missing.append("route_manifest_waypoint_count_mismatch:%d!=%d" % (
+            manifest_count_int, total_waypoints))
+
+    manifest_route = manifest.get("target_route")
+    if not isinstance(manifest_route, list):
+        missing.append("route_manifest_target_route_missing")
+    else:
+        manifest_targets = _targets_by_key(manifest_route)
+        observed_targets = _targets_by_key(summary.get("target_records"))
+        expected_route_items = (0 if manifest_count_int is None else manifest_count_int) + 1
+        if len(manifest_targets) != expected_route_items:
+            missing.append("route_manifest_target_count_mismatch:%d!=%d" % (
+                len(manifest_targets), expected_route_items))
+        tolerance = args.route_manifest_target_tolerance
+        yaw_tolerance = math.radians(args.route_manifest_yaw_tolerance_deg)
+        max_position_delta = 0.0
+        max_yaw_delta = 0.0
+        for key, expected in manifest_targets.items():
+            actual = observed_targets.get(key)
+            if actual is None:
+                missing.append("route_manifest_observed_target_missing:%s%d" % (
+                    key[0].lower(), key[1]))
+                continue
+            position_delta = math.sqrt(sum((actual[index] - expected[index]) ** 2
+                                           for index in range(3)))
+            yaw_delta = abs(_angle_error(actual[3], expected[3]))
+            max_position_delta = max(max_position_delta, position_delta)
+            max_yaw_delta = max(max_yaw_delta, yaw_delta)
+            if position_delta > tolerance or yaw_delta > yaw_tolerance:
+                missing.append("route_manifest_observed_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
+                    key[0].lower(), key[1], position_delta, math.degrees(yaw_delta)))
+        if not missing:
+            notes.append("route_manifest_targets=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f" % (
+                len(manifest_targets), max_position_delta, math.degrees(max_yaw_delta)))
+
+    if not missing:
+        notes.append("route_source=%s revision=%s fingerprint=%s" % (
+            route_source, manifest.get("route_revision", "unknown"),
+            str(manifest.get("route_fingerprint", ""))[:12]))
+    return _phase("active_route_manifest", not missing, missing, notes)
+
+
 def build_report(args):
     path, data = _load(args.evidence)
-    phases = [_base_phase(data, args), _payload_phase(data)]
+    phases = [_base_phase(data, args), _route_manifest_phase(data, args), _payload_phase(data)]
     lookup = {phase["name"]: phase for phase in phases}
     if args.require_phase == "active_local_flight":
-        required_ready = lookup["active_local_flight"]["ready"]
+        required_ready = (lookup["active_local_flight"]["ready"] and
+                          lookup["active_route_manifest"]["ready"])
     else:
-        required_ready = lookup["active_local_flight"]["ready"] and lookup["payload_local_flight"]["ready"]
+        required_ready = (lookup["active_local_flight"]["ready"] and
+                          lookup["active_route_manifest"]["ready"] and
+                          lookup["payload_local_flight"]["ready"])
     return {
         "evidence": str(path),
         "required_phase": args.require_phase,
@@ -281,6 +389,13 @@ def _build_parser():
                         help="Require this many paired local_position / vision_pose relative-motion samples; 0 disables")
     parser.add_argument("--max-active-vision-local-delta-m", type=float, default=0.75,
                         help="Maximum allowed relative-motion disagreement between MAVROS local_position and vision_pose")
+    parser.add_argument("--no-require-route-manifest", dest="require_route_manifest",
+                        action="store_false", default=True,
+                        help="Do not require active evidence to include /robotac/flight/route_manifest")
+    parser.add_argument("--route-manifest-target-tolerance", type=float, default=0.05,
+                        help="Position tolerance in metres for matching route_manifest targets to observed setpoints")
+    parser.add_argument("--route-manifest-yaw-tolerance-deg", type=float, default=1.0,
+                        help="Yaw tolerance in degrees for matching route_manifest targets to observed setpoints")
     parser.add_argument("--no-require-active-mavros-control", dest="require_active_mavros_control",
                         action="store_false", default=True,
                         help="Do not require active evidence to show MAVROS connected, armed, and OFFBOARD")
@@ -301,6 +416,10 @@ def main():
         raise ValueError("min-active-vision-local-pairs must be non-negative")
     if not math.isfinite(args.max_active_vision_local_delta_m) or args.max_active_vision_local_delta_m < 0.0:
         raise ValueError("max-active-vision-local-delta-m must be finite and non-negative")
+    if not math.isfinite(args.route_manifest_target_tolerance) or args.route_manifest_target_tolerance < 0.0:
+        raise ValueError("route-manifest-target-tolerance must be finite and non-negative")
+    if not math.isfinite(args.route_manifest_yaw_tolerance_deg) or args.route_manifest_yaw_tolerance_deg < 0.0:
+        raise ValueError("route-manifest-yaw-tolerance-deg must be finite and non-negative")
     if args.expected_waypoints < 0:
         raise ValueError("expected-waypoints must be non-negative")
     if not math.isfinite(args.min_airborne_altitude) or args.min_airborne_altitude < 0.0:

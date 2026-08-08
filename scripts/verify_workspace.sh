@@ -612,6 +612,9 @@ for expected in (
     "active_vision_local_pair_count",
     "active_vision_local_max_delta_error_m",
     "require_active_vision_local_consistency",
+    "require_route_manifest",
+    "route_manifest_missing",
+    "route_manifest_target_route_missing",
     "active_local_flight_passed",
     "target_records",
     "target_records_unreached",
@@ -979,6 +982,11 @@ for expected in (
     "active_vision_local_delta_error",
     "min-active-vision-local-pairs",
     "max-active-vision-local-delta-m",
+    "active_route_manifest",
+    "route_manifest_missing",
+    "route_manifest_target_route_missing",
+    "route_manifest_observed_target_mismatch",
+    "route-manifest-target-tolerance",
     "waypoints_incomplete",
     "final_disarmed",
     "final_on_ground",
@@ -1168,7 +1176,8 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    target_reached=True, missing_waypoint_index=None,
                    target_dwell_s=1.0, active_vision=True,
                    active_vision_local_error=0.05,
-                   active_mavros_control=True, include_landing_state=True):
+                   active_mavros_control=True, include_landing_state=True,
+                   omit_route_manifest=False, corrupt_route_manifest_target=False):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
          "waypoint_total": 8, "min_distance_m": 0.08,
@@ -1197,6 +1206,32 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "max_continuous_reach_s": target_dwell_s if reached else 0.0,
             "reached": reached,
         })
+    route_manifest = None
+    if not omit_route_manifest:
+        manifest_route = []
+        for record in target_records:
+            manifest_target = list(record["target"])
+            if corrupt_route_manifest_target and record["state"] == "WAYPOINTS" and record["waypoint_index"] == 2:
+                manifest_target[0] += 0.50
+            manifest_route.append({
+                "state": record["state"],
+                "waypoint_index": record["waypoint_index"] if record["state"] == "WAYPOINTS" else None,
+                "target": manifest_target,
+            })
+        route_manifest = {
+            "event": "mission_started",
+            "route_source": "configured",
+            "route_revision": 0,
+            "route_fingerprint": "synthetic",
+            "waypoint_frame": "robotac_start_body",
+            "waypoint_count": 8,
+            "takeoff_height": 1.0,
+            "require_auto_land": True,
+            "auto_land": True,
+            "origin": [0.0, 0.0, 0.0],
+            "origin_yaw": 0.0,
+            "target_route": manifest_route,
+        }
     path.write_text(json.dumps({
         "observer": "active_flight_observer",
         "success": success,
@@ -1212,6 +1247,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
             "target_records": target_records,
+            "route_manifest": route_manifest,
             "active_vision_pose_count": 24 if active_vision else 0,
             "active_vision_pose_parent": "odom" if active_vision else None,
             "active_vision_pose_first_stamp": 10.0 if active_vision else None,
@@ -1254,6 +1290,20 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if ok.returncode != 0 or "active_local_flight=READY" not in ok.stdout:
         raise SystemExit("Active flight evidence analyzer rejected valid evidence:\n%s\n%s" % (ok.stdout, ok.stderr))
+    if "active_route_manifest=READY" not in ok.stdout:
+        raise SystemExit("Active flight evidence analyzer did not mark route manifest evidence ready")
+    write_evidence(evidence, omit_route_manifest=True)
+    missing_manifest = subprocess.run([sys.executable, script, str(root)], text=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_manifest.returncode == 0 or "route_manifest_missing" not in missing_manifest.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted missing route manifest evidence")
+    write_evidence(evidence, corrupt_route_manifest_target=True)
+    bad_manifest_target = subprocess.run([sys.executable, script, str(root)], text=True,
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if (bad_manifest_target.returncode == 0 or
+            "route_manifest_observed_target_mismatch:waypoints2" not in bad_manifest_target.stdout):
+        raise SystemExit("Active flight evidence analyzer accepted route manifest target mismatch")
+    write_evidence(evidence)
     payload_missing = subprocess.run([sys.executable, script, str(root), "--require-phase", "payload_local_flight"],
                                      text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if payload_missing.returncode == 0 or "payload_local_flight=BLOCKED" not in payload_missing.stdout:

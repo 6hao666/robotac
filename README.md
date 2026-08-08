@@ -650,15 +650,18 @@ The observer subscribes only to `/robotac/flight/status`,
 setpoints, calls services, arms, changes mode, or commands landing. A passing
 `active_flight_observer.json` requires the controller to reach `COMPLETE`, all
 waypoints to be consumed, controller `TAKEOFF` and `LANDING` states to appear,
+`/robotac/flight/route_manifest` to contain the `mission_started` target route,
 relative airborne altitude to have been observed, MAVROS to finish
 disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to have been
 observed within the configured `waypoint_reach_tolerance` by
 `/mavros/local_position/odom` for at least `min_target_dwell_s` continuous
 seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and the
 analyzer rejects evidence that lacks a reached-and-dwelled record for any
-configured waypoint. It also requires active-flight `/mavros/vision_pose/pose_cov`
-samples, a seen `fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision
-status by default. It then checks paired local-position / vision-pose relative
+configured waypoint. The standalone active-evidence analyzer also checks that
+the manifest target route matches the observed active setpoint targets. It also
+requires active-flight `/mavros/vision_pose/pose_cov` samples, a seen
+`fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision status by
+default. It then checks paired local-position / vision-pose relative
 motion samples; by default at least 5 pairs must exist and their maximum relative
 displacement disagreement must stay within `max_active_vision_local_delta_m`
 (`0.75 m`). Active evidence must also show MAVROS connected, armed, and in
