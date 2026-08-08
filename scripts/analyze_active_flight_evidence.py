@@ -79,6 +79,10 @@ def _base_phase(data, args):
 
     total_waypoints = _int(summary.get("total_waypoints"))
     max_waypoint_index = _int(summary.get("max_waypoint_index"))
+    expected_waypoints = _int(getattr(args, "expected_waypoints", 0)) or 0
+    if expected_waypoints > 0 and total_waypoints != expected_waypoints:
+        missing.append("expected_waypoints_mismatch:%s!=%d" % (
+            "unknown" if total_waypoints is None else total_waypoints, expected_waypoints))
     if total_waypoints is None or total_waypoints < args.min_waypoints:
         missing.append("total_waypoints_below_%d" % args.min_waypoints)
     if max_waypoint_index is None or total_waypoints is None or max_waypoint_index < total_waypoints:
@@ -201,6 +205,8 @@ def _build_parser():
     parser.add_argument("--require-phase", default="active_local_flight",
                         choices=("active_local_flight", "payload_local_flight"))
     parser.add_argument("--min-waypoints", type=int, default=1)
+    parser.add_argument("--expected-waypoints", type=int, default=0,
+                        help="Require the observed mission waypoint count to exactly match this value; 0 disables exact matching")
     parser.add_argument("--min-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
@@ -213,6 +219,8 @@ def main():
     args = _build_parser().parse_args()
     if args.min_waypoints < 1 or args.min_setpoints < 1 or args.min_unique_setpoints < 1:
         raise ValueError("minimum waypoint/setpoint counts must be positive")
+    if args.expected_waypoints < 0:
+        raise ValueError("expected-waypoints must be non-negative")
     if not math.isfinite(args.min_airborne_altitude) or args.min_airborne_altitude < 0.0:
         raise ValueError("min-airborne-altitude must be finite and non-negative")
     if not math.isfinite(args.waypoint_reach_tolerance) or args.waypoint_reach_tolerance <= 0.0:

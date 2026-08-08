@@ -75,13 +75,18 @@ def _readonly_report(args):
     return analyze_readonly_flight_evidence.build_report(readonly_args)
 
 
-def _active_report(args):
+def _active_report(args, configured_waypoints):
     if not args.active_evidence:
         return None
+    expected_waypoints = args.expected_waypoints
+    if expected_waypoints <= 0 and not args.allow_dynamic_active_route:
+        expected_waypoints = configured_waypoints
+    min_waypoints = args.min_waypoints if args.min_waypoints > 0 else max(1, expected_waypoints)
     active_args = SimpleNamespace(
         evidence=args.active_evidence,
         require_phase="active_local_flight",
-        min_waypoints=args.min_waypoints,
+        min_waypoints=min_waypoints,
+        expected_waypoints=expected_waypoints,
         min_setpoints=args.min_setpoints,
         min_unique_setpoints=args.min_unique_setpoints,
         min_airborne_altitude=args.min_airborne_altitude,
@@ -99,7 +104,8 @@ def _config_phase(readiness, name):
 def build_report(args):
     readiness = _readiness_report(args)
     readonly = _readonly_report(args)
-    active = _active_report(args)
+    configured_waypoints = int(readiness.get("mission", {}).get("waypoints") or 0)
+    active = _active_report(args, configured_waypoints)
 
     phases = [
         _config_phase(readiness, "vision_output"),
@@ -217,7 +223,12 @@ def _build_parser():
     parser.add_argument("--min-fastlio-hz", type=float, default=5.0)
     parser.add_argument("--min-vision-hz", type=float, default=5.0)
     parser.add_argument("--min-timesync-hz", type=float, default=2.0)
-    parser.add_argument("--min-waypoints", type=int, default=1)
+    parser.add_argument("--min-waypoints", type=int, default=0,
+                        help="Minimum observed active-flight waypoints; 0 uses the configured route count")
+    parser.add_argument("--expected-waypoints", type=int, default=0,
+                        help="Exact observed active-flight waypoint count; 0 uses the configured route count")
+    parser.add_argument("--allow-dynamic-active-route", action="store_true",
+                        help="Do not require active-flight evidence to match the configured route waypoint count")
     parser.add_argument("--min-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
@@ -231,6 +242,8 @@ def _build_parser():
 
 def main():
     args = _build_parser().parse_args()
+    if args.min_waypoints < 0 or args.expected_waypoints < 0:
+        raise ValueError("min-waypoints and expected-waypoints must be non-negative")
     report = build_report(args)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))

@@ -834,6 +834,7 @@ for expected in (
     "active_flight_observer.json",
     "active_local_flight_passed",
     "target_records_unreached",
+    "expected_waypoints_mismatch",
     "waypoint-reach-tolerance",
     "waypoints_incomplete",
     "final_disarmed",
@@ -1131,13 +1132,13 @@ def write_readonly_evidence(root):
         "metrics": {},
     }, indent=2))
 
-def write_active_evidence(root, payload_open=False, success=True):
+def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8):
     root.mkdir(parents=True, exist_ok=True)
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
-         "waypoint_total": 8, "min_distance_m": 0.08, "reached": True},
+         "waypoint_total": waypoint_count, "min_distance_m": 0.08, "reached": True},
     ]
-    for index, target in enumerate((
+    route = (
             [1, 0, 1, 0],
             [0, 0, 1, 0],
             [0, 1, 1, 0],
@@ -1146,12 +1147,13 @@ def write_active_evidence(root, payload_open=False, success=True):
             [0, 0, 1, 0],
             [-1, 0, 1, 0],
             [0, 0, 1, 0],
-    )):
+    )[:waypoint_count]
+    for index, target in enumerate(route):
         target_records.append({
             "target": target,
             "state": "WAYPOINTS",
             "waypoint_index": index,
-            "waypoint_total": 8,
+            "waypoint_total": waypoint_count,
             "min_distance_m": 0.12,
             "reached": True,
         })
@@ -1160,10 +1162,10 @@ def write_active_evidence(root, payload_open=False, success=True):
         "success": success,
         "reason": "active_local_flight_passed" if success else "flight_aborted:test",
         "summary": {
-            "last_status": {"state": "COMPLETE" if success else "ABORT", "waypoint": "8/8"},
+            "last_status": {"state": "COMPLETE" if success else "ABORT", "waypoint": "%d/%d" % (waypoint_count, waypoint_count)},
             "abort_reason": None if success else "test",
-            "max_waypoint_index": 8,
-            "total_waypoints": 8,
+            "max_waypoint_index": waypoint_count,
+            "total_waypoints": waypoint_count,
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
             "target_records": target_records,
@@ -1199,6 +1201,14 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if ready.returncode != 0 or "active_local_flight=READY" not in ready.stdout:
         raise SystemExit("Goal audit rejected valid synthetic active-flight evidence:\n%s\n%s" % (ready.stdout, ready.stderr))
+    write_active_evidence(active, payload_open=False, waypoint_count=1)
+    short_route = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if short_route.returncode == 0 or "expected_waypoints_mismatch:1!=8" not in short_route.stdout:
+        raise SystemExit("Goal audit accepted active-flight evidence from the wrong route length")
+    write_active_evidence(active, payload_open=False)
     payload_missing = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
          "--readonly-evidence", str(readonly), "--active-evidence", str(active),
