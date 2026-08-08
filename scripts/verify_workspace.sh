@@ -417,6 +417,17 @@ for expected in (
 ):
     if expected not in flight_source:
         raise SystemExit(f"Flight vision-output gate check failed: missing {expected}")
+for expected in (
+    "if self.enable_control else None",
+    "if self.enable_payload else None",
+    "self.setpoint_pub is not None",
+):
+    if expected not in flight_source:
+        raise SystemExit(f"Flight dry-run publisher isolation check failed: missing {expected}")
+if "self.setpoint_pub = rospy.Publisher(self.setpoint_topic" in flight_source:
+    raise SystemExit("Dry-run flight node must not unconditionally register MAVROS setpoint publisher")
+if "self.payload_pub = rospy.Publisher(self.payload_topic" in flight_source:
+    raise SystemExit("Dry-run flight node must not unconditionally register payload publisher")
 for name, source in (("flight controller", flight_source),
                      ("vision bridge", bridge_source),
                      ("read-only preflight", preflight_source)):

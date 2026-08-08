@@ -342,6 +342,10 @@ roslaunch robotac_flight local_waypoint_flight.launch \
   enable_control:=false auto_mode:=false auto_arm:=false auto_land:=false
 ```
 
+With `enable_control:=false`, the node registers only the preview publisher; it
+does not register a publisher on `/mavros/setpoint_raw/local`. This keeps
+read-only evidence bundles from showing a phantom control publisher.
+
 The following regression test is isolated from the aircraft: it starts a
 separate loopback ROS master, a MAVROS/PX4 contract simulator, and the
 controller. It uses a non-zero local start position and a 90 degree heading to

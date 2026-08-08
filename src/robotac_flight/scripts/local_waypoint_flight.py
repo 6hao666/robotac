@@ -259,8 +259,13 @@ class LocalWaypointFlight(object):
         self.last_consumer_issue = None
 
         self.preview_pub = rospy.Publisher("/robotac/flight/setpoint_preview", PositionTarget, queue_size=10)
-        self.setpoint_pub = rospy.Publisher(self.setpoint_topic, PositionTarget, queue_size=10)
-        self.payload_pub = rospy.Publisher(self.payload_topic, Bool, queue_size=1)
+        # Do not even register a MAVROS setpoint publisher unless active
+        # control is explicitly enabled. This keeps dry-run/preview launches
+        # out of the FCU control topic and makes read-only evidence unambiguous.
+        self.setpoint_pub = (rospy.Publisher(self.setpoint_topic, PositionTarget, queue_size=10)
+                             if self.enable_control else None)
+        self.payload_pub = (rospy.Publisher(self.payload_topic, Bool, queue_size=1)
+                            if self.enable_payload else None)
         self.status_pub = rospy.Publisher("/robotac/flight/status", String, queue_size=1, latch=True)
         self.active_pub = rospy.Publisher("/robotac/flight/active", Bool, queue_size=1, latch=True)
         rospy.Subscriber("/mavros/state", State, self._state_cb, queue_size=10)
@@ -595,7 +600,7 @@ class LocalWaypointFlight(object):
             return TriggerResponse(False, self.last_error)
         if (self.enable_payload and self._has_payload_actions() and
                 self.payload_required_connection and
-                self.payload_pub.get_num_connections() < 1):
+                (self.payload_pub is None or self.payload_pub.get_num_connections() < 1)):
             return TriggerResponse(False, "payload_subscriber_unavailable")
         if (self.enable_payload and self.payload_require_ack and
                 (self.payload_ack_time is None or self.payload_ack_boot_id is None)):
@@ -978,6 +983,8 @@ class LocalWaypointFlight(object):
     def _publish_payload(self, is_open):
         if not self.enable_payload:
             return True
+        if self.payload_pub is None:
+            return False
         if self.payload_required_connection and self.payload_pub.get_num_connections() < 1:
             return False
         self.payload_expected_state = "open" if is_open else "closed"
@@ -1064,7 +1071,7 @@ class LocalWaypointFlight(object):
     def _publish_setpoint(self, target):
         msg = self._make_setpoint(target)
         self.preview_pub.publish(msg)
-        if self.enable_control and self.control_tx_enabled:
+        if self.enable_control and self.control_tx_enabled and self.setpoint_pub is not None:
             self.setpoint_pub.publish(msg)
             self.last_setpoint_wall = time.monotonic()
         self.last_setpoint = msg
