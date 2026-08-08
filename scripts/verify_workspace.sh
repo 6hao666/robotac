@@ -34,6 +34,7 @@ required_paths=(
   config/deployment_sim.yaml
   config/udev/99-robotac-servo.rules.template
   config/udev/99-robotac-rgb-camera.rules.template
+  scripts/flight_test_ladder.sh
 )
 
 for path in "${required_paths[@]}"; do
@@ -401,6 +402,44 @@ for expected in (
     if expected not in source:
         raise SystemExit(f"AprilTag config check failed: missing {expected}")
 print("Validated AprilTag IDs 0/1 and 0.15 m pose-estimation size.")
+PY
+
+python3 - "${workspace_dir}/scripts/flight_test_ladder.sh" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+source = path.read_text()
+for expected in (
+    "This script never starts ROS nodes",
+    "--show-active",
+    "Deployment gates are not all true",
+    "rosservice call /robotac/flight/start",
+    "enable_flight_controller:=false",
+    "flight_auto_arm:=true",
+):
+    if expected not in source:
+        raise SystemExit(f"Flight test ladder check failed: missing {expected}")
+
+in_heredoc = False
+delimiter = None
+for number, line in enumerate(source.splitlines(), start=1):
+    stripped = line.strip()
+    if in_heredoc:
+        if stripped == delimiter:
+            in_heredoc = False
+            delimiter = None
+        continue
+    match = re.search(r"<<'?([A-Za-z_][A-Za-z0-9_]*)'?", line)
+    if match:
+        in_heredoc = True
+        delimiter = match.group(1)
+        continue
+    if re.match(r"^(roslaunch|rosservice|rostopic|rosrun)\b", stripped):
+        raise SystemExit(
+            f"Flight test ladder must only print ROS commands; line {number} executes: {stripped}")
+print("Validated flight test ladder remains offline/read-only by default.")
 PY
 
 for script in "${workspace_dir}"/scripts/*.sh "${workspace_dir}"/src/robotac_bringup/scripts/*.sh; do

@@ -146,6 +146,22 @@ publishes only `/robotac/flight/setpoint_preview`. Nothing is sent to MAVROS
 until the corresponding output gate is explicitly enabled, and the flight
 state machine still requires a separate `/robotac/flight/start` service call.
 
+For the staged path from offline checks to read-only aircraft observation, run:
+
+```bash
+./scripts/flight_test_ladder.sh
+```
+
+This helper is offline by default: it runs `verify_workspace.sh`, previews the
+configured local route, prints the deployment-gate status, and then prints the
+next read-only aircraft commands. It never starts ROS nodes, opens serial
+devices, sends setpoints, changes modes, arms, or calls MAVROS services. Active
+flight commands are hidden unless `--show-active` is supplied, and even then the
+script refuses to print them until the active-flight deployment gates in
+`config/deployment.yaml` are all true. Use `--skip-verify` only when you are
+iterating on the printed route/command ladder and have just run the full
+workspace verification separately.
+
 ## FAST-LIO vision input
 
 `fastlio_vision_bridge.py` converts `/Odometry` from
