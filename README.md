@@ -352,9 +352,12 @@ After the measured transforms, PX4 external-vision parameters, and deployment
 gates have been approved, repeat it with
 `require_vision_output:=true require_timesync:=true check_px4_vision_params:=true`.
 This also checks that the configured consumer node, `/mavros` by default, is
-subscribed to the exact vision-pose topic. The parameter query is read-only. The
-following regression exercises that preflight against a loopback ROS graph; it
-opens no serial device and starts no MAVROS:
+subscribed to the exact vision-pose topic. The PX4 parameter query is read-only
+and, by default, also requires `EKF2_EV_POS_X/Y/Z` to be zero within 0.01 m;
+Robotac's bridge already outputs the airframe `base_link` pose, so non-zero PX4
+EV offsets would apply the external-vision lever arm twice. The following
+regression exercises that preflight against a loopback ROS graph; it opens no
+serial device and starts no MAVROS:
 
 ```bash
 src/robotac_flight/test/run_flight_preflight_sim.sh

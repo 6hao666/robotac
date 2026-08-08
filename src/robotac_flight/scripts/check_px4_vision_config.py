@@ -2,6 +2,7 @@
 """Read-only check of PX4 external-vision EKF parameters through MAVROS."""
 
 import sys
+import math
 
 import rospy
 from mavros_msgs.srv import ParamGet
@@ -36,6 +37,11 @@ def main():
     rospy.init_node("check_px4_vision_config", anonymous=True)
     service_name = rospy.get_param("~param_get_service", "/mavros/param/get")
     require_yaw = as_bool(rospy.get_param("~require_yaw_fusion", False))
+    require_ev_offsets_zero = as_bool(rospy.get_param("~require_ev_offsets_zero", True))
+    ev_offset_tolerance_m = float(rospy.get_param("~ev_offset_tolerance_m", 0.01))
+    if not math.isfinite(ev_offset_tolerance_m) or ev_offset_tolerance_m < 0.0:
+        print("FAIL: ev_offset_tolerance_m must be finite and non-negative")
+        return 3
     try:
         rospy.wait_for_service(service_name, timeout=5.0)
         get = rospy.ServiceProxy(service_name, ParamGet)
@@ -66,6 +72,18 @@ def main():
         for name in ("EKF2_EV_DELAY", "EKF2_EV_POS_X", "EKF2_EV_POS_Y", "EKF2_EV_POS_Z"):
             value = get_param(get, name)
             print("%s=%s" % (name, "unavailable" if value is None else value))
+        if require_ev_offsets_zero:
+            offsets = []
+            for name in ("EKF2_EV_POS_X", "EKF2_EV_POS_Y", "EKF2_EV_POS_Z"):
+                value = get_param(get, name)
+                if value is None:
+                    print("FAIL: %s is unavailable; cannot verify zero PX4 EV lever arm" % name)
+                    return 2
+                offsets.append(float(value))
+            if any(abs(value) > ev_offset_tolerance_m for value in offsets):
+                print("FAIL: PX4 EV_POS offsets must be zero when Robotac bridge outputs base_link pose; offsets=%s tolerance=%.3f" %
+                      (",".join("%.4f" % value for value in offsets), ev_offset_tolerance_m))
+                return 2
         print("PASS: PX4 external-vision fusion parameters are enabled (read-only check)")
         return 0
     except (rospy.ROSException, rospy.ServiceException) as exc:

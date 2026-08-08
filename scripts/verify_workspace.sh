@@ -157,7 +157,8 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/robotac_flight/scripts/local_waypoint_flight.py" \
   "${workspace_dir}/src/robotac_flight/scripts/fastlio_vision_bridge.py" \
   "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" \
-  "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" <<'PY'
+  "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/scripts/check_px4_vision_config.py" <<'PY'
 import pathlib
 import sys
 
@@ -171,6 +172,7 @@ flight_source = pathlib.Path(sys.argv[7]).read_text()
 bridge_source = pathlib.Path(sys.argv[8]).read_text()
 dynamic_waypoint_test = pathlib.Path(sys.argv[9]).read_text()
 preflight_test = pathlib.Path(sys.argv[10]).read_text()
+px4_check_source = pathlib.Path(sys.argv[11]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -227,6 +229,10 @@ for expected in (
     "require_vision_output_consumer",
     "vision_output_consumer_node",
     "vision_output_consumer_issue",
+    "require_ev_offsets_zero",
+    "ev_offset_tolerance_m",
+    "EKF2_EV_POS_X",
+    "EV_POS_nonzero",
     "TimesyncStatus",
     "timesync_issue",
 ):
@@ -266,6 +272,14 @@ for expected in (
 ):
     if expected not in preflight_test:
         raise SystemExit(f"Preflight regression check failed: missing {expected}")
+for expected in (
+    "require_ev_offsets_zero",
+    "ev_offset_tolerance_m",
+    "EKF2_EV_POS_X",
+    "EV_POS offsets must be zero",
+):
+    if expected not in px4_check_source:
+        raise SystemExit(f"PX4 vision config check failed: missing {expected}")
 print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 

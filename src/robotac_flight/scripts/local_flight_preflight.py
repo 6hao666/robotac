@@ -126,6 +126,9 @@ class LocalFlightPreflight(object):
         self.check_px4_vision_params = _as_bool(
             rospy.get_param("~check_px4_vision_params", False))
         self.require_yaw_fusion = _as_bool(rospy.get_param("~require_yaw_fusion", False))
+        self.require_ev_offsets_zero = _as_bool(
+            rospy.get_param("~require_ev_offsets_zero", True))
+        self.ev_offset_tolerance_m = float(rospy.get_param("~ev_offset_tolerance_m", 0.01))
         self.require_vision_output_consumer = _as_bool(
             rospy.get_param("~require_vision_output_consumer", self.require_vision_output))
         self.vision_output_consumer_node = str(rospy.get_param(
@@ -230,6 +233,8 @@ class LocalFlightPreflight(object):
             raise ValueError("vision_output_consumer_node must be non-empty")
         if not math.isfinite(self.max_timesync_rtt_ms) or self.max_timesync_rtt_ms < 0.0:
             raise ValueError("max_timesync_rtt_ms must be finite and non-negative")
+        if not math.isfinite(self.ev_offset_tolerance_m) or self.ev_offset_tolerance_m < 0.0:
+            raise ValueError("ev_offset_tolerance_m must be finite and non-negative")
 
     def _stamp_is_current(self, stamp, age_limit):
         if stamp == rospy.Time(0):
@@ -457,6 +462,18 @@ class LocalFlightPreflight(object):
                     self.px4_params_issue = "EKF2_AID_MASK_missing_mask:0x%02x" % required
                 else:
                     self.px4_params_issue = "ok"
+            if self.px4_params_issue == "ok" and self.require_ev_offsets_zero:
+                offsets = []
+                for name in ("EKF2_EV_POS_X", "EKF2_EV_POS_Y", "EKF2_EV_POS_Z"):
+                    value = self._get_px4_param(get, name)
+                    if value is None:
+                        self.px4_params_issue = "%s_unavailable" % name
+                        break
+                    offsets.append(float(value))
+                if self.px4_params_issue == "ok" and any(
+                        abs(value) > self.ev_offset_tolerance_m for value in offsets):
+                    self.px4_params_issue = "EV_POS_nonzero:%s" % ",".join(
+                        "%.4f" % value for value in offsets)
         except (rospy.ROSException, rospy.ServiceException) as exc:
             self.px4_params_issue = "param_get_failed:%s" % exc
         self.px4_params_checked = True
