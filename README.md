@@ -166,7 +166,9 @@ mission, it also checks that `/mavros` is subscribed to that exact vision-pose
 topic, which confirms the MAVROS vision-pose plugin is loaded. Active control
 also requires `/mavros` to subscribe to `/mavros/setpoint_raw/local`; this
 confirms the MAVROS setpoint_raw plugin is present before the controller tries
-to stream OFFBOARD setpoints.
+to stream OFFBOARD setpoints. During the active mission, those MAVROS consumer
+checks are repeated at the configured `consumer_check_interval`; losing either
+required consumer enters `ABORT` and closes the raw setpoint transmission gate.
 
 Interfaces:
 
@@ -356,6 +358,15 @@ while the bridge health signal remains true:
 
 ```bash
 ROBOTAC_FLIGHT_FAULT=vision_output_loss \
+  src/robotac_flight/test/run_flight_fault_sim.sh
+```
+
+It can also exercise loss of MAVROS's raw-setpoint consumer after the mission
+has already entered OFFBOARD/armed simulation. The controller must enter
+`ABORT` with `mavros_setpoint_raw_consumer_lost` and stop raw setpoint output:
+
+```bash
+ROBOTAC_FLIGHT_FAULT=setpoint_consumer_loss \
   src/robotac_flight/test/run_flight_fault_sim.sh
 ```
 

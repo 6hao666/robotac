@@ -62,6 +62,10 @@ local_waypoint_flight:
   setpoint_topic: /mavros/setpoint_raw/local
   require_setpoint_consumer: true
   setpoint_consumer_node: /mavros
+  # During active control, re-check that MAVROS is still consuming both
+  # vision-pose and setpoint_raw topics. A lost consumer immediately aborts
+  # and closes the raw setpoint transmission gate.
+  consumer_check_interval: 0.50
   # MAVROS sends the FAST-LIO source timestamp in VISION_POSITION_ESTIMATE.
   # Require a live, low-latency MAVLink time-sync stream before active control.
   require_timesync: true

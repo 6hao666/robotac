@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Hardware-isolated controller failure regression. It verifies that loss of
-# FAST-LIO vision stops raw MAVROS setpoints instead of holding an old target.
+# FAST-LIO vision or required MAVROS consumers stops raw setpoints instead of
+# holding an old target.
 set -euo pipefail
 
 workspace_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
@@ -72,6 +73,9 @@ case "${fault}" in
     ;;
   vision_output_loss)
     expected_error=mavros_vision_pose_timeout
+    ;;
+  setpoint_consumer_loss)
+    expected_error=mavros_setpoint_raw_consumer_lost
     ;;
   *)
     echo "Unsupported ROBOTAC_FLIGHT_FAULT: ${fault}" >&2

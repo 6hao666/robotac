@@ -173,7 +173,8 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
   "${workspace_dir}/src/robotac_flight/scripts/check_px4_vision_config.py" \
   "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" \
-  "${workspace_dir}/src/robotac_flight/scripts/ev_acceptance_observer.py" <<'PY'
+  "${workspace_dir}/src/robotac_flight/scripts/ev_acceptance_observer.py" \
+  "${workspace_dir}/src/robotac_flight/test/run_flight_fault_sim.sh" <<'PY'
 import pathlib
 import sys
 
@@ -190,6 +191,7 @@ preflight_test = pathlib.Path(sys.argv[10]).read_text()
 px4_check_source = pathlib.Path(sys.argv[11]).read_text()
 setpoint_gate_test = pathlib.Path(sys.argv[12]).read_text()
 ev_acceptance_source = pathlib.Path(sys.argv[13]).read_text()
+flight_fault_test = pathlib.Path(sys.argv[14]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -211,6 +213,7 @@ for expected in (
     "setpoint_topic: /mavros/setpoint_raw/local",
     "require_setpoint_consumer: true",
     "setpoint_consumer_node: /mavros",
+    "consumer_check_interval: 0.50",
     "require_timesync: true",
 ):
     if expected not in flight_config:
@@ -226,6 +229,8 @@ for expected in (
     "def _enu_to_ned_target",
     "def _ned_to_enu_target",
     "mavlink_ned_route=",
+    "setpoint_consumer_loss",
+    "self.setpoint_sub.unregister()",
 ):
     if expected not in sim_source:
         raise SystemExit(f"Flight simulation conversion check failed: missing {expected}")
@@ -295,6 +300,11 @@ for expected in (
     "mavros_timesync_stale",
     "mavros_vision_pose_consumer_unavailable",
     "mavros_setpoint_raw_consumer_unavailable",
+    "mavros_vision_pose_consumer_lost",
+    "mavros_setpoint_raw_consumer_lost",
+    "consumer_check_interval",
+    "invalid_consumer_check_interval",
+    "_active_consumer_issue",
     "_setpoint_consumer_present",
     "setpoint_topic",
 ):
@@ -363,6 +373,13 @@ for expected in (
 ):
     if expected not in setpoint_gate_test:
         raise SystemExit(f"Setpoint consumer gate regression check failed: missing {expected}")
+for expected in (
+    "setpoint_consumer_loss",
+    "mavros_setpoint_raw_consumer_lost",
+    "post_abort_setpoints=0",
+):
+    if expected not in flight_fault_test:
+        raise SystemExit(f"Flight fault regression check failed: missing {expected}")
 print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 

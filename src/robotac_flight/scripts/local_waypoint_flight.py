@@ -162,6 +162,8 @@ class LocalWaypointFlight(object):
             rospy.get_param("~require_setpoint_consumer", True))
         self.setpoint_consumer_node = str(rospy.get_param(
             "~setpoint_consumer_node", "/mavros")).strip()
+        self.consumer_check_interval = float(
+            rospy.get_param("~consumer_check_interval", 0.50))
         self.vision_status_topic = rospy.get_param(
             "~vision_status_topic", "/robotac/fastlio_vision/status")
         self.vision_output_topic = rospy.get_param(
@@ -253,6 +255,8 @@ class LocalWaypointFlight(object):
         self.payload_ack_time = None
         self.payload_state = "disabled" if not self.enable_payload else "uncommanded"
         self.last_error = "idle"
+        self.last_consumer_check_wall = 0.0
+        self.last_consumer_issue = None
 
         self.preview_pub = rospy.Publisher("/robotac/flight/setpoint_preview", PositionTarget, queue_size=10)
         self.setpoint_pub = rospy.Publisher(self.setpoint_topic, PositionTarget, queue_size=10)
@@ -622,6 +626,8 @@ class LocalWaypointFlight(object):
         self.abort_action = "release"
         self.abort_setpoint_policy = "release"
         self.control_tx_enabled = self.enable_control
+        self.last_consumer_check_wall = 0.0
+        self.last_consumer_issue = None
         self._enter(self.PAYLOAD_PREPARE if
                     self.enable_payload and self.payload_preflight_close else self.PRESTREAM)
         return TriggerResponse(True, "mission_started_control_enabled=%s" % self.enable_control)
@@ -653,6 +659,8 @@ class LocalWaypointFlight(object):
         self.abort_action = "release"
         self.abort_setpoint_policy = "release"
         self.control_tx_enabled = False
+        self.last_consumer_check_wall = 0.0
+        self.last_consumer_issue = None
         self.landing_started = None
         self.auto_land_request_started = None
         self.payload_action_index = None
@@ -705,6 +713,9 @@ class LocalWaypointFlight(object):
         if self.require_setpoint_consumer and (
                 not self.setpoint_topic or not self.setpoint_consumer_node):
             self.last_error = "invalid_setpoint_consumer_config"
+            return False
+        if not math.isfinite(self.consumer_check_interval) or self.consumer_check_interval <= 0.0:
+            self.last_error = "invalid_consumer_check_interval"
             return False
         if self.strict_local_frames and (
                 not self.expected_local_parent or not self.expected_local_child):
@@ -929,6 +940,24 @@ class LocalWaypointFlight(object):
         return self._topic_consumer_present(
             self.setpoint_topic, self.setpoint_consumer_node, "MAVROS setpoint_raw")
 
+    def _active_consumer_issue(self):
+        """Return a precise issue if a required MAVROS consumer disappeared."""
+        if not self.enable_control:
+            self.last_consumer_issue = None
+            return None
+        now = time.monotonic()
+        if now - self.last_consumer_check_wall < self.consumer_check_interval:
+            return self.last_consumer_issue
+        self.last_consumer_check_wall = now
+        issue = None
+        if (self.require_vision_output and self.require_vision_output_consumer and
+                not self._vision_output_consumer_present()):
+            issue = "mavros_vision_pose_consumer_lost"
+        elif self.require_setpoint_consumer and not self._setpoint_consumer_present():
+            issue = "mavros_setpoint_raw_consumer_lost"
+        self.last_consumer_issue = issue
+        return issue
+
     def _has_payload_actions(self):
         return any(waypoint["payload_action"] != "none" for waypoint in self.waypoints)
 
@@ -1076,6 +1105,10 @@ class LocalWaypointFlight(object):
                     self._abort(vision_issue)
                 elif self.require_estimator and not self._estimator_ok():
                     self._abort("px4_estimator_lost")
+                else:
+                    consumer_issue = self._active_consumer_issue()
+                    if consumer_issue is not None:
+                        self._abort(consumer_issue)
 
         if self.state in (self.PAYLOAD_PREPARE, self.PRESTREAM, self.WAIT_OFFBOARD) and self.fcu.armed:
             self._abort("unexpected_armed_before_offboard")
