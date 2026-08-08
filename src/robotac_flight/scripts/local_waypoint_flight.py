@@ -332,11 +332,13 @@ class LocalWaypointFlight(object):
             self._reject_local_odom("non_monotonic_timestamp")
             return
         now = rospy.Time.now()
-        if now != rospy.Time(0):
-            age = (now - stamp).to_sec()
-            if age > self.local_stamp_timeout or age < -self.local_stamp_future_tolerance:
-                self._reject_local_odom("timestamp_age:%.3f" % age)
-                return
+        if now == rospy.Time(0):
+            self._reject_local_odom("ros_clock_unavailable")
+            return
+        age = (now - stamp).to_sec()
+        if age > self.local_stamp_timeout or age < -self.local_stamp_future_tolerance:
+            self._reject_local_odom("timestamp_age:%.3f" % age)
+            return
         position = (float(msg.pose.pose.position.x), float(msg.pose.pose.position.y),
                     float(msg.pose.pose.position.z))
         _, _, yaw = euler_from_quaternion(normalized)
@@ -416,8 +418,9 @@ class LocalWaypointFlight(object):
         if self.state != self.IDLE:
             self.last_error = "waypoints_locked_during_mission"
             return
-        if msg.header.frame_id and msg.header.frame_id != self.input_frame:
+        if msg.header.frame_id != self.input_frame:
             self.last_error = "waypoint_frame_must_be_%s" % self.input_frame
+            self._publish_status()
             return
         converted = []
         for pose in msg.poses:

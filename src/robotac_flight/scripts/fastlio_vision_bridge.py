@@ -245,8 +245,11 @@ class FastlioVisionBridge(object):
                     return
 
         now = rospy.Time.now()
+        if now == rospy.Time(0):
+            self._reject("ros_clock_unavailable")
+            return
         age = (now - stamp).to_sec()
-        if now != rospy.Time(0) and (age > self.max_age or age < -self.max_future):
+        if age > self.max_age or age < -self.max_future:
             self._reject("timestamp_age:%.3f" % age)
             return
 

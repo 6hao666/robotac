@@ -237,6 +237,13 @@ Runtime interfaces:
 /robotac/servo/status              std_msgs/String (serial-write feedback)
 ```
 
+To replace the configured route at runtime, publish a `PoseArray` only while
+the controller is `IDLE`. Its `header.frame_id` must exactly match
+`robotac_start_body` (or the configured `waypoint_frame`); a missing or other
+frame is rejected. Each pose position is metres in that frame and its yaw is
+relative to the heading captured at `/robotac/flight/start`. The controller
+locks the accepted route once a mission starts; call reset before replacing it.
+
 Safe dry-run launch:
 
 ```bash
@@ -254,6 +261,15 @@ deployment gates, opens no serial device, and never starts MAVROS:
 
 ```bash
 src/robotac_flight/test/run_closed_loop_sim.sh
+```
+
+The runtime `PoseArray` API has its own loopback regression. It injects five
+non-symmetric `robotac_start_body` waypoints before mission start, then verifies
+their ENU and MAVLink NED routes after a non-zero start position and 90 degree
+heading. It likewise opens no serial device or MAVROS node:
+
+```bash
+src/robotac_flight/test/run_dynamic_waypoints_sim.sh
 ```
 
 The corresponding FAST-LIO bridge regression starts only a loopback ROS master

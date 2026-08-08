@@ -126,6 +126,7 @@ PY
 
 for script in \
   "${workspace_dir}/src/robotac_flight/test/run_closed_loop_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_fault_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_vision_bridge_sim.sh"; do
@@ -137,7 +138,9 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/mavros/mavros/src/plugins/setpoint_raw.cpp" \
   "${workspace_dir}/src/robotac_flight/test/flight_closed_loop_sim.py" \
   "${workspace_dir}/config/fastlio/vision_bridge.yaml" \
-  "${workspace_dir}/src/robotac_flight/scripts/local_flight_preflight.py" <<'PY'
+  "${workspace_dir}/src/robotac_flight/scripts/local_flight_preflight.py" \
+  "${workspace_dir}/src/robotac_flight/scripts/local_waypoint_flight.py" \
+  "${workspace_dir}/src/robotac_flight/scripts/fastlio_vision_bridge.py" <<'PY'
 import pathlib
 import sys
 
@@ -146,6 +149,8 @@ mavros_source = pathlib.Path(sys.argv[2]).read_text()
 sim_source = pathlib.Path(sys.argv[3]).read_text()
 vision_config = pathlib.Path(sys.argv[4]).read_text()
 preflight_source = pathlib.Path(sys.argv[5]).read_text()
+flight_source = pathlib.Path(sys.argv[6]).read_text()
+bridge_source = pathlib.Path(sys.argv[7]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -189,6 +194,12 @@ for expected in (
         raise SystemExit(f"Flight preflight check failed: missing {expected}")
 if "rospy.Publisher(" in preflight_source:
     raise SystemExit("Flight preflight must remain subscriber-only")
+for source, name in ((flight_source, "flight controller"),
+                     (bridge_source, "vision bridge")):
+    if "ros_clock_unavailable" not in source:
+        raise SystemExit(f"{name} must reject an unavailable ROS clock")
+if "msg.header.frame_id != self.input_frame" not in flight_source:
+    raise SystemExit("Dynamic waypoint messages must require their declared frame")
 print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 

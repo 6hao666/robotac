@@ -7,6 +7,11 @@ import rospy
 from mavros_msgs.srv import ParamGet
 
 
+# PX4 v1.10/v1.11 EKF2_AID_MASK: bit 3 is vision position, bit 4 is vision yaw.
+LEGACY_AID_MASK_VISION_POSITION = 1 << 3
+LEGACY_AID_MASK_VISION_YAW = 1 << 4
+
+
 def as_bool(value):
     if isinstance(value, str):
         normalized = value.strip().lower()
@@ -51,7 +56,8 @@ def main():
                 print("FAIL: neither EKF2_EV_CTRL nor EKF2_AID_MASK is available")
                 return 2
             value = int(aid_mask)
-            required = 0x08 | (0x10 if require_yaw else 0x00)
+            required = (LEGACY_AID_MASK_VISION_POSITION |
+                        (LEGACY_AID_MASK_VISION_YAW if require_yaw else 0))
             print("PX4 legacy EKF2_AID_MASK=%d required_mask=0x%02x" % (value, required))
             if value & required != required:
                 print("FAIL: legacy vision-position fusion is not enabled")

@@ -17,6 +17,11 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
 
 
+# PX4 v1.10/v1.11 EKF2_AID_MASK: bit 3 is vision position, bit 4 is vision yaw.
+LEGACY_AID_MASK_VISION_POSITION = 1 << 3
+LEGACY_AID_MASK_VISION_YAW = 1 << 4
+
+
 def _as_bool(value):
     if isinstance(value, str):
         normalized = value.strip().lower()
@@ -385,7 +390,8 @@ class LocalFlightPreflight(object):
                     self.px4_params_issue = "ok"
             else:
                 aid_mask = self._get_px4_param(get, "EKF2_AID_MASK")
-                required = 0x08 | (0x10 if self.require_yaw_fusion else 0x00)
+                required = (LEGACY_AID_MASK_VISION_POSITION |
+                            (LEGACY_AID_MASK_VISION_YAW if self.require_yaw_fusion else 0))
                 if aid_mask is None:
                     self.px4_params_issue = "vision_fusion_parameter_unavailable"
                 elif int(aid_mask) & required != required:
