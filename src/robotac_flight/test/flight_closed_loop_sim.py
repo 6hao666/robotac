@@ -26,6 +26,9 @@ class ClosedLoopMavrosSim(object):
         self.vertical_speed = float(rospy.get_param("~vertical_speed", 0.8))
         self.yaw_rate = float(rospy.get_param("~yaw_rate", math.radians(120.0)))
         self.ground_z = float(rospy.get_param("~ground_z", 0.0))
+        self.initial_x = float(rospy.get_param("~initial_x", 0.0))
+        self.initial_y = float(rospy.get_param("~initial_y", 0.0))
+        self.initial_yaw = math.radians(float(rospy.get_param("~initial_yaw_deg", 0.0)))
         self.fault = str(rospy.get_param("~fault", "")).strip().lower()
         self.fault_delay = float(rospy.get_param("~fault_delay", 0.8))
         if self.fault not in ("", "vision_loss"):
@@ -34,8 +37,11 @@ class ClosedLoopMavrosSim(object):
         self.mode = "STABILIZED"
         self.armed = False
         self.landed = True
-        self.position = [0.0, 0.0, self.ground_z]
-        self.yaw = 0.0
+        # The simulated vehicle state is ROS local ENU/base_link. Incoming raw
+        # setpoints take the same route as MAVROS: ROS ENU/FLU -> MAVLink
+        # LOCAL_NED/FRD -> PX4 local NED -> MAVROS local ENU/base_link.
+        self.position = [self.initial_x, self.initial_y, self.ground_z]
+        self.yaw = self.initial_yaw
         self.target = None
         self.mode_requests = []
         self.arm_requests = []
@@ -43,6 +49,7 @@ class ClosedLoopMavrosSim(object):
         self.payload_command_targets = []
         self.payload_sequence = 0
         self.setpoint_targets = []
+        self.mavlink_ned_targets = []
         self.setpoint_count = 0
         self.last_tick = time.monotonic()
         self.completed = False
@@ -87,15 +94,38 @@ class ClosedLoopMavrosSim(object):
             return target
         return current + math.copysign(limit, error)
 
+    @staticmethod
+    def _wrap_angle(value):
+        return math.atan2(math.sin(value), math.cos(value))
+
+    @classmethod
+    def _enu_to_ned_target(cls, target):
+        """Mirror MAVROS SetpointRawPlugin::local_cb for FRAME_LOCAL_NED."""
+        east, north, up, yaw_enu = target
+        return (north, east, -up, cls._wrap_angle(math.pi / 2.0 - yaw_enu))
+
+    @classmethod
+    def _ned_to_enu_target(cls, target):
+        """Mirror MAVROS local-position output back into ROS ENU/base_link."""
+        north, east, down, yaw_ned = target
+        return (east, north, -down, cls._wrap_angle(math.pi / 2.0 - yaw_ned))
+
+    @staticmethod
+    def _append_unique(targets, target):
+        if not targets or any(
+                abs(current - previous) > 1.0e-3
+                for current, previous in zip(target, targets[-1])):
+            targets.append(target)
+
     def _setpoint_cb(self, msg):
         if msg.coordinate_frame != PositionTarget.FRAME_LOCAL_NED:
             rospy.logerr("unexpected coordinate frame: %d", msg.coordinate_frame)
             return
-        self.target = (msg.position.x, msg.position.y, msg.position.z, msg.yaw)
-        if not self.setpoint_targets or any(
-                abs(current - previous) > 1.0e-3
-                for current, previous in zip(self.target, self.setpoint_targets[-1])):
-            self.setpoint_targets.append(self.target)
+        ros_enu_target = (msg.position.x, msg.position.y, msg.position.z, msg.yaw)
+        mavlink_ned_target = self._enu_to_ned_target(ros_enu_target)
+        self.target = self._ned_to_enu_target(mavlink_ned_target)
+        self._append_unique(self.setpoint_targets, self.target)
+        self._append_unique(self.mavlink_ned_targets, mavlink_ned_target)
         self.setpoint_count += 1
         self.setpoint_source_stamps.append(msg.header.stamp.to_sec())
 
@@ -127,6 +157,11 @@ class ClosedLoopMavrosSim(object):
                     if target[2] > self.ground_z + 0.1]
         return "->".join("(%.3f,%.3f,%.3f)" % target[:3] for target in airborne)
 
+    def _mavlink_ned_route_summary(self):
+        airborne = [target for target in self.mavlink_ned_targets
+                    if target[2] < -self.ground_z - 0.1]
+        return "->".join("(%.3f,%.3f,%.3f,%.3f)" % target for target in airborne)
+
     def _status_cb(self, msg):
         if "state=ABORT" in msg.data and not self.abort_seen:
             self.abort_seen = True
@@ -155,10 +190,10 @@ class ClosedLoopMavrosSim(object):
         open_target_text = ("none" if open_target is None else
                             "(%.3f,%.3f,%.3f)" % open_target[:3])
         self.summary_pub.publish(String(data=(
-            "complete mode_requests=%s arm_requests=%s payload_commands=%s route=%s payload_open_at=%s setpoints=%d final=(%.3f,%.3f,%.3f,%.3f)" %
+            "complete mode_requests=%s arm_requests=%s payload_commands=%s route=%s mavlink_ned_route=%s payload_open_at=%s setpoints=%d final=(%.3f,%.3f,%.3f,%.3f)" %
             (",".join(self.mode_requests), ",".join(str(value) for value in self.arm_requests),
              ",".join("open" if value else "closed" for value in self.payload_commands),
-             self._route_summary(), open_target_text, self.setpoint_count,
+             self._route_summary(), self._mavlink_ned_route_summary(), open_target_text, self.setpoint_count,
              self.position[0], self.position[1], self.position[2], self.yaw))))
 
     def _advance_vehicle(self, dt):

@@ -132,13 +132,22 @@ for script in \
   echo "Validated simulation shell syntax: ${script##*/}"
 done
 
-python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" <<'PY'
+python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
+  "${workspace_dir}/src/mavros/mavros/src/plugins/setpoint_raw.cpp" \
+  "${workspace_dir}/src/robotac_flight/test/flight_closed_loop_sim.py" \
+  "${workspace_dir}/config/fastlio/vision_bridge.yaml" <<'PY'
 import pathlib
 import sys
 
-source = pathlib.Path(sys.argv[1]).read_text()
+flight_config = pathlib.Path(sys.argv[1]).read_text()
+mavros_source = pathlib.Path(sys.argv[2]).read_text()
+sim_source = pathlib.Path(sys.argv[3]).read_text()
+vision_config = pathlib.Path(sys.argv[4]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
+    "strict_local_frames: true",
+    "expected_local_parent: map",
+    "expected_local_child: base_link",
     "payload_action: open",
     "payload_topic: /robotac/servo/open",
     "payload_status_topic: /robotac/servo/status",
@@ -149,9 +158,25 @@ for expected in (
     "operator_abort_action: release",
     "require_auto_land: true",
 ):
-    if expected not in source:
+    if expected not in flight_config:
         raise SystemExit(f"Flight route check failed: missing {expected}")
-print("Validated start-body payload route configuration.")
+for expected in (
+    "position = ftf::transform_frame_enu_ned(position);",
+    "transform_orientation_ned_enu(",
+    "transform_orientation_aircraft_baselink(",
+):
+    if expected not in mavros_source:
+        raise SystemExit(f"MAVROS local-setpoint conversion check failed: missing {expected}")
+for expected in (
+    "def _enu_to_ned_target",
+    "def _ned_to_enu_target",
+    "mavlink_ned_route=",
+):
+    if expected not in sim_source:
+        raise SystemExit(f"Flight simulation conversion check failed: missing {expected}")
+if "output_child_frame" in vision_config:
+    raise SystemExit("Vision bridge must keep fixed implicit base_link pose semantics")
+print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 
 python3 - "${workspace_dir}/config/apriltag/tags.yaml" <<'PY'

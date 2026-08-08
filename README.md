@@ -147,9 +147,11 @@ state machine still requires a separate `/robotac/flight/start` service call.
 
 `fastlio_vision_bridge.py` converts `/Odometry` from
 `camera_init -> body` into a `PoseWithCovarianceStamped` with local ENU and
-`base_link` semantics. MAVROS then performs the ENU-to-NED and FLU-to-FRD
-conversion and sends `VISION_POSITION_ESTIMATE`; do not perform that conversion
-again in project code. The bridge preserves the LiDAR timestamp, rejects stale,
+implicit `base_link` semantics. `PoseWithCovarianceStamped` can name only its
+parent frame, so `input_child_to_output_child_*` is the sole place to describe
+the measured `body -> base_link` transform. MAVROS then performs the ENU-to-NED
+and FLU-to-FRD conversion and sends `VISION_POSITION_ESTIMATE`; do not perform
+that conversion again in project code. The bridge preserves the LiDAR timestamp, rejects stale,
 backward, non-finite, low-rate, or jumping poses, repairs invalid covariance
 with conservative configured values, and reports unhealthy on timeout.
 
@@ -243,11 +245,12 @@ roslaunch robotac_flight local_waypoint_flight.launch \
 ```
 
 The following regression test is isolated from the aircraft: it starts a
-separate loopback ROS master, a fake MAVROS/PX4 node, and the controller. It
-uses `config/deployment_sim.yaml`, never reads the aircraft deployment gates,
-and verifies the configured takeoff, relative-heading route, and `AUTO.LAND`
-handoff, including the simulated `closed -> open` payload sequence. It opens no
-serial device and never starts MAVROS:
+separate loopback ROS master, a MAVROS/PX4 contract simulator, and the
+controller. It uses a non-zero local start position and a 90 degree heading to
+verify the configured body-relative route, the ROS ENU to MAVLink local-NED
+conversion, the `AUTO.LAND` handoff, and the simulated `closed -> open` payload
+sequence. It uses `config/deployment_sim.yaml`, never reads the aircraft
+deployment gates, opens no serial device, and never starts MAVROS:
 
 ```bash
 src/robotac_flight/test/run_closed_loop_sim.sh

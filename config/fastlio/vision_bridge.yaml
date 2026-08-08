@@ -3,7 +3,8 @@ fastlio_vision_bridge:
   expected_input_parent: camera_init
   expected_input_child: body
   output_parent_frame: odom
-  output_child_frame: base_link
+  # PoseWithCovarianceStamped has no child-frame field. Its pose is always the
+  # airframe base_link pose in ROS FLU semantics before MAVROS converts it.
   strict_input_frames: true
   max_age: 0.30
   max_future: 0.10

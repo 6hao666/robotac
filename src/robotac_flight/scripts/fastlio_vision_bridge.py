@@ -88,7 +88,6 @@ class FastlioVisionBridge(object):
         self.expected_parent = rospy.get_param("~expected_input_parent", "camera_init")
         self.expected_child = rospy.get_param("~expected_input_child", "body")
         self.output_parent = rospy.get_param("~output_parent_frame", "odom")
-        self.output_child = rospy.get_param("~output_child_frame", "base_link")
         self.strict_frames = _as_bool(rospy.get_param("~strict_input_frames", True))
         self.max_age = float(rospy.get_param("~max_age", 0.30))
         self.max_future = float(rospy.get_param("~max_future", 0.10))
@@ -252,7 +251,8 @@ class FastlioVisionBridge(object):
             return
 
         # T_output_parent_input_parent * T_input_parent_input_child *
-        # T_input_child_output_child.
+        # T_input_child_base_link. PoseWithCovarianceStamped carries only the
+        # parent header, so its pose always has implicit base_link/FLU meaning.
         parent_position = self.world_rotation.dot(position) + self.world_translation
         child_position = self.world_rotation.dot(
             tft.quaternion_matrix(quaternion)[:3, :3].dot(self.child_translation))
