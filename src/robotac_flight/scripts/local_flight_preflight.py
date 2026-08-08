@@ -11,7 +11,7 @@ import time
 
 import rospy
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from mavros_msgs.msg import EstimatorStatus, ExtendedState, State
+from mavros_msgs.msg import EstimatorStatus, ExtendedState, State, TimesyncStatus
 from mavros_msgs.srv import ParamGet
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
@@ -111,10 +111,15 @@ class LocalFlightPreflight(object):
         self.min_output_samples = int(rospy.get_param("~min_vision_output_samples", 5))
         self.vision_health_window = float(
             rospy.get_param("~vision_health_window_seconds", 5.0))
+        self.timesync_timeout = float(rospy.get_param("~timesync_timeout", 1.0))
+        self.max_timesync_rtt_ms = float(
+            rospy.get_param("~max_timesync_rtt_ms", 20.0))
 
         self.require_vision = _as_bool(rospy.get_param("~require_vision", True))
         self.require_vision_output = _as_bool(
             rospy.get_param("~require_vision_output", False))
+        self.require_timesync = _as_bool(
+            rospy.get_param("~require_timesync", self.require_vision_output))
         self.require_estimator = _as_bool(rospy.get_param("~require_estimator", True))
         self.require_disarmed = _as_bool(rospy.get_param("~require_disarmed", True))
         self.require_on_ground = _as_bool(rospy.get_param("~require_on_ground", True))
@@ -166,6 +171,9 @@ class LocalFlightPreflight(object):
         self.vision_status_receive = None
         self.output_enabled = None
         self.output_enabled_receive = None
+        self.timesync = None
+        self.timesync_receive = None
+        self.timesync_issue = "waiting"
         self.px4_params_checked = not self.check_px4_vision_params
         self.px4_params_issue = "not_requested"
         self.exit_code = 1
@@ -175,6 +183,9 @@ class LocalFlightPreflight(object):
         rospy.Subscriber(self.state_topic, State, self._state_cb, queue_size=10)
         rospy.Subscriber(self.extended_state_topic, ExtendedState, self._extended_cb, queue_size=10)
         rospy.Subscriber(self.estimator_topic, EstimatorStatus, self._estimator_cb, queue_size=10)
+        if self.require_timesync:
+            rospy.Subscriber("/mavros/timesync_status", TimesyncStatus,
+                             self._timesync_cb, queue_size=10)
         rospy.Subscriber(self.local_topic, Odometry, self._local_cb, queue_size=20)
         if self.require_vision:
             rospy.Subscriber(self.fastlio_topic, Odometry, self._fastlio_cb, queue_size=20)
@@ -194,7 +205,7 @@ class LocalFlightPreflight(object):
             self.estimator_timeout, self.local_age_limit, self.vision_age_limit,
             self.vision_status_timeout,
             self.min_local_rate, self.min_fastlio_rate, self.min_preview_rate,
-            self.min_output_rate, self.vision_health_window,
+            self.min_output_rate, self.vision_health_window, self.timesync_timeout,
         )
         if not all(math.isfinite(value) and value > 0.0 for value in positive):
             raise ValueError("all preflight timeouts and rates must be finite and positive")
@@ -208,6 +219,8 @@ class LocalFlightPreflight(object):
             raise ValueError("expected frame names must be non-empty")
         if self.require_vision_output and not self.require_vision:
             raise ValueError("require_vision_output requires require_vision=true")
+        if not math.isfinite(self.max_timesync_rtt_ms) or self.max_timesync_rtt_ms < 0.0:
+            raise ValueError("max_timesync_rtt_ms must be finite and non-negative")
 
     def _stamp_is_current(self, stamp, age_limit):
         if stamp == rospy.Time(0):
@@ -255,6 +268,17 @@ class LocalFlightPreflight(object):
             self.estimator_issue = "vertical_invalid"
         else:
             self.estimator_issue = "ok"
+
+    def _timesync_cb(self, msg):
+        self.timesync = msg
+        self.timesync_receive = time.monotonic()
+        rtt = float(msg.round_trip_time_ms)
+        if not math.isfinite(rtt) or rtt < 0.0:
+            self.timesync_issue = "invalid_rtt"
+        elif rtt > self.max_timesync_rtt_ms:
+            self.timesync_issue = "rtt_ms:%.2f" % rtt
+        else:
+            self.timesync_issue = "ok"
 
     def _local_cb(self, msg):
         self._accept_pose_stream(
@@ -340,6 +364,10 @@ class LocalFlightPreflight(object):
         if self.require_estimator and (
                 not self._fresh(self.estimator_receive, self.estimator_timeout) or
                 self.estimator_issue != "ok"):
+            return False
+        if self.require_timesync and (
+                not self._fresh(self.timesync_receive, self.timesync_timeout) or
+                self.timesync_issue != "ok"):
             return False
         return self._stream_ready(
             self.local_stream, self.min_local_samples, self.min_local_rate, self.mavros_timeout)
@@ -440,6 +468,10 @@ class LocalFlightPreflight(object):
             ))
         if self.check_px4_vision_params:
             parts.append("px4_vision_params=%s" % self.px4_params_issue)
+        if self.require_timesync:
+            parts.append("timesync=%s fresh=%s" % (
+                self.timesync_issue,
+                self._fresh(self.timesync_receive, self.timesync_timeout)))
         return " | ".join(parts)
 
     def _finish(self, success, reason):

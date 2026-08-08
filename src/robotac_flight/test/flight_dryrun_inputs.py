@@ -3,7 +3,7 @@
 
 import rospy
 from geometry_msgs.msg import Point, Pose, PoseWithCovariance, Quaternion
-from mavros_msgs.msg import EstimatorStatus, ExtendedState, State
+from mavros_msgs.msg import EstimatorStatus, ExtendedState, State, TimesyncStatus
 from nav_msgs.msg import Odometry
 
 
@@ -15,6 +15,7 @@ def main():
     state_pub = rospy.Publisher("/mavros/state", State, queue_size=2)
     extended_pub = rospy.Publisher("/mavros/extended_state", ExtendedState, queue_size=2)
     estimator_pub = rospy.Publisher("/mavros/estimator_status", EstimatorStatus, queue_size=2)
+    timesync_pub = rospy.Publisher("/mavros/timesync_status", TimesyncStatus, queue_size=2)
     rospy.sleep(1.0)
     while not rospy.is_shutdown():
         now = rospy.Time.now()
@@ -42,6 +43,13 @@ def main():
             # Deliberately omit absolute vertical position: local flight only
             # needs a valid relative/AGL vertical estimate.
             pos_vert_agl_status_flag=True))
+        timesync = TimesyncStatus()
+        timesync.header.stamp = now
+        timesync.remote_timestamp_ns = now.to_nsec()
+        timesync.observed_offset_ns = 0
+        timesync.estimated_offset_ns = 0
+        timesync.round_trip_time_ms = 1.0
+        timesync_pub.publish(timesync)
         rate.sleep()
 
 

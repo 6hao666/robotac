@@ -136,6 +136,7 @@ done
 
 python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/mavros/mavros/src/plugins/setpoint_raw.cpp" \
+  "${workspace_dir}/src/fast_lio/src/laserMapping.cpp" \
   "${workspace_dir}/src/robotac_flight/test/flight_closed_loop_sim.py" \
   "${workspace_dir}/config/fastlio/vision_bridge.yaml" \
   "${workspace_dir}/src/robotac_flight/scripts/local_flight_preflight.py" \
@@ -146,11 +147,12 @@ import sys
 
 flight_config = pathlib.Path(sys.argv[1]).read_text()
 mavros_source = pathlib.Path(sys.argv[2]).read_text()
-sim_source = pathlib.Path(sys.argv[3]).read_text()
-vision_config = pathlib.Path(sys.argv[4]).read_text()
-preflight_source = pathlib.Path(sys.argv[5]).read_text()
-flight_source = pathlib.Path(sys.argv[6]).read_text()
-bridge_source = pathlib.Path(sys.argv[7]).read_text()
+fastlio_source = pathlib.Path(sys.argv[3]).read_text()
+sim_source = pathlib.Path(sys.argv[4]).read_text()
+vision_config = pathlib.Path(sys.argv[5]).read_text()
+preflight_source = pathlib.Path(sys.argv[6]).read_text()
+flight_source = pathlib.Path(sys.argv[7]).read_text()
+bridge_source = pathlib.Path(sys.argv[8]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -165,6 +167,11 @@ for expected in (
     "critical_fault_action: release",
     "operator_abort_action: release",
     "require_auto_land: true",
+    "vision_status_timeout: 0.50",
+    "vision_output_timeout: 0.50",
+    "vision_output_parent: odom",
+    "vision_output_consumer_node: /mavros",
+    "require_timesync: true",
 ):
     if expected not in flight_config:
         raise SystemExit(f"Flight route check failed: missing {expected}")
@@ -185,10 +192,20 @@ for expected in (
 if "output_child_frame" in vision_config:
     raise SystemExit("Vision bridge must keep fixed implicit base_link pose semantics")
 for expected in (
+    "for (int j = 0; j < 6; j ++)",
+    "odomAftMapped.pose.covariance[i * 6 + j] = P(i, j);",
+):
+    if expected not in fastlio_source:
+        raise SystemExit(f"FAST-LIO covariance layout check failed: missing {expected}")
+if "int k = i < 3 ? i + 3 : i - 3;" in fastlio_source:
+    raise SystemExit("FAST-LIO covariance layout must not swap position/rotation blocks")
+for expected in (
     "vision_status_receive",
     'self.vision_status.startswith("ok ")',
     "ros_clock_unavailable",
     "_matching_stamp",
+    "TimesyncStatus",
+    "timesync_issue",
 ):
     if expected not in preflight_source:
         raise SystemExit(f"Flight preflight check failed: missing {expected}")
@@ -200,6 +217,17 @@ for source, name in ((flight_source, "flight controller"),
         raise SystemExit(f"{name} must reject an unavailable ROS clock")
 if "msg.header.frame_id != self.input_frame" not in flight_source:
     raise SystemExit("Dynamic waypoint messages must require their declared frame")
+for expected in (
+    "PoseWithCovarianceStamped",
+    "vision_status_receive_time",
+    "vision_output_receive_time",
+    "mavros_vision_pose_timeout",
+    "TimesyncStatus",
+    "mavros_timesync_stale",
+    "mavros_vision_pose_consumer_unavailable",
+):
+    if expected not in flight_source:
+        raise SystemExit(f"Flight vision-output gate check failed: missing {expected}")
 print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 

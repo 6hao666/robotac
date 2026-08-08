@@ -10,10 +10,11 @@ import math
 import sys
 import time
 
+import numpy as np
 import rospy
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
-from tf.transformations import quaternion_from_euler
+from tf.transformations import quaternion_from_euler, quaternion_matrix, quaternion_multiply
 
 
 class VisionBridgeIntegration(object):
@@ -21,6 +22,18 @@ class VisionBridgeIntegration(object):
         self.input_topic = rospy.get_param("~input_topic", "/robotac/test/fastlio_odom")
         self.output_topic = rospy.get_param("~output_topic", "/robotac/test/vision_pose")
         self.min_samples = int(rospy.get_param("~min_samples", 3))
+        self.world_quaternion = self._normalize(np.asarray(rospy.get_param(
+            "/fastlio_vision_bridge/input_world_to_output_quaternion"), dtype=float))
+        self.world_translation = np.asarray(rospy.get_param(
+            "/fastlio_vision_bridge/input_world_to_output_translation"), dtype=float)
+        self.child_quaternion = self._normalize(np.asarray(rospy.get_param(
+            "/fastlio_vision_bridge/input_child_to_output_child_quaternion"), dtype=float))
+        self.child_translation = np.asarray(rospy.get_param(
+            "/fastlio_vision_bridge/input_child_to_output_child_translation"), dtype=float)
+        if np.allclose(quaternion_matrix(self.world_quaternion)[:3, :3], np.eye(3)):
+            raise RuntimeError("simulation world transform must be non-identity")
+        if np.allclose(quaternion_matrix(self.child_quaternion)[:3, :3], np.eye(3)):
+            raise RuntimeError("simulation child transform must be non-identity")
         self.outputs = []
         self.publisher = rospy.Publisher(self.input_topic, Odometry, queue_size=10)
         self.subscription = rospy.Subscriber(
@@ -28,6 +41,60 @@ class VisionBridgeIntegration(object):
 
     def _output_cb(self, msg):
         self.outputs.append(msg)
+
+    @staticmethod
+    def _normalize(quaternion):
+        norm = float(np.linalg.norm(quaternion))
+        if norm < 1.0e-6:
+            raise RuntimeError("zero simulation quaternion")
+        return quaternion / norm
+
+    def _source_covariance(self):
+        matrix = np.zeros((6, 6), dtype=float)
+        for row in range(6):
+            for column in range(6):
+                if row == column:
+                    matrix[row, column] = 0.01 * (row + 1)
+                else:
+                    matrix[row, column] = 0.0001 * (row + column + 2)
+        return matrix
+
+    def _expected_pose(self, source):
+        world_rotation = quaternion_matrix(self.world_quaternion)[:3, :3]
+        child_rotation = quaternion_matrix(self.child_quaternion)[:3, :3]
+        source_quaternion = self._normalize(np.asarray([
+            source.pose.pose.orientation.x,
+            source.pose.pose.orientation.y,
+            source.pose.pose.orientation.z,
+            source.pose.pose.orientation.w,
+        ], dtype=float))
+        source_rotation = quaternion_matrix(source_quaternion)[:3, :3]
+        source_position = np.asarray([
+            source.pose.pose.position.x,
+            source.pose.pose.position.y,
+            source.pose.pose.position.z,
+        ], dtype=float)
+        expected_position = (world_rotation.dot(
+            source_position + source_rotation.dot(self.child_translation)) +
+                             self.world_translation)
+        expected_quaternion = self._normalize(np.asarray(quaternion_multiply(
+            self.world_quaternion,
+            quaternion_multiply(source_quaternion, self.child_quaternion)), dtype=float))
+
+        covariance = self._source_covariance()
+        skew = np.array([
+            [0.0, -self.child_translation[2], self.child_translation[1]],
+            [self.child_translation[2], 0.0, -self.child_translation[0]],
+            [-self.child_translation[1], self.child_translation[0], 0.0],
+        ])
+        child_jacobian = np.eye(6, dtype=float)
+        child_jacobian[:3, 3:] = -source_rotation.dot(skew)
+        world_jacobian = np.zeros((6, 6), dtype=float)
+        world_jacobian[:3, :3] = world_rotation
+        world_jacobian[3:, 3:] = world_rotation
+        expected_covariance = (world_jacobian.dot(child_jacobian).dot(covariance)
+                               .dot(child_jacobian.T).dot(world_jacobian.T))
+        return expected_position, expected_quaternion, expected_covariance
 
     def _wait_for(self, predicate, timeout, description):
         deadline = time.monotonic() + timeout
@@ -51,8 +118,7 @@ class VisionBridgeIntegration(object):
         msg.pose.pose.orientation.y = quaternion[1]
         msg.pose.pose.orientation.z = quaternion[2]
         msg.pose.pose.orientation.w = quaternion[3]
-        for index in (0, 7, 14, 21, 28, 35):
-            msg.pose.covariance[index] = 0.01
+        msg.pose.covariance = self._source_covariance().reshape(-1).tolist()
         self.publisher.publish(msg)
         return msg
 
@@ -76,10 +142,25 @@ class VisionBridgeIntegration(object):
             raise RuntimeError("unexpected output parent frame: %s" % initial.header.frame_id)
         if initial.header.stamp != last_source.header.stamp:
             raise RuntimeError("bridge did not preserve the FAST-LIO timestamp")
-        if abs(initial.pose.pose.position.x - last_source.pose.pose.position.x) > 1.0e-6:
-            raise RuntimeError("identity bridge changed the local x position")
-        if abs(initial.pose.pose.position.y - last_source.pose.pose.position.y) > 1.0e-6:
-            raise RuntimeError("identity bridge changed the local y position")
+        expected_position, expected_quaternion, expected_covariance = self._expected_pose(last_source)
+        actual_position = np.asarray([
+            initial.pose.pose.position.x,
+            initial.pose.pose.position.y,
+            initial.pose.pose.position.z,
+        ], dtype=float)
+        actual_quaternion = np.asarray([
+            initial.pose.pose.orientation.x,
+            initial.pose.pose.orientation.y,
+            initial.pose.pose.orientation.z,
+            initial.pose.pose.orientation.w,
+        ], dtype=float)
+        if not np.allclose(actual_position, expected_position, atol=1.0e-6):
+            raise RuntimeError("non-identity bridge position transform is incorrect")
+        if abs(float(np.dot(actual_quaternion, expected_quaternion))) < 1.0 - 1.0e-6:
+            raise RuntimeError("non-identity bridge orientation transform is incorrect")
+        if not np.allclose(np.asarray(initial.pose.covariance).reshape((6, 6)),
+                           expected_covariance, atol=1.0e-8):
+            raise RuntimeError("bridge covariance transform is incorrect")
 
         # The bad frame clears the previous health window. A single later valid
         # sample must not reach the MAVROS output topic yet.
@@ -96,9 +177,9 @@ class VisionBridgeIntegration(object):
         self._wait_for(lambda: len(self.outputs) > output_count, 2.0,
                        "vision output after recovered health window")
         recovered = self.outputs[-1]
-        expected_x = 0.11 + 0.01 * (self.min_samples - 1)
-        if not math.isclose(recovered.pose.pose.position.x, expected_x, abs_tol=1.0e-6):
-            raise RuntimeError("recovered output does not contain the latest local pose")
+        expected_position, _, _ = self._expected_pose(last_source)
+        if not math.isclose(recovered.pose.pose.position.x, expected_position[0], abs_tol=1.0e-6):
+            raise RuntimeError("recovered output does not contain the latest transformed pose")
 
         print("Vision bridge integration passed: %d output samples" % len(self.outputs))
 

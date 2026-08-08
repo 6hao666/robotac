@@ -5,6 +5,7 @@
   <arg name="auto_arm" default="false" />
   <arg name="auto_land" default="false" />
   <arg name="enable_payload" default="false" />
+  <arg name="vision_output_consumer_node" default="/mavros" />
   <arg name="deployment_file" default="$(arg config_root)/deployment.yaml" />
   <rosparam command="load" file="$(arg deployment_file)" />
   <rosparam command="load" file="$(arg config_root)/flight/local_waypoints.yaml" />
@@ -14,5 +15,6 @@
     <param name="auto_arm" value="$(arg auto_arm)" />
     <param name="auto_land" value="$(arg auto_land)" />
     <param name="enable_payload" value="$(arg enable_payload)" />
+    <param name="vision_output_consumer_node" value="$(arg vision_output_consumer_node)" />
   </node>
 </launch>

@@ -11,8 +11,8 @@ import math
 import time
 
 import rospy
-from geometry_msgs.msg import PoseArray
-from mavros_msgs.msg import EstimatorStatus, ExtendedState, PositionTarget, State
+from geometry_msgs.msg import PoseArray, PoseWithCovarianceStamped
+from mavros_msgs.msg import EstimatorStatus, ExtendedState, PositionTarget, State, TimesyncStatus
 from mavros_msgs.srv import CommandBool, SetMode
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
@@ -111,6 +111,20 @@ class LocalWaypointFlight(object):
         self.state_timeout = float(rospy.get_param("~state_timeout", 1.0))
         self.extended_state_timeout = float(rospy.get_param("~extended_state_timeout", 1.0))
         self.vision_timeout = float(rospy.get_param("~vision_timeout", 0.50))
+        self.vision_status_timeout = float(
+            rospy.get_param("~vision_status_timeout", self.vision_timeout))
+        self.vision_output_timeout = float(
+            rospy.get_param("~vision_output_timeout", self.vision_timeout))
+        self.vision_output_stamp_timeout = float(
+            rospy.get_param("~vision_output_stamp_timeout", 0.30))
+        self.vision_output_stamp_future_tolerance = float(
+            rospy.get_param("~vision_output_stamp_future_tolerance", 0.10))
+        self.vision_output_parent = str(
+            rospy.get_param("~vision_output_parent", "odom")).strip()
+        self.require_timesync = _as_bool(rospy.get_param("~require_timesync", True))
+        self.timesync_timeout = float(rospy.get_param("~timesync_timeout", 1.0))
+        self.max_timesync_rtt_ms = float(
+            rospy.get_param("~max_timesync_rtt_ms", 20.0))
         self.estimator_timeout = float(rospy.get_param("~estimator_timeout", 1.0))
         self.offboard_timeout = float(rospy.get_param("~offboard_timeout", 15.0))
         self.arming_timeout = float(rospy.get_param("~arming_timeout", 15.0))
@@ -133,6 +147,14 @@ class LocalWaypointFlight(object):
         self.land_switch_height = float(rospy.get_param("~land_switch_height", 0.50))
         self.input_frame = rospy.get_param("~waypoint_frame", "robotac_local_enu")
         self.waypoint_topic = rospy.get_param("~waypoint_topic", "/robotac/flight/waypoints")
+        self.vision_status_topic = rospy.get_param(
+            "~vision_status_topic", "/robotac/fastlio_vision/status")
+        self.vision_output_topic = rospy.get_param(
+            "~vision_output_topic", "/mavros/vision_pose/pose_cov")
+        self.require_vision_output_consumer = _as_bool(
+            rospy.get_param("~require_vision_output_consumer", True))
+        self.vision_output_consumer_node = str(rospy.get_param(
+            "~vision_output_consumer_node", "/mavros")).strip()
         self.payload_topic = rospy.get_param("~payload_topic", "/robotac/servo/open")
         self.payload_status_topic = rospy.get_param(
             "~payload_status_topic", "/robotac/servo/status")
@@ -170,6 +192,15 @@ class LocalWaypointFlight(object):
         self.vision_healthy = False
         self.vision_receive_time = None
         self.vision_output_enabled = False
+        self.vision_output_enabled_receive_time = None
+        self.vision_status = "waiting_for_fastlio"
+        self.vision_status_receive_time = None
+        self.vision_output_receive_time = None
+        self.vision_output_stamp = None
+        self.vision_output_rejection_reason = None
+        self.timesync = None
+        self.timesync_receive_time = None
+        self.timesync_issue = "waiting"
         self.estimator = None
         self.estimator_receive_time = None
         self.origin = None
@@ -220,6 +251,12 @@ class LocalWaypointFlight(object):
         rospy.Subscriber("/robotac/fastlio_vision/healthy", Bool, self._vision_cb, queue_size=1)
         rospy.Subscriber("/robotac/fastlio_vision/output_enabled", Bool,
                          self._vision_output_cb, queue_size=1)
+        rospy.Subscriber(self.vision_status_topic, String, self._vision_status_cb, queue_size=5)
+        rospy.Subscriber("/mavros/timesync_status", TimesyncStatus,
+                         self._timesync_cb, queue_size=10)
+        if self.require_vision_output:
+            rospy.Subscriber(self.vision_output_topic, PoseWithCovarianceStamped,
+                             self._vision_pose_cb, queue_size=10)
         rospy.Subscriber(self.payload_status_topic, String, self._payload_status_cb, queue_size=5)
         rospy.Subscriber(self.waypoint_topic, PoseArray, self._waypoints_cb, queue_size=1)
 
@@ -264,9 +301,13 @@ class LocalWaypointFlight(object):
 
     @staticmethod
     def _finite_pose(pose):
-        values = [pose.pose.pose.position.x, pose.pose.pose.position.y, pose.pose.pose.position.z,
-                  pose.pose.pose.orientation.x, pose.pose.pose.orientation.y,
-                  pose.pose.pose.orientation.z, pose.pose.pose.orientation.w]
+        return LocalWaypointFlight._finite_geometry_pose(pose.pose.pose)
+
+    @staticmethod
+    def _finite_geometry_pose(pose):
+        values = [pose.position.x, pose.position.y, pose.position.z,
+                  pose.orientation.x, pose.orientation.y,
+                  pose.orientation.z, pose.orientation.w]
         return all(math.isfinite(float(value)) for value in values)
 
     @staticmethod
@@ -376,6 +417,55 @@ class LocalWaypointFlight(object):
 
     def _vision_output_cb(self, msg):
         self.vision_output_enabled = bool(msg.data)
+        self.vision_output_enabled_receive_time = time.monotonic()
+
+    def _vision_status_cb(self, msg):
+        self.vision_status = str(msg.data).strip() or "empty"
+        self.vision_status_receive_time = time.monotonic()
+
+    def _timesync_cb(self, msg):
+        self.timesync = msg
+        self.timesync_receive_time = time.monotonic()
+        rtt = float(msg.round_trip_time_ms)
+        if not math.isfinite(rtt) or rtt < 0.0:
+            self.timesync_issue = "invalid_rtt"
+        elif rtt > self.max_timesync_rtt_ms:
+            self.timesync_issue = "rtt_ms:%.2f" % rtt
+        else:
+            self.timesync_issue = "ok"
+
+    def _reject_vision_output(self, reason):
+        self.vision_output_receive_time = None
+        self.vision_output_stamp = None
+        self.vision_output_rejection_reason = reason
+
+    def _vision_pose_cb(self, msg):
+        if msg.header.frame_id != self.vision_output_parent:
+            self._reject_vision_output("unexpected_parent:%s" % msg.header.frame_id)
+            return
+        if not self._finite_geometry_pose(msg.pose.pose):
+            self._reject_vision_output("nonfinite_or_invalid_quaternion")
+            return
+        normalized = self._normalized_quaternion(msg.pose.pose.orientation)
+        if normalized is None:
+            self._reject_vision_output("invalid_quaternion")
+            return
+        stamp = msg.header.stamp
+        if stamp == rospy.Time(0):
+            self._reject_vision_output("zero_timestamp")
+            return
+        now = rospy.Time.now()
+        if now == rospy.Time(0):
+            self._reject_vision_output("ros_clock_unavailable")
+            return
+        age = (now - stamp).to_sec()
+        if (age > self.vision_output_stamp_timeout or
+                age < -self.vision_output_stamp_future_tolerance):
+            self._reject_vision_output("timestamp_age:%.3f" % age)
+            return
+        self.vision_output_receive_time = time.monotonic()
+        self.vision_output_stamp = stamp
+        self.vision_output_rejection_reason = None
 
     def _payload_status_cb(self, msg):
         fields = {}
@@ -457,11 +547,13 @@ class LocalWaypointFlight(object):
             return TriggerResponse(False, "local_position_%s" % reason)
         if time.monotonic() - self.local_receive_time > self.local_pose_timeout:
             return TriggerResponse(False, "local_position_stale")
-        if self.require_vision and (not self.vision_healthy or self.vision_receive_time is None or
-                                    time.monotonic() - self.vision_receive_time > self.vision_timeout):
-            return TriggerResponse(False, "fastlio_vision_unhealthy")
-        if self.enable_control and self.require_vision_output and not self.vision_output_enabled:
-            return TriggerResponse(False, "mavros_vision_output_disabled")
+        vision_issue = self._vision_flight_issue()
+        if vision_issue is not None:
+            return TriggerResponse(False, vision_issue)
+        if (self.enable_control and self.require_vision_output and
+                self.require_vision_output_consumer and
+                not self._vision_output_consumer_present()):
+            return TriggerResponse(False, "mavros_vision_pose_consumer_unavailable")
         if self.require_estimator and not self._estimator_ok():
             return TriggerResponse(False, "px4_estimator_unhealthy_or_stale")
         if self.enable_control and self.require_auto_land and not self.auto_land:
@@ -572,9 +664,40 @@ class LocalWaypointFlight(object):
         if self.input_frame not in ("robotac_local_enu", "robotac_start_body"):
             self.last_error = "invalid_waypoint_frame"
             return False
+        if self.require_vision_output and not self.require_vision:
+            self.last_error = "require_vision_output_requires_vision"
+            return False
+        if not self.vision_output_parent:
+            self.last_error = "invalid_vision_output_parent"
+            return False
+        if self.require_vision_output_consumer and not self.vision_output_consumer_node:
+            self.last_error = "invalid_vision_output_consumer_node"
+            return False
         if self.strict_local_frames and (
                 not self.expected_local_parent or not self.expected_local_child):
             self.last_error = "invalid_expected_local_frames"
+            return False
+        positive_parameters = (
+            self.prestream_seconds, self.control_rate, self.position_tolerance,
+            self.yaw_tolerance, self.waypoint_timeout, self.mission_timeout,
+            self.local_pose_timeout, self.local_stamp_timeout, self.state_timeout,
+            self.extended_state_timeout, self.vision_timeout, self.vision_status_timeout,
+            self.vision_output_timeout, self.vision_output_stamp_timeout,
+            self.estimator_timeout, self.offboard_timeout, self.arming_timeout,
+            self.max_xy, self.max_z, self.timesync_timeout,
+        )
+        if not all(math.isfinite(value) and value > 0.0 for value in positive_parameters):
+            self.last_error = "invalid_positive_flight_parameter"
+            return False
+        if (not math.isfinite(self.local_stamp_future_tolerance) or
+                self.local_stamp_future_tolerance < 0.0 or
+                not math.isfinite(self.vision_output_stamp_future_tolerance) or
+                self.vision_output_stamp_future_tolerance < 0.0):
+            self.last_error = "invalid_timestamp_future_tolerance"
+            return False
+        if (not math.isfinite(self.max_timesync_rtt_ms) or
+                self.max_timesync_rtt_ms < 0.0):
+            self.last_error = "invalid_timesync_rtt_limit"
             return False
         if (not math.isfinite(self.max_local_position_speed) or
                 not math.isfinite(self.max_local_yaw_rate) or
@@ -718,6 +841,51 @@ class LocalWaypointFlight(object):
             return False
         return True
 
+    @staticmethod
+    def _fresh(receive_time, timeout):
+        return (receive_time is not None and
+                time.monotonic() - receive_time <= timeout)
+
+    def _vision_flight_issue(self):
+        """Return a precise reason when the vision chain is unsafe for flight."""
+        if self.require_vision:
+            if not self.vision_healthy or not self._fresh(
+                    self.vision_receive_time, self.vision_timeout):
+                return "fastlio_vision_lost"
+            if not self._fresh(self.vision_status_receive_time, self.vision_status_timeout):
+                return "fastlio_vision_status_stale"
+            if not (self.vision_status == "ok" or self.vision_status.startswith("ok ")):
+                return "fastlio_vision_status_unhealthy"
+        if self.enable_control and self.require_vision_output:
+            if not self.vision_output_enabled or not self._fresh(
+                    self.vision_output_enabled_receive_time, self.vision_output_timeout):
+                return "mavros_vision_output_disabled"
+            if not self._fresh(self.vision_output_receive_time, self.vision_output_timeout):
+                if self.vision_output_rejection_reason:
+                    return "mavros_vision_pose_%s" % self.vision_output_rejection_reason
+                return "mavros_vision_pose_timeout"
+        if self.enable_control and self.require_timesync:
+            if not self._fresh(self.timesync_receive_time, self.timesync_timeout):
+                return "mavros_timesync_stale"
+            if self.timesync_issue != "ok":
+                return "mavros_timesync_unhealthy:%s" % self.timesync_issue
+        return None
+
+    def _vision_output_consumer_present(self):
+        """Confirm the MAVROS vision plugin has subscribed before takeoff."""
+        try:
+            code, _message, state = rospy.get_master().getSystemState()
+        except Exception as exc:
+            rospy.logwarn_throttle(5.0, "unable to inspect ROS graph for MAVROS vision: %s", exc)
+            return False
+        if code != 1:
+            return False
+        subscribers = state[1]
+        for topic, nodes in subscribers:
+            if topic == self.vision_output_topic:
+                return self.vision_output_consumer_node in nodes
+        return False
+
     def _has_payload_actions(self):
         return any(waypoint["payload_action"] != "none" for waypoint in self.waypoints)
 
@@ -860,10 +1028,9 @@ class LocalWaypointFlight(object):
                   time.monotonic() - self.local_receive_time > self.local_pose_timeout):
                 self._abort("local_position_timeout")
             else:
-                vision_stale = (self.vision_receive_time is None or
-                                time.monotonic() - self.vision_receive_time > self.vision_timeout)
-                if self.require_vision and (not self.vision_healthy or vision_stale):
-                    self._abort("fastlio_vision_lost")
+                vision_issue = self._vision_flight_issue()
+                if vision_issue is not None:
+                    self._abort(vision_issue)
                 elif self.require_estimator and not self._estimator_ok():
                     self._abort("px4_estimator_lost")
 
@@ -977,10 +1144,10 @@ class LocalWaypointFlight(object):
 
     def _publish_status(self):
         event_stamp = rospy.Time.now().to_sec()
-        self.status_pub.publish(String(data="state=%s waypoint=%d/%d connected=%s armed=%s mode=%s vision=%s estimator=%s payload=%s abort_action=%s tx=%s error=%s stamp=%.9f" %
+        self.status_pub.publish(String(data="state=%s waypoint=%d/%d connected=%s armed=%s mode=%s vision=%s estimator=%s timesync=%s payload=%s abort_action=%s tx=%s error=%s stamp=%.9f" %
                                       (self.state, self.index, len(self.waypoints), self.fcu.connected,
                                        self.fcu.armed, self.fcu.mode, self.vision_healthy,
-                                       self._estimator_ok(), self.payload_state, self.abort_action,
+                                       self._estimator_ok(), self.timesync_issue, self.payload_state, self.abort_action,
                                        self.control_tx_enabled, self.last_error, event_stamp)))
         self.active_pub.publish(Bool(data=self.state not in (self.IDLE, self.COMPLETE, self.ABORT)))
 

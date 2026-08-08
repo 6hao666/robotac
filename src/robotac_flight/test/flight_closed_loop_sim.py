@@ -12,7 +12,8 @@ import math
 import time
 
 import rospy
-from mavros_msgs.msg import EstimatorStatus, ExtendedState, PositionTarget, State
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from mavros_msgs.msg import EstimatorStatus, ExtendedState, PositionTarget, State, TimesyncStatus
 from mavros_msgs.srv import CommandBool, CommandBoolResponse, SetMode, SetModeResponse
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
@@ -31,7 +32,7 @@ class ClosedLoopMavrosSim(object):
         self.initial_yaw = math.radians(float(rospy.get_param("~initial_yaw_deg", 0.0)))
         self.fault = str(rospy.get_param("~fault", "")).strip().lower()
         self.fault_delay = float(rospy.get_param("~fault_delay", 0.8))
-        if self.fault not in ("", "vision_loss"):
+        if self.fault not in ("", "vision_loss", "vision_output_loss"):
             raise ValueError("unsupported simulated fault: %s" % self.fault)
 
         self.mode = "STABILIZED"
@@ -66,9 +67,15 @@ class ClosedLoopMavrosSim(object):
         self.extended_pub = rospy.Publisher("/mavros/extended_state", ExtendedState, queue_size=5)
         self.estimator_pub = rospy.Publisher("/mavros/estimator_status", EstimatorStatus, queue_size=5)
         self.local_pub = rospy.Publisher("/mavros/local_position/odom", Odometry, queue_size=5)
+        self.timesync_pub = rospy.Publisher(
+            "/mavros/timesync_status", TimesyncStatus, queue_size=5)
         self.vision_pub = rospy.Publisher("/robotac/fastlio_vision/healthy", Bool, queue_size=1, latch=True)
+        self.vision_status_pub = rospy.Publisher(
+            "/robotac/fastlio_vision/status", String, queue_size=5, latch=True)
         self.output_pub = rospy.Publisher(
             "/robotac/fastlio_vision/output_enabled", Bool, queue_size=1, latch=True)
+        self.vision_pose_pub = rospy.Publisher(
+            "/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped, queue_size=5)
         self.payload_status_pub = rospy.Publisher(
             "/robotac/servo/status", String, queue_size=5, latch=True)
         # Mirror the servo node's startup closed command so the controller can
@@ -81,6 +88,10 @@ class ClosedLoopMavrosSim(object):
             "/robotac/test/flight_fault_summary", String, queue_size=1, latch=True)
 
         rospy.Subscriber("/mavros/setpoint_raw/local", PositionTarget, self._setpoint_cb, queue_size=20)
+        # Stand in for MAVROS's vision_pose_estimate plugin so the controller's
+        # graph-level consumer check exercises the same ROS topic contract.
+        rospy.Subscriber("/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped,
+                         lambda _msg: None, queue_size=10)
         rospy.Subscriber("/robotac/flight/status", String, self._status_cb, queue_size=10)
         rospy.Subscriber("/robotac/servo/open", Bool, self._payload_cb, queue_size=5)
         rospy.Service("/mavros/set_mode", SetMode, self._set_mode_cb)
@@ -275,9 +286,36 @@ class ClosedLoopMavrosSim(object):
         odom.pose.pose.orientation.z = quaternion[2]
         odom.pose.pose.orientation.w = quaternion[3]
         self.local_pub.publish(odom)
-        if not (self.fault_active and self.fault == "vision_loss"):
+        timesync = TimesyncStatus()
+        timesync.header.stamp = now
+        timesync.remote_timestamp_ns = now.to_nsec()
+        timesync.observed_offset_ns = 0
+        timesync.estimated_offset_ns = 0
+        timesync.round_trip_time_ms = 1.0
+        self.timesync_pub.publish(timesync)
+        vision_healthy = not (self.fault_active and self.fault == "vision_loss")
+        if vision_healthy:
             self.vision_pub.publish(Bool(data=True))
+            self.vision_status_pub.publish(
+                String(data="ok rate_hz=%.2f valid=20 dropped=0 mavros_output=true" % self.rate_hz))
+        else:
+            self.vision_pub.publish(Bool(data=False))
+            self.vision_status_pub.publish(String(data="fastlio_timeout"))
         self.output_pub.publish(Bool(data=True))
+        if not (self.fault_active and self.fault in ("vision_loss", "vision_output_loss")):
+            vision_pose = PoseWithCovarianceStamped()
+            vision_pose.header.stamp = now
+            vision_pose.header.frame_id = "odom"
+            vision_pose.pose.pose.position.x = self.position[0]
+            vision_pose.pose.pose.position.y = self.position[1]
+            vision_pose.pose.pose.position.z = self.position[2]
+            vision_pose.pose.pose.orientation.x = quaternion[0]
+            vision_pose.pose.pose.orientation.y = quaternion[1]
+            vision_pose.pose.pose.orientation.z = quaternion[2]
+            vision_pose.pose.pose.orientation.w = quaternion[3]
+            for index in (0, 7, 14, 21, 28, 35):
+                vision_pose.pose.covariance[index] = 0.01
+            self.vision_pose_pub.publish(vision_pose)
         self._publish_fault_summary()
         if not self.completed:
             self.summary_pub.publish(String(data=(

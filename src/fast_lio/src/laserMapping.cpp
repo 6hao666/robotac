@@ -670,15 +670,17 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
     odomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);// ros::Time().fromSec(lidar_end_time);
     set_posestamp(odomAftMapped.pose);
     auto P = kf.get_P();
+    // state_ikfom stores position in 0..2 and rotation error in 3..5.  That
+    // is the same block order required by nav_msgs/Odometry pose covariance:
+    // x, y, z, roll, pitch, yaw.  Do not swap these blocks before publishing;
+    // downstream consumers such as MAVROS interpret the first three rows as
+    // position uncertainty.
     for (int i = 0; i < 6; i ++)
     {
-        int k = i < 3 ? i + 3 : i - 3;
-        odomAftMapped.pose.covariance[i*6 + 0] = P(k, 3);
-        odomAftMapped.pose.covariance[i*6 + 1] = P(k, 4);
-        odomAftMapped.pose.covariance[i*6 + 2] = P(k, 5);
-        odomAftMapped.pose.covariance[i*6 + 3] = P(k, 0);
-        odomAftMapped.pose.covariance[i*6 + 4] = P(k, 1);
-        odomAftMapped.pose.covariance[i*6 + 5] = P(k, 2);
+        for (int j = 0; j < 6; j ++)
+        {
+            odomAftMapped.pose.covariance[i * 6 + j] = P(i, j);
+        }
     }
     // Fill the EKF covariance before publishing so subscribers never receive
     // the previous frame's covariance (or zeros on the first frame).

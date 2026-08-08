@@ -5,6 +5,7 @@ set -euo pipefail
 
 workspace_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 master_port=${ROBOTAC_FAULT_SIM_MASTER_PORT:-11323}
+fault=${ROBOTAC_FLIGHT_FAULT:-vision_loss}
 log_dir=$(mktemp -d "${TMPDIR:-/tmp}/robotac-flight-fault-sim.XXXXXX")
 roscore_pid=
 sim_pid=
@@ -65,14 +66,28 @@ for _ in $(seq 1 100); do
 done
 rosparam list >/dev/null
 
+case "${fault}" in
+  vision_loss)
+    expected_error=fastlio_vision_lost
+    ;;
+  vision_output_loss)
+    expected_error=mavros_vision_pose_timeout
+    ;;
+  *)
+    echo "Unsupported ROBOTAC_FLIGHT_FAULT: ${fault}" >&2
+    exit 64
+    ;;
+esac
+
 python3 "${workspace_dir}/src/robotac_flight/test/flight_closed_loop_sim.py" \
-  _fault:=vision_loss _fault_delay:=0.8 \
+  _fault:="${fault}" _fault_delay:=0.8 \
   >"${log_dir}/sim.log" 2>&1 &
 sim_pid=$!
 roslaunch robotac_flight local_waypoint_flight.launch \
   config_root:="${workspace_dir}/config" \
   deployment_file:="${workspace_dir}/config/deployment_sim.yaml" \
   enable_control:=true auto_mode:=true auto_arm:=true auto_land:=true \
+  vision_output_consumer_node:=/robotac_flight_closed_loop_sim \
   enable_payload:=false \
   >"${log_dir}/controller.log" 2>&1 &
 controller_pid=$!
@@ -84,6 +99,7 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 rosservice list | grep -qx '/robotac/flight/start'
+sleep 0.5
 start_result=$(rosservice call /robotac/flight/start)
 printf '%s\n' "${start_result}"
 [[ "${start_result}" == *"success: True"* ]]
@@ -91,14 +107,14 @@ printf '%s\n' "${start_result}"
 summary=
 for _ in $(seq 1 300); do
   summary=$(timeout 1 rostopic echo -n 1 /robotac/test/flight_fault_summary 2>/dev/null || true)
-  if [[ "${summary}" == *"abort fault=vision_loss"* ]]; then
+  if [[ "${summary}" == *"abort fault=${fault}"* ]]; then
     break
   fi
   sleep 0.1
 done
 
 printf '%s\n' "${summary}"
-[[ "${summary}" == *"abort fault=vision_loss"* ]]
-[[ "${summary}" == *"error=fastlio_vision_lost"* ]]
+[[ "${summary}" == *"abort fault=${fault}"* ]]
+[[ "${summary}" == *"error=${expected_error}"* ]]
 [[ "${summary}" == *"post_abort_setpoints=0"* ]]
-echo "Flight vision-loss safety regression passed."
+echo "Flight ${fault} safety regression passed."

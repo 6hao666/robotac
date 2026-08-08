@@ -72,6 +72,7 @@ roslaunch robotac_flight local_waypoint_flight.launch \
   config_root:="${workspace_dir}/config" \
   deployment_file:="${workspace_dir}/config/deployment_sim.yaml" \
   enable_control:=true auto_mode:=true auto_arm:=true auto_land:=true \
+  vision_output_consumer_node:=/robotac_flight_closed_loop_sim \
   enable_payload:=false \
   >"${log_dir}/controller.log" 2>&1 &
 controller_pid=$!
@@ -83,6 +84,7 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 rosservice list | grep -qx '/robotac/flight/start'
+sleep 0.5
 python3 "${workspace_dir}/src/robotac_flight/test/publish_dynamic_waypoints.py" \
   >"${log_dir}/waypoints.log" 2>&1
 cat "${log_dir}/waypoints.log"

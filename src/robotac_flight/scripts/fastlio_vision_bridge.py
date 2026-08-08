@@ -305,6 +305,10 @@ class FastlioVisionBridge(object):
                           self.enable_mavros_output))
 
     def _health_cb(self, _event):
+        # This latched topic is also a live bridge heartbeat.  Re-publishing it
+        # here lets the flight controller distinguish a running bridge from a
+        # stale latched value after the process or ROS graph has failed.
+        self.output_enabled_pub.publish(Bool(data=self.enable_mavros_output))
         if self.last_receive is None or time.monotonic() - self.last_receive > self.health_timeout:
             self._reset_health_window()
             if self.last_receive is None:

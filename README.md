@@ -153,7 +153,14 @@ the measured `body -> base_link` transform. MAVROS then performs the ENU-to-NED
 and FLU-to-FRD conversion and sends `VISION_POSITION_ESTIMATE`; do not perform
 that conversion again in project code. The bridge preserves the LiDAR timestamp, rejects stale,
 backward, non-finite, low-rate, or jumping poses, repairs invalid covariance
-with conservative configured values, and reports unhealthy on timeout.
+with conservative configured values, and reports unhealthy on timeout. The
+flight controller requires all three live signals before active control: an
+`ok ...` bridge status, a fresh healthy signal, and a fresh valid message on
+`/mavros/vision_pose/pose_cov` with frame `odom`. A latched
+`output_enabled` value alone is never treated as proof that MAVROS is still
+receiving vision data. Before `/robotac/flight/start` accepts an active
+mission, it also checks that `/mavros` is subscribed to that exact vision-pose
+topic, which confirms the MAVROS vision-pose plugin is loaded.
 
 Interfaces:
 
@@ -293,11 +300,19 @@ bridge regression above:
 src/robotac_flight/test/run_flight_fault_sim.sh
 ```
 
+The same regression can exercise loss of the actual MAVROS vision-pose stream
+while the bridge health signal remains true:
+
+```bash
+ROBOTAC_FLIGHT_FAULT=vision_output_loss \
+  src/robotac_flight/test/run_flight_fault_sim.sh
+```
+
 Before any active test, run the read-only local-flight preflight against the
 existing ROS graph. It subscribes to MAVROS state, grounded/disarmed status,
 local `map -> base_link` odometry, estimator health, FAST-LIO
 `camera_init -> body` odometry, bridge preview/health/status and their matching
-timestamps, and optionally the MAVROS vision-pose input. It creates no
+timestamps, MAVROS time-sync status, and optionally the MAVROS vision-pose input. It creates no
 publishers, sends no setpoints, and does not call flight-control services:
 
 ```bash
@@ -307,7 +322,7 @@ rosrun robotac_flight local_flight_preflight.py \
 
 After the measured transforms, PX4 external-vision parameters, and deployment
 gates have been approved, repeat it with
-`_require_vision_output:=true _check_px4_vision_params:=true`. The latter
+`_require_vision_output:=true _require_timesync:=true _check_px4_vision_params:=true`. The latter
 parameter query is read-only. The following regression exercises that preflight
 against a loopback ROS graph; it opens no serial device and starts no MAVROS:
 

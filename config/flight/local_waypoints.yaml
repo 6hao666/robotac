@@ -48,6 +48,20 @@ local_waypoint_flight:
   state_timeout: 1.0
   extended_state_timeout: 1.0
   vision_timeout: 0.50
+  vision_status_timeout: 0.50
+  vision_output_timeout: 0.50
+  vision_output_stamp_timeout: 0.30
+  vision_output_stamp_future_tolerance: 0.10
+  vision_output_parent: odom
+  # Verify that MAVROS's vision_pose plugin, not merely another monitor, has
+  # subscribed to the bridge output before the start service accepts a mission.
+  require_vision_output_consumer: true
+  vision_output_consumer_node: /mavros
+  # MAVROS sends the FAST-LIO source timestamp in VISION_POSITION_ESTIMATE.
+  # Require a live, low-latency MAVLink time-sync stream before active control.
+  require_timesync: true
+  timesync_timeout: 1.0
+  max_timesync_rtt_ms: 20.0
   estimator_timeout: 1.0
   # Time allowed for an explicitly requested OFFBOARD transition and arming.
   offboard_timeout: 15.0
