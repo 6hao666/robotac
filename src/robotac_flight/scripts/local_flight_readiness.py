@@ -97,7 +97,8 @@ def _plugin_report(config_root):
 
 
 def _mission_report(config_root, args):
-    route_file = config_root / "flight" / "local_waypoints.yaml"
+    route_file = (pathlib.Path(args.route_file).expanduser().resolve()
+                  if args.route_file else config_root / "flight" / "local_waypoints.yaml")
     mission_args = SimpleNamespace(
         file=str(route_file),
         origin_x=args.origin_x,
@@ -196,6 +197,8 @@ def build_report(args):
 
     return {
         "config_root": str(config_root),
+        "route_file": str(pathlib.Path(args.route_file).expanduser().resolve()
+                          if args.route_file else config_root / "flight" / "local_waypoints.yaml"),
         "overall_ready": all(phase["ready"] for phase in phases),
         "required_phase": args.require_phase,
         "required_phase_ready": next((phase["ready"] for phase in phases
@@ -207,6 +210,7 @@ def build_report(args):
 
 def _print_text(report):
     print("LOCAL_FLIGHT_READINESS config_root=%s" % report["config_root"])
+    print("route_file=%s" % report["route_file"])
     for phase in report["phases"]:
         status = "READY" if phase["ready"] else "BLOCKED"
         print("%s=%s" % (phase["name"], status))
@@ -222,6 +226,8 @@ def _build_parser():
         description="Report offline readiness for Robotac FAST-LIO/MAVROS local flight.")
     parser.add_argument("--config-root", default="config",
                         help="Robotac config directory, default: ./config")
+    parser.add_argument("--route-file", default="",
+                        help="Local waypoint YAML; default: CONFIG_ROOT/flight/local_waypoints.yaml")
     parser.add_argument("--origin-x", type=float, default=0.0)
     parser.add_argument("--origin-y", type=float, default=0.0)
     parser.add_argument("--origin-z", type=float, default=0.0)

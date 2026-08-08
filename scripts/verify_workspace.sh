@@ -30,6 +30,7 @@ required_paths=(
   config/fastlio/vision_bridge.yaml
   config/fastlio/vision_bridge_sim.yaml
   config/flight/local_waypoints.yaml
+  config/flight/local_waypoints_simple_box.yaml
   config/flight/posearray_waypoints_example.yaml
   config/mavros/px4.yaml
   config/apriltag/settings.yaml
@@ -228,6 +229,14 @@ printf '%s\n' "${mission_audit}"
 [[ "${mission_audit}" == *"payload_events=wp6:open@(3.000,-3.000,1.000)"* ]]
 [[ "${mission_audit}" == *"global_coordinates=forbidden"* ]]
 echo "Validated offline local mission audit."
+
+simple_mission_audit=$(python3 "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" \
+  --file "${workspace_dir}/config/flight/local_waypoints_simple_box.yaml" \
+  --require-auto-land)
+printf '%s\n' "${simple_mission_audit}"
+[[ "${simple_mission_audit}" == *"MISSION_AUDIT_PASS"* ]]
+[[ "${simple_mission_audit}" == *"global_coordinates=forbidden"* ]]
+echo "Validated simple route-file mission template."
 
 python3 - "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" <<'PY'
 import pathlib
@@ -607,7 +616,9 @@ source = path.read_text()
 for expected in (
     "This script never starts ROS nodes",
     "--show-active",
+    "--route-file",
     "--evidence-dir",
+    "flight_route_file",
     "ev_acceptance_observer.json",
     "Deployment gates are not all true",
     "Readiness report did not pass active_local_flight",
@@ -910,6 +921,7 @@ for expected in (
     "active_local_flight",
     "payload_local_flight",
     "preflight_evidence_file",
+    "route_file",
 ):
     if expected not in source:
         raise SystemExit(f"Flight goal audit check failed: missing {expected}")

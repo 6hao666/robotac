@@ -1,5 +1,6 @@
 <launch>
   <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
+  <arg name="route_file" default="$(arg config_root)/flight/local_waypoints.yaml" />
   <arg name="enable_control" default="false" />
   <arg name="auto_mode" default="false" />
   <arg name="auto_arm" default="false" />
@@ -12,7 +13,7 @@
   <arg name="vision_output_consumer_node" default="/mavros" />
   <arg name="deployment_file" default="$(arg config_root)/deployment.yaml" />
   <rosparam command="load" file="$(arg deployment_file)" />
-  <rosparam command="load" file="$(arg config_root)/flight/local_waypoints.yaml" />
+  <rosparam command="load" file="$(arg route_file)" />
   <node pkg="robotac_flight" type="local_waypoint_flight.py" name="local_waypoint_flight" output="screen">
     <param name="enable_control" value="$(arg enable_control)" />
     <param name="auto_mode" value="$(arg auto_mode)" />

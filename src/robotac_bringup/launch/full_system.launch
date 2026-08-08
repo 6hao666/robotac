@@ -17,6 +17,7 @@
   <arg name="flight_auto_arm" default="false" />
   <arg name="flight_auto_land" default="false" />
   <arg name="flight_enable_payload" default="false" />
+  <arg name="flight_route_file" default="$(arg config_root)/flight/local_waypoints.yaml" />
   <arg name="flight_setpoint_topic" default="/mavros/setpoint_raw/local" />
   <arg name="flight_require_setpoint_consumer" default="true" />
   <arg name="flight_setpoint_consumer_node" default="/mavros" />
@@ -78,6 +79,7 @@
   <group if="$(arg enable_flight_controller)">
     <include file="$(find robotac_flight)/launch/local_waypoint_flight.launch">
       <arg name="config_root" value="$(arg config_root)" />
+      <arg name="route_file" value="$(arg flight_route_file)" />
       <arg name="enable_control" value="$(arg flight_enable_control)" />
       <arg name="auto_mode" value="$(arg flight_auto_mode)" />
       <arg name="auto_arm" value="$(arg flight_auto_arm)" />

@@ -179,7 +179,9 @@ and have just run the full workspace verification separately.
 To inspect the same evidence matrix directly, run the offline readiness report:
 
 ```bash
-rosrun robotac_flight local_flight_readiness.py --config-root ~/robotac_ws/config
+rosrun robotac_flight local_flight_readiness.py \
+  --config-root ~/robotac_ws/config \
+  --route-file ~/robotac_ws/config/flight/local_waypoints.yaml
 ```
 
 It reports separate readiness for `vision_output`, `active_local_flight`, and
@@ -316,8 +318,12 @@ frame is rejected. Each pose position is metres in that frame and its yaw is
 relative to the heading captured at `/robotac/flight/start`. The controller
 locks the accepted route once a mission starts; call reset before replacing it.
 `PoseArray` can carry only position and yaw, so it is for position-only routes.
-The checked-in payload mission with per-waypoint hold and `payload_action` must
-be loaded through `config/flight/local_waypoints.yaml` at launch.
+Routes with per-waypoint hold times or `payload_action` should be loaded at
+launch through `route_file` / `flight_route_file`; the default remains
+`config/flight/local_waypoints.yaml`. Use
+`config/flight/local_waypoints_simple_box.yaml` as a no-payload full-mission
+template when you want to provide a new route file without using the runtime
+`PoseArray` API.
 Every accepted route is also published on `/robotac/flight/route_manifest` as
 latched JSON. After `/robotac/flight/start`, that manifest includes the captured
 local origin, route source (`configured` or `posearray`), fingerprint, waypoint
@@ -334,8 +340,12 @@ rosrun robotac_flight audit_local_mission.py \
   --require-payload-open
 
 rosrun robotac_flight preview_local_route.py \
-  --file ~/robotac_ws/config/flight/local_waypoints.yaml \
+  --file ~/robotac_ws/config/flight/local_waypoints_simple_box.yaml \
   --origin-x 0 --origin-y 0 --origin-z 0 --origin-yaw-deg 0
+
+roslaunch robotac_flight local_waypoint_flight.launch \
+  route_file:=~/robotac_ws/config/flight/local_waypoints_simple_box.yaml \
+  enable_control:=false
 
 rosrun robotac_flight publish_waypoints.py \
   --file ~/robotac_ws/config/flight/posearray_waypoints_example.yaml \
@@ -611,6 +621,7 @@ To roll up the whole objective after a test, use the top-level audit:
 
 ```bash
 ./scripts/flight_goal_audit.py \
+  --route-file ~/robotac_ws/config/flight/local_waypoints.yaml \
   --readonly-evidence ~/robotac_ws/logs/read_only_evidence/YYYYMMDD_HHMMSS \
   --active-evidence ~/robotac_ws/logs/active_flight_evidence/YYYYMMDD_HHMMSS
 ```
@@ -619,7 +630,8 @@ It reports configuration gates, read-only FAST-LIO→MAVROS/PX4 evidence, and
 active local-flight evidence together. The default required phase is
 `active_local_flight`; add `--require-phase payload_local_flight` for the final
 payload mission. By default it also requires the active-flight evidence waypoint
-count and target coordinates to match `config/flight/local_waypoints.yaml`; use
+count and target coordinates to match the configured route file; pass
+`--route-file ...` whenever the launch used `flight_route_file:=...`. Use
 `--allow-dynamic-active-route` only when the mission was intentionally replaced
 through `/robotac/flight/waypoints` before `/robotac/flight/start`. In that mode
 the audit still requires the observer's route manifest and matches every actual

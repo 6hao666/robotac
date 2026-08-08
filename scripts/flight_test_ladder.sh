@@ -7,6 +7,7 @@ set -euo pipefail
 
 workspace_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 config_root="${workspace_dir}/config"
+route_file=""
 origin_x=0.0
 origin_y=0.0
 origin_z=0.0
@@ -27,6 +28,7 @@ hardware.
 
 Options:
   --config-root PATH              Config directory, default: ./config
+  --route-file PATH               Local waypoint YAML, default: CONFIG_ROOT/flight/local_waypoints.yaml
   --origin-x M                    Preview start ENU x, default: 0.0
   --origin-y M                    Preview start ENU y, default: 0.0
   --origin-z M                    Preview start ENU z, default: 0.0
@@ -44,6 +46,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --config-root)
       config_root=${2:?--config-root requires a value}
+      shift 2
+      ;;
+    --route-file)
+      route_file=${2:?--route-file requires a value}
       shift 2
       ;;
     --origin-x)
@@ -95,7 +101,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 deployment_file="${config_root}/deployment.yaml"
-route_file="${config_root}/flight/local_waypoints.yaml"
+if [[ -z "${route_file}" ]]; then
+  route_file="${config_root}/flight/local_waypoints.yaml"
+fi
 if [[ ! -f "${deployment_file}" ]]; then
   echo "Missing deployment file: ${deployment_file}" >&2
   exit 1
@@ -167,6 +175,7 @@ python3 "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" \
 print_section "readiness report"
 readiness_report=$(python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
   --config-root "${config_root}" \
+  --route-file "${route_file}" \
   --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
   --origin-yaw-deg "${origin_yaw_deg}")
 printf '%s\n' "${readiness_report}"
@@ -205,6 +214,7 @@ roslaunch robotac_bringup full_system.launch \
 evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
 mkdir -p "${evidence_dir}"
 EOF
+printf 'route_file=%q\n' "${route_file}"
 
 if [[ -n "${expected_ev_delay_ms}" ]]; then
   cat <<EOF
@@ -240,7 +250,9 @@ roslaunch robotac_flight ev_acceptance_observer.launch \
 ./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
 
 # 7) Top-level goal audit stays BLOCKED until active-flight evidence is added.
-./scripts/flight_goal_audit.py --readonly-evidence "${evidence_dir}"
+./scripts/flight_goal_audit.py \
+  --route-file "${route_file}" \
+  --readonly-evidence "${evidence_dir}"
 EOF
 
 if [[ "${show_active}" == true ]]; then
@@ -252,6 +264,7 @@ if [[ "${show_active}" == true ]]; then
   fi
   if ! python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
       --config-root "${config_root}" \
+      --route-file "${route_file}" \
       --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
       --origin-yaw-deg "${origin_yaw_deg}" \
       --require-phase active_local_flight >/tmp/robotac-active-readiness.$$ 2>&1; then
@@ -284,6 +297,7 @@ if [[ "${show_active}" == true ]]; then
   rm -f /tmp/robotac-active-evidence.$$
   print_section "active flight commands (not executed by this script)"
   printf 'readonly_evidence_dir=%q\n' "${evidence_dir}"
+  printf 'flight_route_file=%q\n' "${route_file}"
   cat <<'EOF'
 # First active connected test: controller can stream only after /robotac/flight/start;
 # mode/arming are still manual, auto_land is allowed because the route requires landing.
@@ -292,6 +306,7 @@ mkdir -p "${flight_evidence_dir}"
 roslaunch robotac_bringup full_system.launch \
   enable_mavros:=true \
   enable_vision_bridge:=true vision_enable_output:=true \
+  flight_route_file:="${flight_route_file}" \
   enable_flight_controller:=true flight_enable_control:=true \
   flight_auto_mode:=false flight_auto_arm:=false flight_auto_land:=true \
   flight_enable_payload:=false enable_servo:=false
@@ -306,12 +321,14 @@ rosservice call /robotac/flight/start
 # After the observer exits, verify the captured completion evidence:
 ./scripts/analyze_active_flight_evidence.py "${flight_evidence_dir}"
 ./scripts/flight_goal_audit.py \
+  --route-file "${flight_route_file}" \
   --readonly-evidence "${readonly_evidence_dir}" \
   --active-evidence "${flight_evidence_dir}"
 EOF
 
   if ! python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
       --config-root "${config_root}" \
+      --route-file "${route_file}" \
       --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
       --origin-yaw-deg "${origin_yaw_deg}" \
       --require-phase payload_local_flight >/tmp/robotac-payload-readiness.$$ 2>&1; then
@@ -332,6 +349,7 @@ mkdir -p "${payload_flight_evidence_dir}"
 roslaunch robotac_bringup full_system.launch \
   enable_mavros:=true \
   enable_vision_bridge:=true vision_enable_output:=true \
+  flight_route_file:="${flight_route_file}" \
   enable_flight_controller:=true flight_enable_control:=true \
   flight_auto_mode:=true flight_auto_arm:=true flight_auto_land:=true \
   enable_servo:=true flight_enable_payload:=true
@@ -342,6 +360,7 @@ rosservice call /robotac/flight/start
 ./scripts/analyze_active_flight_evidence.py \
   "${payload_flight_evidence_dir}" --require-phase payload_local_flight
 ./scripts/flight_goal_audit.py \
+  --route-file "${flight_route_file}" \
   --readonly-evidence "${readonly_evidence_dir}" \
   --active-evidence "${payload_flight_evidence_dir}" \
   --require-phase payload_local_flight

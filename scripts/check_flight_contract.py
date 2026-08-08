@@ -216,6 +216,7 @@ def _check_controller_source(root):
         "mavros_vision_pose_consumer_lost",
     )))
     missing.extend("launch_missing:%s" % token for token in _contains_all(launch, (
+        '<arg name="route_file" default="$(arg config_root)/flight/local_waypoints.yaml" />',
         '<arg name="enable_control" default="false" />',
         '<arg name="auto_mode" default="false" />',
         '<arg name="auto_arm" default="false" />',
@@ -290,6 +291,7 @@ def _check_evidence_surface(root):
     active = _read(root / "scripts" / "analyze_active_flight_evidence.py")
     goal_audit = _read(root / "scripts" / "flight_goal_audit.py")
     ladder = _read(root / "scripts" / "flight_test_ladder.sh")
+    full_system = _read(root / "src" / "robotac_bringup" / "launch" / "full_system.launch")
     missing.extend("readonly_analyzer_missing:%s" % token for token in _contains_all(readonly, (
         "mavros_safe_state",
         "vision_to_mavros",
@@ -332,14 +334,21 @@ def _check_evidence_surface(root):
         "dynamic_route_manifest_missing",
         "prefix=\"dynamic_route\"",
         "preflight_evidence_file",
+        "route_file",
     )))
     missing.extend("ladder_missing:%s" % token for token in _contains_all(ladder, (
+        "--route-file",
+        "flight_route_file",
         "active flight commands hidden",
         "Read-only evidence did not pass active_preflight_evidence",
         "rosservice call /robotac/flight/start",
         "flight_auto_arm:=false",
         "flight_auto_mode:=false",
         "flight_auto_land:=true",
+    )))
+    missing.extend("full_system_missing:%s" % token for token in _contains_all(full_system, (
+        '<arg name="flight_route_file" default="$(arg config_root)/flight/local_waypoints.yaml" />',
+        '<arg name="route_file" value="$(arg flight_route_file)" />',
     )))
     if not missing:
         notes.append("read-only and active evidence gates cover vision input, target reach, landing, and payload")

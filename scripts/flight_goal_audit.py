@@ -49,6 +49,7 @@ def _find_phase(report, name):
 def _readiness_report(args):
     readiness_args = SimpleNamespace(
         config_root=args.config_root,
+        route_file=args.route_file,
         origin_x=args.origin_x,
         origin_y=args.origin_y,
         origin_z=args.origin_z,
@@ -101,6 +102,12 @@ def _active_report(args, configured_waypoints):
         json=False,
     )
     return analyze_active_flight_evidence.build_report(active_args)
+
+
+def _route_file(args):
+    if args.route_file:
+        return pathlib.Path(args.route_file).expanduser().resolve()
+    return pathlib.Path(args.config_root).expanduser().resolve() / "flight" / "local_waypoints.yaml"
 
 
 def _number(value):
@@ -272,7 +279,7 @@ def _active_route_match_report(args):
     if takeoff_target is None:
         return _phase("active_route_matches_config", False, ["route_takeoff_target_invalid"])
 
-    route_file = pathlib.Path(args.config_root).expanduser().resolve() / "flight" / "local_waypoints.yaml"
+    route_file = _route_file(args)
     section, frame, waypoints = preview_local_route._parse_route(str(route_file))
     preview_local_route._validate(section, waypoints)
     takeoff_height = preview_local_route._finite_float(
@@ -407,6 +414,7 @@ def build_report(args):
     }
     return {
         "config_root": str(pathlib.Path(args.config_root).expanduser().resolve()),
+        "route_file": str(_route_file(args)),
         "readonly_evidence": None if not args.readonly_evidence else str(pathlib.Path(args.readonly_evidence).expanduser().resolve()),
         "active_evidence": None if not args.active_evidence else str(pathlib.Path(args.active_evidence).expanduser().resolve()),
         "required_phase": args.require_phase,
@@ -418,6 +426,7 @@ def build_report(args):
 
 def _print_text(report):
     print("ROBOTAC_FLIGHT_GOAL_AUDIT config_root=%s" % report["config_root"])
+    print("route_file=%s" % report["route_file"])
     if report["readonly_evidence"]:
         print("readonly_evidence=%s" % report["readonly_evidence"])
     if report["active_evidence"]:
@@ -438,6 +447,8 @@ def _build_parser():
     parser = argparse.ArgumentParser(
         description="Top-level offline audit for Robotac local MAVROS/FAST-LIO flight goal.")
     parser.add_argument("--config-root", default="config")
+    parser.add_argument("--route-file", default="",
+                        help="Local waypoint YAML; default: CONFIG_ROOT/flight/local_waypoints.yaml")
     parser.add_argument("--readonly-evidence", default="",
                         help="Directory containing read-only topic evidence and ev_acceptance_observer.json")
     parser.add_argument("--active-evidence", default="",
