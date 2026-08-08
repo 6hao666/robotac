@@ -3,7 +3,7 @@
 
 import rospy
 from geometry_msgs.msg import Point, Pose, PoseWithCovarianceStamped, Quaternion
-from mavros_msgs.msg import EstimatorStatus, ExtendedState, State, TimesyncStatus
+from mavros_msgs.msg import EstimatorStatus, ExtendedState, PositionTarget, State, TimesyncStatus
 from nav_msgs.msg import Odometry
 
 
@@ -17,6 +17,8 @@ def main():
     estimator_pub = rospy.Publisher("/mavros/estimator_status", EstimatorStatus, queue_size=2)
     timesync_pub = rospy.Publisher("/mavros/timesync_status", TimesyncStatus, queue_size=2)
     rospy.Subscriber("/robotac/test/vision_pose", PoseWithCovarianceStamped,
+                     lambda _msg: None, queue_size=10)
+    rospy.Subscriber("/mavros/setpoint_raw/local", PositionTarget,
                      lambda _msg: None, queue_size=10)
     rospy.sleep(1.0)
     while not rospy.is_shutdown():

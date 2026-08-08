@@ -147,6 +147,11 @@ class LocalWaypointFlight(object):
         self.land_switch_height = float(rospy.get_param("~land_switch_height", 0.50))
         self.input_frame = rospy.get_param("~waypoint_frame", "robotac_local_enu")
         self.waypoint_topic = rospy.get_param("~waypoint_topic", "/robotac/flight/waypoints")
+        self.setpoint_topic = rospy.get_param("~setpoint_topic", "/mavros/setpoint_raw/local")
+        self.require_setpoint_consumer = _as_bool(
+            rospy.get_param("~require_setpoint_consumer", True))
+        self.setpoint_consumer_node = str(rospy.get_param(
+            "~setpoint_consumer_node", "/mavros")).strip()
         self.vision_status_topic = rospy.get_param(
             "~vision_status_topic", "/robotac/fastlio_vision/status")
         self.vision_output_topic = rospy.get_param(
@@ -240,7 +245,7 @@ class LocalWaypointFlight(object):
         self.last_error = "idle"
 
         self.preview_pub = rospy.Publisher("/robotac/flight/setpoint_preview", PositionTarget, queue_size=10)
-        self.setpoint_pub = rospy.Publisher("/mavros/setpoint_raw/local", PositionTarget, queue_size=10)
+        self.setpoint_pub = rospy.Publisher(self.setpoint_topic, PositionTarget, queue_size=10)
         self.payload_pub = rospy.Publisher(self.payload_topic, Bool, queue_size=1)
         self.status_pub = rospy.Publisher("/robotac/flight/status", String, queue_size=1, latch=True)
         self.active_pub = rospy.Publisher("/robotac/flight/active", Bool, queue_size=1, latch=True)
@@ -554,6 +559,9 @@ class LocalWaypointFlight(object):
                 self.require_vision_output_consumer and
                 not self._vision_output_consumer_present()):
             return TriggerResponse(False, "mavros_vision_pose_consumer_unavailable")
+        if (self.enable_control and self.require_setpoint_consumer and
+                not self._setpoint_consumer_present()):
+            return TriggerResponse(False, "mavros_setpoint_raw_consumer_unavailable")
         if self.require_estimator and not self._estimator_ok():
             return TriggerResponse(False, "px4_estimator_unhealthy_or_stale")
         if self.enable_control and self.require_auto_land and not self.auto_land:
@@ -672,6 +680,10 @@ class LocalWaypointFlight(object):
             return False
         if self.require_vision_output_consumer and not self.vision_output_consumer_node:
             self.last_error = "invalid_vision_output_consumer_node"
+            return False
+        if self.require_setpoint_consumer and (
+                not self.setpoint_topic or not self.setpoint_consumer_node):
+            self.last_error = "invalid_setpoint_consumer_config"
             return False
         if self.strict_local_frames and (
                 not self.expected_local_parent or not self.expected_local_child):
@@ -871,20 +883,30 @@ class LocalWaypointFlight(object):
                 return "mavros_timesync_unhealthy:%s" % self.timesync_issue
         return None
 
-    def _vision_output_consumer_present(self):
-        """Confirm the MAVROS vision plugin has subscribed before takeoff."""
+    def _topic_consumer_present(self, target_topic, node_name, description):
         try:
             code, _message, state = rospy.get_master().getSystemState()
         except Exception as exc:
-            rospy.logwarn_throttle(5.0, "unable to inspect ROS graph for MAVROS vision: %s", exc)
+            rospy.logwarn_throttle(5.0, "unable to inspect ROS graph for %s: %s",
+                                   description, exc)
             return False
         if code != 1:
             return False
         subscribers = state[1]
         for topic, nodes in subscribers:
-            if topic == self.vision_output_topic:
-                return self.vision_output_consumer_node in nodes
+            if topic == target_topic:
+                return node_name in nodes
         return False
+
+    def _vision_output_consumer_present(self):
+        """Confirm the MAVROS vision plugin has subscribed before takeoff."""
+        return self._topic_consumer_present(
+            self.vision_output_topic, self.vision_output_consumer_node, "MAVROS vision")
+
+    def _setpoint_consumer_present(self):
+        """Confirm MAVROS setpoint_raw has subscribed before active control."""
+        return self._topic_consumer_present(
+            self.setpoint_topic, self.setpoint_consumer_node, "MAVROS setpoint_raw")
 
     def _has_payload_actions(self):
         return any(waypoint["payload_action"] != "none" for waypoint in self.waypoints)

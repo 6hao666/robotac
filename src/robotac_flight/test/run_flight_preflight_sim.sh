@@ -79,6 +79,8 @@ roslaunch robotac_flight local_flight_preflight.launch \
   observe_seconds:=1.0 startup_timeout:=12.0 \
   vision_health_window_seconds:=0.5 \
   require_vision_output:=true \
+  require_setpoint_consumer:=true \
+  setpoint_consumer_node:=/robotac_flight_dryrun_inputs \
   vision_output_consumer_node:=/robotac_flight_dryrun_inputs \
   vision_output_topic:=/robotac/test/vision_pose \
   >"${log_dir}/preflight.log" 2>&1
@@ -95,6 +97,8 @@ roslaunch robotac_flight local_flight_preflight.launch \
   observe_seconds:=0.5 startup_timeout:=2.0 \
   vision_health_window_seconds:=0.5 \
   require_vision_output:=true \
+  require_setpoint_consumer:=true \
+  setpoint_consumer_node:=/robotac_flight_dryrun_inputs \
   vision_output_consumer_node:=/robotac_flight_dryrun_inputs \
   vision_output_topic:=/robotac/test/vision_pose \
   >"${log_dir}/preflight-bridge-loss.log" 2>&1

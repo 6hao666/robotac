@@ -163,7 +163,10 @@ flight controller requires all three live signals before active control: an
 `output_enabled` value alone is never treated as proof that MAVROS is still
 receiving vision data. Before `/robotac/flight/start` accepts an active
 mission, it also checks that `/mavros` is subscribed to that exact vision-pose
-topic, which confirms the MAVROS vision-pose plugin is loaded.
+topic, which confirms the MAVROS vision-pose plugin is loaded. Active control
+also requires `/mavros` to subscribe to `/mavros/setpoint_raw/local`; this
+confirms the MAVROS setpoint_raw plugin is present before the controller tries
+to stream OFFBOARD setpoints.
 
 Interfaces:
 
@@ -350,14 +353,14 @@ roslaunch robotac_flight local_flight_preflight.launch \
 
 After the measured transforms, PX4 external-vision parameters, and deployment
 gates have been approved, repeat it with
-`require_vision_output:=true require_timesync:=true check_px4_vision_params:=true`.
-This also checks that the configured consumer node, `/mavros` by default, is
-subscribed to the exact vision-pose topic. The PX4 parameter query is read-only
-and, by default, also requires `EKF2_EV_POS_X/Y/Z` to be zero within 0.01 m;
-Robotac's bridge already outputs the airframe `base_link` pose, so non-zero PX4
-EV offsets would apply the external-vision lever arm twice. The following
-regression exercises that preflight against a loopback ROS graph; it opens no
-serial device and starts no MAVROS:
+`require_vision_output:=true require_timesync:=true check_px4_vision_params:=true require_setpoint_consumer:=true`.
+This also checks that `/mavros` is subscribed to the exact vision-pose and
+setpoint_raw topics. The PX4 parameter query is read-only and, by default, also
+requires `EKF2_EV_POS_X/Y/Z` to be zero within 0.01 m; Robotac's bridge already
+outputs the airframe `base_link` pose, so non-zero PX4 EV offsets would apply
+the external-vision lever arm twice. The following regression exercises that
+preflight against a loopback ROS graph; it opens no serial device and starts no
+MAVROS:
 
 ```bash
 src/robotac_flight/test/run_flight_preflight_sim.sh

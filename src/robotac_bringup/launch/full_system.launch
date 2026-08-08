@@ -17,6 +17,9 @@
   <arg name="flight_auto_arm" default="false" />
   <arg name="flight_auto_land" default="false" />
   <arg name="flight_enable_payload" default="false" />
+  <arg name="flight_setpoint_topic" default="/mavros/setpoint_raw/local" />
+  <arg name="flight_require_setpoint_consumer" default="true" />
+  <arg name="flight_setpoint_consumer_node" default="/mavros" />
   <!-- Servo hardware is independent and never starts unless explicitly asked. -->
   <arg name="enable_servo" default="false" />
   <arg name="servo_port" default="/dev/robotac_servo" />
@@ -80,6 +83,9 @@
       <arg name="auto_arm" value="$(arg flight_auto_arm)" />
       <arg name="auto_land" value="$(arg flight_auto_land)" />
       <arg name="enable_payload" value="$(arg flight_enable_payload)" />
+      <arg name="setpoint_topic" value="$(arg flight_setpoint_topic)" />
+      <arg name="require_setpoint_consumer" value="$(arg flight_require_setpoint_consumer)" />
+      <arg name="setpoint_consumer_node" value="$(arg flight_setpoint_consumer_node)" />
     </include>
   </group>
 </launch>

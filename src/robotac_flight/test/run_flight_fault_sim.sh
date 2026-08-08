@@ -88,6 +88,7 @@ roslaunch robotac_flight local_waypoint_flight.launch \
   deployment_file:="${workspace_dir}/config/deployment_sim.yaml" \
   enable_control:=true auto_mode:=true auto_arm:=true auto_land:=true \
   vision_output_consumer_node:=/robotac_flight_closed_loop_sim \
+  setpoint_consumer_node:=/robotac_flight_closed_loop_sim \
   enable_payload:=false \
   >"${log_dir}/controller.log" 2>&1 &
 controller_pid=$!

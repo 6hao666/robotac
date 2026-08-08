@@ -57,6 +57,11 @@ local_waypoint_flight:
   # subscribed to the bridge output before the start service accepts a mission.
   require_vision_output_consumer: true
   vision_output_consumer_node: /mavros
+  # Active OFFBOARD control requires MAVROS's setpoint_raw plugin to subscribe
+  # before /start is accepted. This confirms local setpoints have a consumer.
+  setpoint_topic: /mavros/setpoint_raw/local
+  require_setpoint_consumer: true
+  setpoint_consumer_node: /mavros
   # MAVROS sends the FAST-LIO source timestamp in VISION_POSITION_ESTIMATE.
   # Require a live, low-latency MAVLink time-sync stream before active control.
   require_timesync: true

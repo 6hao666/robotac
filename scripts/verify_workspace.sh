@@ -191,6 +191,9 @@ for expected in (
     "vision_output_timeout: 0.50",
     "vision_output_parent: odom",
     "vision_output_consumer_node: /mavros",
+    "setpoint_topic: /mavros/setpoint_raw/local",
+    "require_setpoint_consumer: true",
+    "setpoint_consumer_node: /mavros",
     "require_timesync: true",
 ):
     if expected not in flight_config:
@@ -229,6 +232,10 @@ for expected in (
     "require_vision_output_consumer",
     "vision_output_consumer_node",
     "vision_output_consumer_issue",
+    "require_setpoint_consumer",
+    "setpoint_consumer_node",
+    "setpoint_consumer_issue",
+    "setpoint_topic",
     "require_ev_offsets_zero",
     "ev_offset_tolerance_m",
     "EKF2_EV_POS_X",
@@ -254,6 +261,9 @@ for expected in (
     "TimesyncStatus",
     "mavros_timesync_stale",
     "mavros_vision_pose_consumer_unavailable",
+    "mavros_setpoint_raw_consumer_unavailable",
+    "_setpoint_consumer_present",
+    "setpoint_topic",
 ):
     if expected not in flight_source:
         raise SystemExit(f"Flight vision-output gate check failed: missing {expected}")
@@ -267,6 +277,8 @@ for expected in (
 for expected in (
     "local_flight_preflight.launch",
     "require_vision_output:=true",
+    "require_setpoint_consumer:=true",
+    "setpoint_consumer_node:=/robotac_flight_dryrun_inputs",
     "vision_output_consumer_node:=/robotac_flight_dryrun_inputs",
     "vision_output_topic:=/robotac/test/vision_pose",
 ):
