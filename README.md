@@ -491,6 +491,7 @@ To capture the read-only evidence bundle for later review, run:
   --duration 8 --bag-seconds 0 \
   --output-dir "${evidence_dir}"
 ./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
+./scripts/flight_goal_audit.py --readonly-evidence "${evidence_dir}"
 ```
 
 The collector only subscribes and inspects the existing ROS graph. It records
@@ -563,6 +564,19 @@ The first command proves the local waypoint/takeoff/landing contract. The
 payload phase additionally requires a successful servo open acknowledgement.
 Like the read-only evidence analyzer, it only reads JSON and never interacts
 with ROS, MAVROS, or the aircraft.
+
+To roll up the whole objective after a test, use the top-level audit:
+
+```bash
+./scripts/flight_goal_audit.py \
+  --readonly-evidence ~/robotac_ws/logs/read_only_evidence/YYYYMMDD_HHMMSS \
+  --active-evidence ~/robotac_ws/logs/active_flight_evidence/YYYYMMDD_HHMMSS
+```
+
+It reports configuration gates, read-only FAST-LIO→MAVROS/PX4 evidence, and
+active local-flight evidence together. The default required phase is
+`active_local_flight`; add `--require-phase payload_local_flight` for the final
+payload mission.
 
 The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
 rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG

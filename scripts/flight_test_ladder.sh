@@ -233,6 +233,9 @@ roslaunch robotac_flight ev_acceptance_observer.launch \
 
 # 6) Analyze the same directory. This now requires ev_acceptance_observer.json.
 ./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
+
+# 7) Top-level goal audit stays BLOCKED until active-flight evidence is added.
+./scripts/flight_goal_audit.py --readonly-evidence "${evidence_dir}"
 EOF
 
 if [[ "${show_active}" == true ]]; then
@@ -275,6 +278,7 @@ if [[ "${show_active}" == true ]]; then
   fi
   rm -f /tmp/robotac-active-evidence.$$
   print_section "active flight commands (not executed by this script)"
+  printf 'readonly_evidence_dir=%q\n' "${evidence_dir}"
   cat <<'EOF'
 # First active connected test: controller can stream only after /robotac/flight/start;
 # mode/arming are still manual, auto_land is allowed because the route requires landing.
@@ -296,6 +300,9 @@ rosservice call /robotac/flight/start
 
 # After the observer exits, verify the captured completion evidence:
 ./scripts/analyze_active_flight_evidence.py "${flight_evidence_dir}"
+./scripts/flight_goal_audit.py \
+  --readonly-evidence "${readonly_evidence_dir}" \
+  --active-evidence "${flight_evidence_dir}"
 EOF
 
   if ! python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
@@ -329,6 +336,10 @@ roslaunch robotac_flight active_flight_observer.launch \
 rosservice call /robotac/flight/start
 ./scripts/analyze_active_flight_evidence.py \
   "${payload_flight_evidence_dir}" --require-phase payload_local_flight
+./scripts/flight_goal_audit.py \
+  --readonly-evidence "${readonly_evidence_dir}" \
+  --active-evidence "${payload_flight_evidence_dir}" \
+  --require-phase payload_local_flight
 EOF
 else
   print_section "active flight commands hidden"

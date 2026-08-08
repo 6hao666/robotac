@@ -41,6 +41,7 @@ required_paths=(
   scripts/analyze_active_flight_evidence.py
   scripts/analyze_readonly_flight_evidence.py
   scripts/collect_readonly_flight_evidence.sh
+  scripts/flight_goal_audit.py
   scripts/flight_test_ladder.sh
 )
 
@@ -840,6 +841,42 @@ if re.search(r"subprocess\.run|subprocess\.Popen|os\.system", source):
 print("Validated active flight evidence analyzer safety surface.")
 PY
 
+python3 - "${workspace_dir}/scripts/flight_goal_audit.py" <<'PY'
+import pathlib
+import re
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+for expected in (
+    "ROBOTAC_FLIGHT_GOAL_AUDIT",
+    "config_active_local_flight",
+    "readonly_active_preflight_evidence",
+    "active_local_flight_evidence",
+    "payload_local_flight_evidence",
+    "active_local_flight",
+    "payload_local_flight",
+):
+    if expected not in source:
+        raise SystemExit(f"Flight goal audit check failed: missing {expected}")
+for forbidden in (
+    "rospy",
+    "rosservice",
+    "roslaunch",
+    "rostopic pub",
+    "ServiceProxy",
+    "Publisher",
+    "/mavros/cmd/arming",
+    "/mavros/set_mode",
+    "/mavros/setpoint_raw/local",
+    "/robotac/flight/start",
+):
+    if forbidden in source:
+        raise SystemExit(f"Flight goal audit must not reference control path {forbidden}")
+if re.search(r"subprocess\.run|subprocess\.Popen|os\.system", source):
+    raise SystemExit("Flight goal audit must only read files, not execute commands")
+print("Validated flight goal audit safety surface.")
+PY
+
 python3 - "${workspace_dir}/scripts/analyze_readonly_flight_evidence.py" <<'PY'
 import pathlib
 import subprocess
@@ -975,6 +1012,129 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
     if failed.returncode == 0 or "active_local_flight=BLOCKED" not in failed.stdout:
         raise SystemExit("Active flight evidence analyzer accepted failed/aborted evidence")
 print("Validated active flight evidence analyzer with synthetic evidence.")
+PY
+
+python3 - "${workspace_dir}" <<'PY'
+import json
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+workspace = pathlib.Path(sys.argv[1])
+script = workspace / "scripts" / "flight_goal_audit.py"
+expected_types = {
+    "mavros_state": "mavros_msgs/State",
+    "mavros_extended_state": "mavros_msgs/ExtendedState",
+    "mavros_local_position_odom": "nav_msgs/Odometry",
+    "mavros_estimator_status": "mavros_msgs/EstimatorStatus",
+    "mavros_timesync_status": "mavros_msgs/TimesyncStatus",
+    "mavros_vision_pose_pose_cov": "geometry_msgs/PoseWithCovarianceStamped",
+    "mavros_setpoint_raw_local": "mavros_msgs/PositionTarget",
+    "robotac_fastlio_vision_healthy": "std_msgs/Bool",
+    "robotac_fastlio_vision_status": "std_msgs/String",
+    "robotac_fastlio_vision_output_enabled": "std_msgs/Bool",
+    "robotac_fastlio_vision_pose_preview": "geometry_msgs/PoseWithCovarianceStamped",
+    "Odometry": "nav_msgs/Odometry",
+}
+
+def write(path, text):
+    path.write_text(text, encoding="utf-8")
+
+def write_readonly_evidence(root):
+    root.mkdir(parents=True, exist_ok=True)
+    for safe, message_type in expected_types.items():
+        write(root / f"topic_type_{safe}.txt", f"### type\n{message_type}\n")
+        write(root / f"topic_hz_{safe}.txt", "average rate: 10.000\n")
+        write(root / f"topic_info_{safe}.txt",
+              "Type: %s\nPublishers:\n * /producer\nSubscribers:\n * /listener\n" % message_type)
+        write(root / f"topic_echo_{safe}.txt", "---\n")
+    write(root / "topic_echo_mavros_state.txt", "connected: True\narmed: False\nmode: MANUAL\n")
+    write(root / "topic_echo_mavros_extended_state.txt", "landed_state: 1\n")
+    write(root / "topic_echo_robotac_fastlio_vision_healthy.txt", "data: True\n")
+    write(root / "topic_echo_robotac_fastlio_vision_status.txt",
+          "data: ok rate_hz=10.0 valid=20 dropped=0\n")
+    write(root / "topic_echo_robotac_fastlio_vision_output_enabled.txt", "data: True\n")
+    write(root / "topic_info_mavros_vision_pose_pose_cov.txt",
+          "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
+    write(root / "topic_info_mavros_setpoint_raw_local.txt",
+          "Type: mavros_msgs/PositionTarget\nPublishers: None\nSubscribers:\n * /mavros\n")
+    write(root / "ev_acceptance_observer.json", json.dumps({
+        "observer": "ev_acceptance_observer",
+        "success": True,
+        "reason": "ev_acceptance_passed local_delta=(0.400,0.000,0.000) vision_delta=(0.390,0.000,0.000) delta_direction_cos=1.000 delta_scale=1.026",
+        "parameters": {
+            "require_connected": True,
+            "require_disarmed": True,
+            "require_on_ground": True,
+            "require_vision_output_enabled": True,
+            "require_vision_status_ok": True,
+        },
+        "metrics": {},
+    }, indent=2))
+
+def write_active_evidence(root, payload_open=False, success=True):
+    root.mkdir(parents=True, exist_ok=True)
+    write(root / "active_flight_observer.json", json.dumps({
+        "observer": "active_flight_observer",
+        "success": success,
+        "reason": "active_local_flight_passed" if success else "flight_aborted:test",
+        "summary": {
+            "last_status": {"state": "COMPLETE" if success else "ABORT", "waypoint": "8/8"},
+            "abort_reason": None if success else "test",
+            "max_waypoint_index": 8,
+            "total_waypoints": 8,
+            "setpoint_count": 120,
+            "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
+            "local_count": 240,
+            "max_relative_local_z": 1.02,
+            "final_armed": False,
+            "final_landed_state": 1,
+            "payload_open_seen": payload_open,
+        },
+    }, indent=2))
+
+with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
+    root = pathlib.Path(directory)
+    config_root = root / "config"
+    readonly = root / "readonly"
+    active = root / "active"
+    shutil.copytree(str(workspace / "config"), str(config_root))
+    shutil.copyfile(str(workspace / "config" / "deployment_sim.yaml"),
+                    str(config_root / "deployment.yaml"))
+    shutil.copyfile(str(workspace / "config" / "fastlio" / "vision_bridge_sim.yaml"),
+                    str(config_root / "fastlio" / "vision_bridge.yaml"))
+    write_readonly_evidence(readonly)
+    write_active_evidence(active, payload_open=False)
+    missing_active = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_active.returncode == 0 or "active_local_flight_evidence=BLOCKED" not in missing_active.stdout:
+        raise SystemExit("Goal audit accepted missing active-flight evidence")
+    ready = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if ready.returncode != 0 or "active_local_flight=READY" not in ready.stdout:
+        raise SystemExit("Goal audit rejected valid synthetic active-flight evidence:\n%s\n%s" % (ready.stdout, ready.stderr))
+    payload_missing = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--require-phase", "payload_local_flight"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if payload_missing.returncode == 0 or "payload_local_flight=BLOCKED" not in payload_missing.stdout:
+        raise SystemExit("Goal audit accepted missing payload evidence")
+    write_active_evidence(active, payload_open=True)
+    payload_ready = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--require-phase", "payload_local_flight"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if payload_ready.returncode != 0 or "payload_local_flight=READY" not in payload_ready.stdout:
+        raise SystemExit("Goal audit rejected valid synthetic payload evidence:\n%s\n%s" % (payload_ready.stdout, payload_ready.stderr))
+print("Validated top-level flight goal audit with synthetic evidence.")
 PY
 
 for script in "${workspace_dir}"/scripts/*.sh "${workspace_dir}"/src/robotac_bringup/scripts/*.sh; do
