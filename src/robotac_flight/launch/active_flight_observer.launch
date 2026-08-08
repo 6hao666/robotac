@@ -8,6 +8,9 @@
   <arg name="min_airborne_altitude" default="0.50" />
   <arg name="waypoint_reach_tolerance" default="0.35" />
   <arg name="min_target_dwell_s" default="0.25" />
+  <arg name="require_active_vision_pose" default="true" />
+  <arg name="min_active_vision_pose_count" default="5" />
+  <arg name="expected_vision_parent" default="odom" />
   <arg name="require_waypoints_complete" default="true" />
   <arg name="require_final_disarmed" default="true" />
   <arg name="require_final_on_ground" default="true" />
@@ -20,6 +23,9 @@
   <arg name="extended_state_topic" default="/mavros/extended_state" />
   <arg name="payload_status_topic" default="/robotac/servo/status" />
   <arg name="route_manifest_topic" default="/robotac/flight/route_manifest" />
+  <arg name="vision_pose_topic" default="/mavros/vision_pose/pose_cov" />
+  <arg name="vision_output_enabled_topic" default="/robotac/fastlio_vision/output_enabled" />
+  <arg name="vision_status_topic" default="/robotac/fastlio_vision/status" />
 
   <node pkg="robotac_flight" type="active_flight_observer.py"
         name="active_flight_observer" output="screen" required="true">
@@ -29,6 +35,9 @@
     <param name="min_airborne_altitude" value="$(arg min_airborne_altitude)" />
     <param name="waypoint_reach_tolerance" value="$(arg waypoint_reach_tolerance)" />
     <param name="min_target_dwell_s" value="$(arg min_target_dwell_s)" />
+    <param name="require_active_vision_pose" value="$(arg require_active_vision_pose)" />
+    <param name="min_active_vision_pose_count" value="$(arg min_active_vision_pose_count)" />
+    <param name="expected_vision_parent" value="$(arg expected_vision_parent)" />
     <param name="require_waypoints_complete" value="$(arg require_waypoints_complete)" />
     <param name="require_final_disarmed" value="$(arg require_final_disarmed)" />
     <param name="require_final_on_ground" value="$(arg require_final_on_ground)" />
@@ -41,5 +50,8 @@
     <param name="extended_state_topic" value="$(arg extended_state_topic)" />
     <param name="payload_status_topic" value="$(arg payload_status_topic)" />
     <param name="route_manifest_topic" value="$(arg route_manifest_topic)" />
+    <param name="vision_pose_topic" value="$(arg vision_pose_topic)" />
+    <param name="vision_output_enabled_topic" value="$(arg vision_output_enabled_topic)" />
+    <param name="vision_status_topic" value="$(arg vision_status_topic)" />
   </node>
 </launch>

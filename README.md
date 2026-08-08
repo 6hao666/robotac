@@ -563,9 +563,10 @@ roslaunch robotac_flight active_flight_observer.launch \
 
 The observer subscribes only to `/robotac/flight/status`,
 `/robotac/flight/setpoint_preview`, `/robotac/flight/route_manifest`,
-`/mavros/local_position/odom`, `/mavros/state`, `/mavros/extended_state`, and
-servo status. It never publishes setpoints, calls services, arms, changes mode,
-or commands landing. A passing
+`/mavros/local_position/odom`, `/mavros/vision_pose/pose_cov`,
+`/robotac/fastlio_vision/output_enabled`, `/robotac/fastlio_vision/status`,
+`/mavros/state`, `/mavros/extended_state`, and servo status. It never publishes
+setpoints, calls services, arms, changes mode, or commands landing. A passing
 `active_flight_observer.json` requires the controller to reach `COMPLETE`, all
 waypoints to be consumed, relative airborne altitude to have been observed, MAVROS to
 finish disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to
@@ -573,7 +574,9 @@ have been observed within the configured `waypoint_reach_tolerance` by
 `/mavros/local_position/odom` for at least `min_target_dwell_s` continuous
 seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and
 the analyzer rejects evidence that lacks a reached-and-dwelled record for any
-configured waypoint. If `require_payload_open:=true`, it also requires a
+configured waypoint. It also requires active-flight `/mavros/vision_pose/pose_cov`
+samples, a seen `fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision
+status by default. If `require_payload_open:=true`, it additionally requires a
 successful payload-open acknowledgement.
 
 After the observer exits, analyze the evidence offline:

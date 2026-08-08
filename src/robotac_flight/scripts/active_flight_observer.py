@@ -14,9 +14,10 @@ import sys
 import time
 
 import rospy
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from mavros_msgs.msg import ExtendedState, PositionTarget, State
 from nav_msgs.msg import Odometry
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 
 def _as_bool(value):
@@ -60,6 +61,9 @@ class ActiveFlightObserver(object):
         self.min_airborne_altitude = float(rospy.get_param("~min_airborne_altitude", 0.50))
         self.waypoint_reach_tolerance = float(rospy.get_param("~waypoint_reach_tolerance", 0.35))
         self.min_target_dwell_s = float(rospy.get_param("~min_target_dwell_s", 0.25))
+        self.require_active_vision_pose = _as_bool(rospy.get_param("~require_active_vision_pose", True))
+        self.min_active_vision_pose_count = int(rospy.get_param("~min_active_vision_pose_count", 5))
+        self.expected_vision_parent = str(rospy.get_param("~expected_vision_parent", "odom")).strip()
         self.require_waypoints_complete = _as_bool(rospy.get_param("~require_waypoints_complete", True))
         self.require_final_disarmed = _as_bool(rospy.get_param("~require_final_disarmed", True))
         self.require_final_on_ground = _as_bool(rospy.get_param("~require_final_on_ground", True))
@@ -89,6 +93,19 @@ class ActiveFlightObserver(object):
         self.route_manifest = None
         self.route_manifest_history = []
         self.route_manifest_receive = None
+
+        self.active_vision_pose_count = 0
+        self.active_vision_pose_receive = None
+        self.active_vision_pose_first_stamp = None
+        self.active_vision_pose_last_stamp = None
+        self.active_vision_pose_parent = None
+        self.vision_output_enabled_latest = None
+        self.vision_output_enabled_receive = None
+        self.active_vision_output_enabled_seen = False
+        self.active_vision_output_enabled_receive = None
+        self.active_fastlio_vision_status_ok_seen = False
+        self.active_fastlio_vision_status_receive = None
+        self.last_fastlio_vision_status = None
 
         self.local_count = 0
         self.local_receive = None
@@ -122,6 +139,12 @@ class ActiveFlightObserver(object):
                          String, self._payload_status_cb, queue_size=10)
         rospy.Subscriber(rospy.get_param("~route_manifest_topic", "/robotac/flight/route_manifest"),
                          String, self._route_manifest_cb, queue_size=10)
+        rospy.Subscriber(rospy.get_param("~vision_pose_topic", "/mavros/vision_pose/pose_cov"),
+                         PoseWithCovarianceStamped, self._vision_pose_cb, queue_size=50)
+        rospy.Subscriber(rospy.get_param("~vision_output_enabled_topic", "/robotac/fastlio_vision/output_enabled"),
+                         Bool, self._vision_output_enabled_cb, queue_size=10)
+        rospy.Subscriber(rospy.get_param("~vision_status_topic", "/robotac/fastlio_vision/status"),
+                         String, self._vision_status_cb, queue_size=20)
         self.timer = rospy.Timer(rospy.Duration(0.20), self._tick)
 
     def _validate_parameters(self):
@@ -137,6 +160,10 @@ class ActiveFlightObserver(object):
             raise ValueError("waypoint_reach_tolerance must be finite and positive")
         if not math.isfinite(self.min_target_dwell_s) or self.min_target_dwell_s < 0.0:
             raise ValueError("min_target_dwell_s must be finite and non-negative")
+        if self.min_active_vision_pose_count < 0:
+            raise ValueError("min_active_vision_pose_count must be non-negative")
+        if self.require_active_vision_pose and not self.expected_vision_parent:
+            raise ValueError("expected_vision_parent must be non-empty")
 
     @staticmethod
     def _fresh(receive_time, timeout):
@@ -190,6 +217,9 @@ class ActiveFlightObserver(object):
                 pass
         if state == "ABORT":
             self.abort_reason = fields.get("error", "unknown")
+
+    def _mission_active(self):
+        return self.last_status.get("state") not in (None, "", "IDLE", "COMPLETE", "ABORT")
 
     def _append_target_record_if_needed(self, target):
         state = self.last_status.get("state", "unknown")
@@ -306,6 +336,40 @@ class ActiveFlightObserver(object):
         if len(self.route_manifest_history) > 20:
             self.route_manifest_history = self.route_manifest_history[-20:]
 
+    def _vision_pose_cb(self, msg):
+        if not self._mission_active():
+            return
+        pose = msg.pose.pose
+        values = (pose.position.x, pose.position.y, pose.position.z,
+                  pose.orientation.x, pose.orientation.y,
+                  pose.orientation.z, pose.orientation.w)
+        if not _finite(values):
+            return
+        if self.expected_vision_parent and msg.header.frame_id != self.expected_vision_parent:
+            return
+        self.active_vision_pose_count += 1
+        self.active_vision_pose_receive = time.monotonic()
+        stamp = msg.header.stamp.to_sec()
+        self.active_vision_pose_parent = msg.header.frame_id
+        if stamp > 0.0:
+            if self.active_vision_pose_first_stamp is None:
+                self.active_vision_pose_first_stamp = stamp
+            self.active_vision_pose_last_stamp = stamp
+
+    def _vision_output_enabled_cb(self, msg):
+        self.vision_output_enabled_latest = bool(msg.data)
+        self.vision_output_enabled_receive = time.monotonic()
+        if self._mission_active() and self.vision_output_enabled_latest:
+            self.active_vision_output_enabled_seen = True
+            self.active_vision_output_enabled_receive = time.monotonic()
+
+    def _vision_status_cb(self, msg):
+        status = str(msg.data).strip()
+        self.last_fastlio_vision_status = status
+        if self._mission_active() and status.startswith("ok"):
+            self.active_fastlio_vision_status_ok_seen = True
+            self.active_fastlio_vision_status_receive = time.monotonic()
+
     def _target_reach_issue(self):
         flight_targets = [record for record in self.target_records
                           if record.get("state") in ("TAKEOFF", "WAYPOINTS")]
@@ -362,6 +426,16 @@ class ActiveFlightObserver(object):
                 return "waypoint_progress_unavailable"
             if self.max_waypoint_index < self.total_waypoints:
                 return "waypoints_incomplete:%d/%d" % (self.max_waypoint_index, self.total_waypoints)
+        if self.require_active_vision_pose:
+            if self.active_vision_pose_count < self.min_active_vision_pose_count:
+                return "active_vision_pose_count_below_%d" % self.min_active_vision_pose_count
+            if not self.active_vision_output_enabled_seen:
+                return "active_vision_output_enabled_missing"
+            if not self.active_fastlio_vision_status_ok_seen:
+                return "active_fastlio_vision_status_ok_missing"
+            if (not final and
+                    not self._fresh(self.active_vision_pose_receive, self.stream_timeout)):
+                return "active_vision_pose_missing_or_stale"
         target_issue = self._target_reach_issue()
         if target_issue is not None:
             return target_issue
@@ -393,6 +467,14 @@ class ActiveFlightObserver(object):
             "target_records": self._public_target_records(),
             "route_manifest": self.route_manifest,
             "route_manifest_history": self.route_manifest_history,
+            "active_vision_pose_count": self.active_vision_pose_count,
+            "active_vision_pose_first_stamp": self.active_vision_pose_first_stamp,
+            "active_vision_pose_last_stamp": self.active_vision_pose_last_stamp,
+            "active_vision_pose_parent": self.active_vision_pose_parent,
+            "vision_output_enabled_latest": self.vision_output_enabled_latest,
+            "active_vision_output_enabled_seen": self.active_vision_output_enabled_seen,
+            "active_fastlio_vision_status_ok_seen": self.active_fastlio_vision_status_ok_seen,
+            "last_fastlio_vision_status": self.last_fastlio_vision_status,
             "local_count": self.local_count,
             "initial_local_position": self.initial_local_position,
             "initial_local_yaw": self.initial_local_yaw,
@@ -412,6 +494,9 @@ class ActiveFlightObserver(object):
                 "min_airborne_altitude": self.min_airborne_altitude,
                 "waypoint_reach_tolerance": self.waypoint_reach_tolerance,
                 "min_target_dwell_s": self.min_target_dwell_s,
+                "require_active_vision_pose": self.require_active_vision_pose,
+                "min_active_vision_pose_count": self.min_active_vision_pose_count,
+                "expected_vision_parent": self.expected_vision_parent,
                 "require_waypoints_complete": self.require_waypoints_complete,
                 "require_final_disarmed": self.require_final_disarmed,
                 "require_final_on_ground": self.require_final_on_ground,

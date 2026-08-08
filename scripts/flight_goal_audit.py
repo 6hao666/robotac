@@ -94,6 +94,7 @@ def _active_report(args, configured_waypoints):
         min_airborne_altitude=args.min_airborne_altitude,
         waypoint_reach_tolerance=args.waypoint_reach_tolerance,
         min_target_dwell_s=args.min_target_dwell_s,
+        min_active_vision_pose_count=args.min_active_vision_pose_count,
         json=False,
     )
     return analyze_active_flight_evidence.build_report(active_args)
@@ -466,6 +467,8 @@ def _build_parser():
     parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--min-target-dwell-s", type=float, default=0.25,
                         help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
+    parser.add_argument("--min-active-vision-pose-count", type=int, default=5,
+                        help="Require active-flight evidence to include this many MAVROS vision pose samples; 0 disables")
     parser.add_argument("--require-phase", default="active_local_flight",
                         choices=("configuration", "active_preflight",
                                  "active_local_flight", "payload_local_flight"))
@@ -482,6 +485,8 @@ def main():
         raise ValueError("route target/yaw tolerances must be non-negative")
     if args.min_target_dwell_s < 0.0:
         raise ValueError("min-target-dwell-s must be non-negative")
+    if args.min_active_vision_pose_count < 0:
+        raise ValueError("min-active-vision-pose-count must be non-negative")
     report = build_report(args)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))

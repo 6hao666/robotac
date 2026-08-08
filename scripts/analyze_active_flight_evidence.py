@@ -158,6 +158,18 @@ def _base_phase(data, args):
     else:
         notes.append("max_relative_z=%.3f" % max_relative_z)
 
+    active_vision_count = _int(summary.get("active_vision_pose_count"))
+    if args.min_active_vision_pose_count > 0:
+        if active_vision_count is None or active_vision_count < args.min_active_vision_pose_count:
+            missing.append("active_vision_pose_count_below_%d" % args.min_active_vision_pose_count)
+        else:
+            parent = summary.get("active_vision_pose_parent") or "unknown"
+            notes.append("active_vision_pose_count=%d parent=%s" % (active_vision_count, parent))
+        if summary.get("active_vision_output_enabled_seen") is not True:
+            missing.append("active_vision_output_enabled_seen")
+        if summary.get("active_fastlio_vision_status_ok_seen") is not True:
+            missing.append("active_fastlio_vision_status_ok_seen")
+
     if summary.get("final_armed") is not False:
         missing.append("final_disarmed")
     if summary.get("final_landed_state") != LANDED_STATE_ON_GROUND:
@@ -221,6 +233,8 @@ def _build_parser():
     parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--min-target-dwell-s", type=float, default=0.25,
                         help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
+    parser.add_argument("--min-active-vision-pose-count", type=int, default=5,
+                        help="Require at least this many /mavros/vision_pose/pose_cov samples during active flight; 0 disables")
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -229,6 +243,8 @@ def main():
     args = _build_parser().parse_args()
     if args.min_waypoints < 1 or args.min_setpoints < 1 or args.min_unique_setpoints < 1:
         raise ValueError("minimum waypoint/setpoint counts must be positive")
+    if args.min_active_vision_pose_count < 0:
+        raise ValueError("min-active-vision-pose-count must be non-negative")
     if args.expected_waypoints < 0:
         raise ValueError("expected-waypoints must be non-negative")
     if not math.isfinite(args.min_airborne_altitude) or args.min_airborne_altitude < 0.0:

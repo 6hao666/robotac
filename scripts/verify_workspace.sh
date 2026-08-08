@@ -992,7 +992,7 @@ script = sys.argv[1]
 def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    payload_open=False, state="COMPLETE", abort_reason=None,
                    target_reached=True, missing_waypoint_index=None,
-                   target_dwell_s=1.0):
+                   target_dwell_s=1.0, active_vision=True):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
          "waypoint_total": 8, "min_distance_m": 0.08,
@@ -1034,6 +1034,14 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
             "target_records": target_records,
+            "active_vision_pose_count": 24 if active_vision else 0,
+            "active_vision_pose_parent": "odom" if active_vision else None,
+            "active_vision_pose_first_stamp": 10.0 if active_vision else None,
+            "active_vision_pose_last_stamp": 13.0 if active_vision else None,
+            "vision_output_enabled_latest": bool(active_vision),
+            "active_vision_output_enabled_seen": bool(active_vision),
+            "active_fastlio_vision_status_ok_seen": bool(active_vision),
+            "last_fastlio_vision_status": "ok rate_hz=10.0 valid=24 dropped=0" if active_vision else "timeout",
             "local_count": 240,
             "initial_local_position": [0, 0, 0],
             "initial_local_yaw": 0.0,
@@ -1062,6 +1070,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if payload_ok.returncode != 0 or "payload_local_flight=READY" not in payload_ok.stdout:
         raise SystemExit("Active flight evidence analyzer rejected valid payload evidence")
+    write_evidence(evidence, active_vision=False)
+    no_vision = subprocess.run([sys.executable, script, str(root)], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if no_vision.returncode == 0 or "active_vision_pose_count_below_5" not in no_vision.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted missing active vision pose evidence")
     write_evidence(evidence, target_reached=False)
     unreached = subprocess.run([sys.executable, script, str(root)], text=True,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1185,6 +1198,14 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "setpoint_count": 120,
         "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
         "target_records": target_records,
+        "active_vision_pose_count": 24,
+        "active_vision_pose_parent": "odom",
+        "active_vision_pose_first_stamp": 10.0,
+        "active_vision_pose_last_stamp": 13.0,
+        "vision_output_enabled_latest": True,
+        "active_vision_output_enabled_seen": True,
+        "active_fastlio_vision_status_ok_seen": True,
+        "last_fastlio_vision_status": "ok rate_hz=10.0 valid=24 dropped=0",
         "local_count": 240,
         "initial_local_position": [0.50 if corrupt_initial_origin else 0.0, 0.0, 0.0],
         "initial_local_yaw": 0.0,
