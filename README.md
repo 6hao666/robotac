@@ -568,16 +568,17 @@ The observer subscribes only to `/robotac/flight/status`,
 `/mavros/state`, `/mavros/extended_state`, and servo status. It never publishes
 setpoints, calls services, arms, changes mode, or commands landing. A passing
 `active_flight_observer.json` requires the controller to reach `COMPLETE`, all
-waypoints to be consumed, relative airborne altitude to have been observed, MAVROS to
-finish disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to
-have been observed within the configured `waypoint_reach_tolerance` by
+waypoints to be consumed, controller `TAKEOFF` and `LANDING` states to appear,
+relative airborne altitude to have been observed, MAVROS to finish
+disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to have been
+observed within the configured `waypoint_reach_tolerance` by
 `/mavros/local_position/odom` for at least `min_target_dwell_s` continuous
-seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and
-the analyzer rejects evidence that lacks a reached-and-dwelled record for any
+seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and the
+analyzer rejects evidence that lacks a reached-and-dwelled record for any
 configured waypoint. It also requires active-flight `/mavros/vision_pose/pose_cov`
 samples, a seen `fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision
-status by default. Active evidence must also show MAVROS connected, armed, and
-in `OFFBOARD` during the mission window before ending disarmed/on-ground. If
+status by default. Active evidence must also show MAVROS connected, armed, and in
+`OFFBOARD` during the mission window before ending disarmed/on-ground. If
 `require_payload_open:=true`, it additionally requires a successful payload-open
 acknowledgement.
 

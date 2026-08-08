@@ -96,6 +96,7 @@ def _active_report(args, configured_waypoints):
         min_target_dwell_s=args.min_target_dwell_s,
         min_active_vision_pose_count=args.min_active_vision_pose_count,
         require_active_mavros_control=args.require_active_mavros_control,
+        require_takeoff_landing_states=args.require_takeoff_landing_states,
         json=False,
     )
     return analyze_active_flight_evidence.build_report(active_args)
@@ -473,6 +474,9 @@ def _build_parser():
     parser.add_argument("--no-require-active-mavros-control", dest="require_active_mavros_control",
                         action="store_false", default=True,
                         help="Do not require active evidence to show MAVROS connected, armed, and OFFBOARD")
+    parser.add_argument("--no-require-takeoff-landing-states", dest="require_takeoff_landing_states",
+                        action="store_false", default=True,
+                        help="Do not require active evidence to show TAKEOFF and LANDING controller states")
     parser.add_argument("--require-phase", default="active_local_flight",
                         choices=("configuration", "active_preflight",
                                  "active_local_flight", "payload_local_flight"))

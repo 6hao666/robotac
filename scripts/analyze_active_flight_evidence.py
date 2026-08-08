@@ -81,6 +81,13 @@ def _base_phase(data, args):
     if last_status.get("state") != "COMPLETE":
         missing.append("flight_state_complete")
 
+    state_history = summary.get("state_history")
+    if args.require_takeoff_landing_states:
+        if not isinstance(state_history, list) or "TAKEOFF" not in state_history:
+            missing.append("takeoff_state_missing")
+        if not isinstance(state_history, list) or "LANDING" not in state_history:
+            missing.append("landing_state_missing")
+
     total_waypoints = _int(summary.get("total_waypoints"))
     max_waypoint_index = _int(summary.get("max_waypoint_index"))
     expected_waypoints = _int(getattr(args, "expected_waypoints", 0)) or 0
@@ -254,6 +261,9 @@ def _build_parser():
     parser.add_argument("--no-require-active-mavros-control", dest="require_active_mavros_control",
                         action="store_false", default=True,
                         help="Do not require active evidence to show MAVROS connected, armed, and OFFBOARD")
+    parser.add_argument("--no-require-takeoff-landing-states", dest="require_takeoff_landing_states",
+                        action="store_false", default=True,
+                        help="Do not require controller state_history to include TAKEOFF and LANDING")
     parser.add_argument("--json", action="store_true")
     return parser
 

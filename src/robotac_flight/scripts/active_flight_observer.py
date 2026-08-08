@@ -66,6 +66,8 @@ class ActiveFlightObserver(object):
         self.expected_vision_parent = str(rospy.get_param("~expected_vision_parent", "odom")).strip()
         self.require_active_mavros_control = _as_bool(
             rospy.get_param("~require_active_mavros_control", True))
+        self.require_takeoff_landing_states = _as_bool(
+            rospy.get_param("~require_takeoff_landing_states", True))
         self.require_waypoints_complete = _as_bool(rospy.get_param("~require_waypoints_complete", True))
         self.require_final_disarmed = _as_bool(rospy.get_param("~require_final_disarmed", True))
         self.require_final_on_ground = _as_bool(rospy.get_param("~require_final_on_ground", True))
@@ -128,6 +130,10 @@ class ActiveFlightObserver(object):
         self.active_mavros_modes = []
         self.extended_state = None
         self.extended_state_receive = None
+        self.active_extended_state_count = 0
+        self.active_landed_states = []
+        self.active_in_air_seen = False
+        self.active_landing_seen = False
 
         self.payload_open_seen = False
         self.payload_status_receive = None
@@ -336,6 +342,18 @@ class ActiveFlightObserver(object):
     def _extended_state_cb(self, msg):
         self.extended_state = msg
         self.extended_state_receive = time.monotonic()
+        if self._mission_active():
+            self.active_extended_state_count += 1
+            landed_state = int(msg.landed_state)
+            if (not self.active_landed_states or
+                    self.active_landed_states[-1] != landed_state):
+                self.active_landed_states.append(landed_state)
+                if len(self.active_landed_states) > 20:
+                    self.active_landed_states = self.active_landed_states[-20:]
+            if landed_state == ExtendedState.LANDED_STATE_IN_AIR:
+                self.active_in_air_seen = True
+            if landed_state == ExtendedState.LANDED_STATE_LANDING:
+                self.active_landing_seen = True
 
     def _payload_status_cb(self, msg):
         fields = _parse_fields(msg.data)
@@ -441,6 +459,11 @@ class ActiveFlightObserver(object):
         if (self.max_relative_local_z is None or
                 self.max_relative_local_z < self.min_airborne_altitude):
             return "airborne_altitude_not_observed"
+        if self.require_takeoff_landing_states:
+            if "TAKEOFF" not in self.state_history:
+                return "takeoff_state_missing"
+            if "LANDING" not in self.state_history:
+                return "landing_state_missing"
         if self.require_waypoints_complete:
             if self.total_waypoints is None:
                 return "waypoint_progress_unavailable"
@@ -517,6 +540,10 @@ class ActiveFlightObserver(object):
             "active_mavros_armed_seen": self.active_mavros_armed_seen,
             "active_mavros_offboard_seen": self.active_mavros_offboard_seen,
             "active_mavros_modes": self.active_mavros_modes,
+            "active_extended_state_count": self.active_extended_state_count,
+            "active_landed_states": self.active_landed_states,
+            "active_in_air_seen": self.active_in_air_seen,
+            "active_landing_seen": self.active_landing_seen,
             "final_armed": None if self.mavros_state is None else bool(self.mavros_state.armed),
             "final_mode": None if self.mavros_state is None else self.mavros_state.mode,
             "final_landed_state": None if self.extended_state is None else self.extended_state.landed_state,
@@ -532,6 +559,7 @@ class ActiveFlightObserver(object):
                 "min_active_vision_pose_count": self.min_active_vision_pose_count,
                 "expected_vision_parent": self.expected_vision_parent,
                 "require_active_mavros_control": self.require_active_mavros_control,
+                "require_takeoff_landing_states": self.require_takeoff_landing_states,
                 "require_waypoints_complete": self.require_waypoints_complete,
                 "require_final_disarmed": self.require_final_disarmed,
                 "require_final_on_ground": self.require_final_on_ground,

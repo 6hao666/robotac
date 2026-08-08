@@ -993,7 +993,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    payload_open=False, state="COMPLETE", abort_reason=None,
                    target_reached=True, missing_waypoint_index=None,
                    target_dwell_s=1.0, active_vision=True,
-                   active_mavros_control=True):
+                   active_mavros_control=True, include_landing_state=True):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
          "waypoint_total": 8, "min_distance_m": 0.08,
@@ -1028,7 +1028,9 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
         "reason": reason,
         "summary": {
             "last_status": {"state": state, "waypoint": "8/8"},
-            "state_history": ["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "LANDING", "COMPLETE"],
+            "state_history": (["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "LANDING", "COMPLETE"]
+                              if include_landing_state else
+                              ["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "COMPLETE"]),
             "abort_reason": abort_reason,
             "max_waypoint_index": 8,
             "total_waypoints": 8,
@@ -1053,6 +1055,10 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "active_mavros_armed_seen": bool(active_mavros_control),
             "active_mavros_offboard_seen": bool(active_mavros_control),
             "active_mavros_modes": ["OFFBOARD"] if active_mavros_control else [],
+            "active_extended_state_count": 12 if active_mavros_control else 0,
+            "active_landed_states": [2, 4] if include_landing_state else [2],
+            "active_in_air_seen": True,
+            "active_landing_seen": bool(include_landing_state),
             "final_armed": False,
             "final_landed_state": 1,
             "payload_open_seen": payload_open,
@@ -1086,6 +1092,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if no_mavros_control.returncode == 0 or "active_mavros_offboard_seen" not in no_mavros_control.stdout:
         raise SystemExit("Active flight evidence analyzer accepted missing active MAVROS OFFBOARD evidence")
+    write_evidence(evidence, include_landing_state=False)
+    no_landing = subprocess.run([sys.executable, script, str(root)], text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if no_landing.returncode == 0 or "landing_state_missing" not in no_landing.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted evidence without a LANDING state")
     write_evidence(evidence, target_reached=False)
     unreached = subprocess.run([sys.executable, script, str(root)], text=True,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1203,6 +1214,7 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         })
     summary = {
         "last_status": {"state": "COMPLETE" if success else "ABORT", "waypoint": "%d/%d" % (waypoint_count, waypoint_count)},
+        "state_history": ["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "LANDING", "COMPLETE"],
         "abort_reason": None if success else "test",
         "max_waypoint_index": waypoint_count,
         "total_waypoints": waypoint_count,
@@ -1226,6 +1238,10 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "active_mavros_armed_seen": True,
         "active_mavros_offboard_seen": True,
         "active_mavros_modes": ["OFFBOARD"],
+        "active_extended_state_count": 12,
+        "active_landed_states": [2, 4],
+        "active_in_air_seen": True,
+        "active_landing_seen": True,
         "final_armed": False,
         "final_landed_state": 1,
         "payload_open_seen": payload_open,

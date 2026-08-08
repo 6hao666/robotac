@@ -309,6 +309,8 @@ def _check_evidence_surface(root):
         "max_continuous_reach_s",
         "min_target_dwell_s",
         "expected_waypoints_mismatch",
+        "takeoff_state_missing",
+        "landing_state_missing",
         "active_vision_pose_count_below",
         "active_vision_output_enabled_seen",
         "active_fastlio_vision_status_ok_seen",
