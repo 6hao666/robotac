@@ -693,14 +693,20 @@ active local-flight evidence together. The default required phase is
 `active_local_flight`; add `--require-phase payload_local_flight` for the final
 payload mission. By default it also requires the active-flight evidence waypoint
 count and target coordinates to match the configured route file; pass
-`--route-file ...` whenever the launch used `flight_route_file:=...`. Use
-`--allow-dynamic-active-route` only when the mission was intentionally replaced
-through `/robotac/flight/waypoints` before `/robotac/flight/start`. In that mode
-the audit still requires the observer's route manifest and matches every actual
-`TAKEOFF`/`WAYPOINTS` target against the manifest. Start the active observer
-before `/robotac/flight/start`: its initial MAVROS local pose is used as
-independent evidence that the route targets were generated relative to the
-actual local takeoff pose.
+`--route-file ...` whenever the launch used `flight_route_file:=...`. For a
+configured route, the audit requires the observer to have captured
+`/robotac/flight/route_manifest` with `event=mission_started` and
+`route_source=configured`, then matches both the manifest `target_route` and the
+observed setpoint/reach `target_records` against the route file. This proves the
+aircraft flew the exact local relative route supplied by the operator, not
+merely a route with the same waypoint count. Use `--allow-dynamic-active-route`
+only when the mission was intentionally replaced through
+`/robotac/flight/waypoints` before `/robotac/flight/start`. In that mode the
+audit requires `route_source=posearray` and validates the dynamic manifest
+targets instead of the configured route file. Start the active observer before
+`/robotac/flight/start`: its initial MAVROS local pose is used as independent
+evidence that the route targets were generated relative to the actual local
+takeoff pose.
 
 The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
 rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG

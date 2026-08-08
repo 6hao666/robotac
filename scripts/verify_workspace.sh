@@ -1395,7 +1395,8 @@ def write_readonly_evidence(root):
 
 def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8,
                           corrupt_waypoint_index=None, corrupt_initial_origin=False,
-                          dynamic_manifest=False, corrupt_dynamic_manifest=False):
+                          dynamic_manifest=False, corrupt_dynamic_manifest=False,
+                          omit_route_manifest=False):
     root.mkdir(parents=True, exist_ok=True)
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
@@ -1465,25 +1466,29 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "final_landed_state": 1,
         "payload_open_seen": payload_open,
     }
-    if dynamic_manifest:
-        manifest_route = []
-        for record in target_records:
-            item = {
-                "state": record["state"],
-                "waypoint_index": record["waypoint_index"] if record["state"] == "WAYPOINTS" else None,
-                "target": list(record["target"]),
-            }
-            manifest_route.append(item)
-        if corrupt_dynamic_manifest and len(manifest_route) > 1:
-            manifest_route[1]["target"][0] += 0.50
+    manifest_route = []
+    for record in target_records:
+        item = {
+            "state": record["state"],
+            "waypoint_index": record["waypoint_index"] if record["state"] == "WAYPOINTS" else None,
+            "target": list(record["target"]),
+        }
+        manifest_route.append(item)
+    if corrupt_dynamic_manifest and len(manifest_route) > 1:
+        manifest_route[1]["target"][0] += 0.50
+    if not omit_route_manifest:
+        route_source = "posearray" if dynamic_manifest else "configured"
+        route_revision = 1 if dynamic_manifest else 0
         summary["route_manifest"] = {
             "event": "mission_started",
-            "route_source": "posearray",
-            "route_revision": 1,
+            "route_source": route_source,
+            "route_revision": route_revision,
             "route_fingerprint": "synthetic",
             "waypoint_frame": "robotac_start_body",
             "waypoint_count": waypoint_count,
             "takeoff_height": 1.0,
+            "require_auto_land": True,
+            "auto_land": True,
             "origin": [0.0, 0.0, 0.0],
             "origin_yaw": 0.0,
             "target_route": manifest_route,
@@ -1519,6 +1524,14 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if ready.returncode != 0 or "active_local_flight=READY" not in ready.stdout:
         raise SystemExit("Goal audit rejected valid synthetic active-flight evidence:\n%s\n%s" % (ready.stdout, ready.stderr))
+    write_active_evidence(active, payload_open=False, omit_route_manifest=True)
+    missing_configured_manifest = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if (missing_configured_manifest.returncode == 0 or
+            "configured_route_manifest_missing" not in missing_configured_manifest.stdout):
+        raise SystemExit("Goal audit accepted configured active-flight evidence without route manifest")
     custom_route = root / "custom_route.yaml"
     custom_route.write_text("""local_waypoint_flight:
   waypoint_frame: robotac_start_body
@@ -1583,7 +1596,7 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if wrong_origin.returncode == 0 or "route_origin_mismatch" not in wrong_origin.stdout:
         raise SystemExit("Goal audit accepted active-flight evidence with the wrong local route origin")
-    write_active_evidence(active, payload_open=False, waypoint_count=2)
+    write_active_evidence(active, payload_open=False, waypoint_count=2, omit_route_manifest=True)
     dynamic_missing_manifest = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
          "--readonly-evidence", str(readonly), "--active-evidence", str(active),

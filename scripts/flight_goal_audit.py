@@ -273,26 +273,51 @@ def _active_route_match_report(args):
     if args.allow_dynamic_active_route:
         return _dynamic_route_match_report(args, summary, records)
 
-    takeoff_records = [record for record in records
-                       if isinstance(record, dict) and record.get("state") == "TAKEOFF"]
-    if not takeoff_records:
-        return _phase("active_route_matches_config", False, ["route_takeoff_target_missing"])
-    takeoff_target = _target_tuple(takeoff_records[0])
-    if takeoff_target is None:
-        return _phase("active_route_matches_config", False, ["route_takeoff_target_invalid"])
-
     route_file = _route_file(args)
     section, frame, waypoints = preview_local_route._parse_route(str(route_file))
     preview_local_route._validate(section, waypoints)
-    takeoff_height = preview_local_route._finite_float(
-        section.get("takeoff_height", 1.0), "takeoff_height")
-    origin = (takeoff_target[0], takeoff_target[1], takeoff_target[2] - takeoff_height)
-    origin_yaw = takeoff_target[3]
-    expected_targets = preview_local_route._build_targets(
-        section, frame, waypoints, origin, origin_yaw, include_takeoff=True)
+
+    manifest = summary.get("route_manifest") if isinstance(summary.get("route_manifest"), dict) else None
+    if manifest is None:
+        return _phase("active_route_matches_config", False,
+                      ["configured_route_manifest_missing"],
+                      ["active_flight_observer must record /robotac/flight/route_manifest"])
 
     missing = []
     notes = []
+    if manifest.get("event") != "mission_started":
+        missing.append("route_manifest_not_started")
+    if manifest.get("route_source") != "configured":
+        missing.append("route_manifest_source_not_configured")
+    manifest_count = _number(manifest.get("waypoint_count"))
+    manifest_count_int = None if manifest_count is None else int(manifest_count)
+    if (manifest_count is None or abs(manifest_count - manifest_count_int) > 1.0e-9 or
+            manifest_count_int != len(waypoints)):
+        missing.append("route_manifest_waypoint_count_mismatch")
+    if manifest.get("waypoint_frame") != frame:
+        missing.append("route_manifest_frame_mismatch")
+    takeoff_height = preview_local_route._finite_float(
+        section.get("takeoff_height", 1.0), "takeoff_height")
+    manifest_takeoff = _number(manifest.get("takeoff_height"))
+    if manifest_takeoff is None or abs(manifest_takeoff - takeoff_height) > args.route_target_tolerance:
+        missing.append("route_manifest_takeoff_height_mismatch")
+    if section.get("require_auto_land") is True and manifest.get("require_auto_land") is not True:
+        missing.append("route_manifest_require_auto_land_missing")
+    if section.get("require_auto_land") is True and manifest.get("auto_land") is not True:
+        missing.append("route_manifest_auto_land_not_enabled")
+
+    origin = _position_tuple(manifest.get("origin"))
+    origin_yaw = _number(manifest.get("origin_yaw"))
+    if origin is None:
+        missing.append("route_manifest_origin_missing")
+    if origin_yaw is None:
+        missing.append("route_manifest_origin_yaw_missing")
+    if missing:
+        return _phase("active_route_matches_config", False, missing, notes)
+
+    expected_targets = preview_local_route._build_targets(
+        section, frame, waypoints, origin, origin_yaw, include_takeoff=True)
+
     initial_position = _position_tuple(summary.get("initial_local_position"))
     initial_yaw = _number(summary.get("initial_local_yaw"))
     max_origin_delta = 0.0
@@ -319,6 +344,14 @@ def _active_route_match_report(args):
             "waypoint_index": None if index == 0 else index - 1,
             "target": list(expected["target"]),
         })
+    manifest_route = manifest.get("target_route")
+    if not isinstance(manifest_route, list):
+        missing.append("route_manifest_target_route_missing")
+    else:
+        manifest_missing, manifest_notes = _match_route_targets(
+            manifest_route, expected_records, args, prefix="route_manifest")
+        missing.extend(manifest_missing)
+        notes.extend(manifest_notes)
     target_missing, target_notes = _match_route_targets(records, expected_records, args, prefix="route")
     missing.extend(target_missing)
     notes.extend(target_notes)
@@ -326,6 +359,10 @@ def _active_route_match_report(args):
     if not missing:
         notes.append("route_origin_delta=%.3f origin_yaw_delta_deg=%.2f" % (
             max_origin_delta, math.degrees(max_origin_yaw_delta)))
+        notes.append("route_source=%s revision=%s fingerprint=%s" % (
+            manifest.get("route_source", "unknown"),
+            manifest.get("route_revision", "unknown"),
+            str(manifest.get("route_fingerprint", ""))[:12]))
     return _phase("active_route_matches_config", not missing, missing, notes)
 
 
