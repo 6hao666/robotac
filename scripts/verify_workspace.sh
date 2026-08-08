@@ -61,6 +61,27 @@ PY
 
 echo "Workspace layout validation passed."
 
+hardware_check="${workspace_dir}/src/robotac_bringup/scripts/check_hardware_config.sh"
+if ! bash "${hardware_check}" "${workspace_dir}/config" false false false false false false; then
+  echo "Passive full-system hardware check unexpectedly failed." >&2
+  exit 1
+fi
+if bash "${hardware_check}" "${workspace_dir}/config" true true false false true true >/dev/null 2>&1; then
+  echo "Active full-system hardware check unexpectedly bypassed deployment gates." >&2
+  exit 1
+fi
+hardware_test_dir=$(mktemp -d "${TMPDIR:-/tmp}/robotac-hardware-check.XXXXXX")
+mkdir -p "${hardware_test_dir}/lidar"
+cp "${workspace_dir}/config/deployment_sim.yaml" "${hardware_test_dir}/deployment.yaml"
+cp "${workspace_dir}/config/lidar/mid360s.json" "${hardware_test_dir}/lidar/mid360s.json"
+if bash "${hardware_check}" "${hardware_test_dir}" false false false false false true >/dev/null 2>&1; then
+  rm -rf "${hardware_test_dir}"
+  echo "Active hardware check unexpectedly accepted the MID360s sample host address." >&2
+  exit 1
+fi
+rm -rf "${hardware_test_dir}"
+echo "Validated passive/active hardware-gate separation."
+
 python3 - "${workspace_dir}/src/robotac_servo/scripts" <<'PY'
 import pathlib
 import py_compile

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-config_root=${1:?usage: check_hardware_config.sh CONFIG_ROOT [REQUIRE_FCU] [REQUIRE_FLIGHT] [REQUIRE_VISION_OUTPUT] [REQUIRE_PAYLOAD] [ENABLE_MAVROS]}
+config_root=${1:?usage: check_hardware_config.sh CONFIG_ROOT [REQUIRE_FCU] [REQUIRE_FLIGHT] [REQUIRE_VISION_OUTPUT] [REQUIRE_PAYLOAD] [ENABLE_MAVROS] [REQUIRE_SENSOR_CALIBRATION]}
 require_fcu=${2:-true}
 require_flight=${3:-false}
 require_vision_output=${4:-false}
 require_payload=${5:-false}
 enable_mavros=${6:-true}
+# Preserve the conservative behavior for direct script use. full_system passes
+# this explicitly so passive observation can start before flight calibration.
+require_sensor_calibration=${7:-true}
 deployment_file="${config_root}/deployment.yaml"
 lidar_file="${config_root}/lidar/mid360s.json"
 
@@ -15,13 +18,27 @@ if [[ ! -f "${deployment_file}" || ! -f "${lidar_file}" ]]; then
   exit 1
 fi
 
-required_keys=(
-  lidar_network_configured
-  lidar_imu_extrinsics_calibrated
-  lidar_imu_time_checked
-  camera_extrinsics_measured
-  stable_camera_device_configured
-)
+# Bash 3.2 treats an empty array as unset under `set -u` unless it is declared.
+declare -a required_keys=()
+case "${require_sensor_calibration}" in
+  true|True|TRUE|1|yes|YES|on|ON)
+    sensor_calibration_required=true
+    required_keys+=(
+      lidar_network_configured
+      lidar_imu_extrinsics_calibrated
+      lidar_imu_time_checked
+      camera_extrinsics_measured
+      stable_camera_device_configured
+    )
+    ;;
+  false|False|FALSE|0|no|NO|off|OFF)
+    sensor_calibration_required=false
+    ;;
+  *)
+    echo "require_sensor_calibration must be a Boolean value, got: ${require_sensor_calibration}" >&2
+    exit 64
+    ;;
+esac
 case "${require_fcu}" in
   true|True|TRUE|1|yes|YES|on|ON)
     fcu_required=true
@@ -95,22 +112,39 @@ case "${require_payload}" in
     exit 64
     ;;
 esac
-for key in "${required_keys[@]}"; do
-  if ! grep -Eq "^[[:space:]]*${key}:[[:space:]]*true[[:space:]]*$" "${deployment_file}"; then
-    echo "Deployment gate is not confirmed: ${key}" >&2
-    exit 1
-  fi
-done
+if (( ${#required_keys[@]} )); then
+  for key in "${required_keys[@]}"; do
+    if ! grep -Eq "^[[:space:]]*${key}:[[:space:]]*true[[:space:]]*$" "${deployment_file}"; then
+      echo "Deployment gate is not confirmed: ${key}" >&2
+      exit 1
+    fi
+  done
+fi
 
-python3 - "${lidar_file}" <<'PY'
+python3 - "${lidar_file}" "${sensor_calibration_required}" <<'PY'
+import ipaddress
 import json
 import sys
 
 with open(sys.argv[1]) as stream:
     config = json.load(stream)
-host_ip = config["Mid360s"]["host_net_info"][0]["host_ip"]
-lidar_ip = config["lidar_configs"][0]["ip"]
-if (host_ip, lidar_ip) == ("192.168.1.5", "192.168.1.12"):
-    raise SystemExit("MID360s network configuration still contains Sunray sample IP addresses.")
-print(f"MID360s network configuration accepted: host={host_ip}, lidar={lidar_ip}")
+try:
+    host_ip = config["Mid360s"]["host_net_info"][0]["host_ip"]
+    lidar_ip = config["lidar_configs"][0]["ip"]
+    ipaddress.ip_address(host_ip)
+    ipaddress.ip_address(lidar_ip)
+except (IndexError, KeyError, ValueError) as exc:
+    raise SystemExit(f"Invalid MID360s network configuration: {exc}")
+
+if sys.argv[2] == "true" and host_ip == "192.168.1.5":
+    raise SystemExit(
+        "MID360s host_ip is still the Sunray sample address 192.168.1.5. "
+        "Set the aircraft LiDAR NIC address before enabling vision or flight output.")
+
+if host_ip == "192.168.1.5":
+    print(
+        f"MID360s passive observation: host={host_ip}, lidar={lidar_ip}. "
+        "The sample host address is allowed only while all PX4 outputs are disabled.")
+else:
+    print(f"MID360s network configuration accepted: host={host_ip}, lidar={lidar_ip}")
 PY

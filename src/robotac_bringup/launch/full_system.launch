@@ -22,14 +22,16 @@
   <arg name="servo_port" default="/dev/robotac_servo" />
   <arg name="servo_open_angle" default="45" />
   <arg name="servo_close_on_shutdown" default="true" />
-  <!-- Control/output requires an explicitly requested FCU connection. -->
-  <arg name="require_fcu" default="$(eval arg('enable_mavros') == 'true' or (arg('enable_vision_bridge') == 'true' and arg('vision_enable_output') == 'true') or (arg('enable_flight_controller') == 'true' and arg('flight_enable_control') == 'true'))" />
+  <!-- Telemetry is passive; PX4 output/control requires an explicitly requested FCU connection. -->
+  <arg name="require_fcu" default="$(eval (arg('enable_vision_bridge') == 'true' and arg('vision_enable_output') == 'true') or (arg('enable_flight_controller') == 'true' and arg('flight_enable_control') == 'true'))" />
   <arg name="require_flight" default="$(eval arg('enable_flight_controller') == 'true' and arg('flight_enable_control') == 'true')" />
   <arg name="require_vision_output" default="$(eval arg('enable_vision_bridge') == 'true' and arg('vision_enable_output') == 'true')" />
   <arg name="require_payload" default="$(eval arg('enable_servo') == 'true' or (arg('enable_flight_controller') == 'true' and arg('flight_enable_payload') == 'true'))" />
+  <!-- Camera/LiDAR calibration gates apply only when their data leaves the passive stack. -->
+  <arg name="require_sensor_calibration" default="$(eval (arg('enable_vision_bridge') == 'true' and arg('vision_enable_output') == 'true') or (arg('enable_flight_controller') == 'true' and arg('flight_enable_control') == 'true'))" />
 
   <node pkg="robotac_bringup" type="check_hardware_config.sh"
-        name="check_hardware_config" args="$(arg config_root) $(arg require_fcu) $(arg require_flight) $(arg require_vision_output) $(arg require_payload) $(arg enable_mavros)"
+        name="check_hardware_config" args="$(arg config_root) $(arg require_fcu) $(arg require_flight) $(arg require_vision_output) $(arg require_payload) $(arg enable_mavros) $(arg require_sensor_calibration)"
         output="screen" required="true" />
 
   <group if="$(arg enable_mavros)">

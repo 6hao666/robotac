@@ -83,12 +83,14 @@ integer duty quantization means nearby angles can share one duty value. The
 default launch closes on shutdown; explicitly set `close_on_shutdown:=false`
 only for a bench test that must retain the last PWM output.
 
-`full_system.launch` rejects the default workspace until its sensor gates in
-`config/deployment.yaml` are confirmed and the MID360s JSON no longer contains
-sample IP addresses. `enable_mavros` defaults to `false`; it must be explicitly
-set to `true` before this launch will open the FCU link. Requesting vision output
-or flight control without it is a configuration error, not an implicit MAVROS
-start.
+`full_system.launch` supports passive sensor/SLAM/AprilTag observation before
+the flight calibration gates are complete. `enable_mavros` still defaults to
+`false`; setting it to `true` explicitly opens a telemetry link only and does
+not send flight commands. Enabling external-vision output or flight control
+requires the sensor, FCU, PX4, and deployment gates in
+`config/deployment.yaml`; it is a configuration error to request either without
+explicitly enabling MAVROS. A checked-in `192.168.1.5` LiDAR host address is
+allowed only for passive diagnostics and is rejected for vision or flight output.
 
 The two `robotac_flight` launches also load `deployment.yaml`. Passive preview
 can run independently, but `enable_mavros_output:=true` or
@@ -133,9 +135,10 @@ roslaunch robotac_flight local_waypoint_flight.launch enable_control:=false
 ```
 
 For a read-only FCU telemetry session, use
-`full_system.launch enable_mavros:=true` only after the deployment gate is
-complete. The two `robotac_flight` launches are passive by default. The vision
-bridge publishes only `/robotac/fastlio_vision/pose_preview`; the waypoint node
+`full_system.launch enable_mavros:=true` with the intended `fcu_url`; it does
+not enable vision output, mode changes, arming, or setpoint transmission. The
+two `robotac_flight` launches are passive by default. The vision bridge
+publishes only `/robotac/fastlio_vision/pose_preview`; the waypoint node
 publishes only `/robotac/flight/setpoint_preview`. Nothing is sent to MAVROS
 until the corresponding output gate is explicitly enabled, and the flight
 state machine still requires a separate `/robotac/flight/start` service call.
