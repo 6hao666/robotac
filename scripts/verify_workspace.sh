@@ -349,6 +349,31 @@ for expected in (
 ):
     if expected not in flight_source:
         raise SystemExit(f"Flight vision-output gate check failed: missing {expected}")
+for name, source in (("flight controller", flight_source),
+                     ("vision bridge", bridge_source),
+                     ("read-only preflight", preflight_source)):
+    for forbidden in (
+        "CommandTOL",
+        "GlobalPositionTarget",
+        "NavSatFix",
+        "GeoPose",
+        "FRAME_GLOBAL",
+        "WaypointPush",
+        "WaypointPull",
+        "WaypointSetCurrent",
+        "/mavros/global_position",
+        "/mavros/mission",
+        "/mavros/setpoint_position",
+        "/mavros/setpoint_velocity",
+        "/mavros/setpoint_attitude",
+        "latitude",
+        "longitude",
+    ):
+        if forbidden in source:
+            raise SystemExit(
+                f"{name} must stay local-only; found forbidden token {forbidden}")
+if "from mavros_msgs.srv import CommandBool, SetMode" not in flight_source:
+    raise SystemExit("Flight controller should expose only MAVROS arming/mode services")
 for expected in (
     "scripts/publish_waypoints.py",
     "config/flight/posearray_waypoints_example.yaml",
