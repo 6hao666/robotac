@@ -15,7 +15,9 @@ required_paths=(
   src/apriltag_ros/apriltag_ros
   src/robotac_bringup
   src/robotac_flight
+  src/robotac_flight/launch/ev_acceptance_observer.launch
   src/robotac_flight/launch/local_flight_preflight.launch
+  src/robotac_flight/scripts/ev_acceptance_observer.py
   src/robotac_servo
   config/lidar/mid360s.json
   config/camera/rgb.yaml
@@ -160,7 +162,8 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
   "${workspace_dir}/src/robotac_flight/scripts/check_px4_vision_config.py" \
-  "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" <<'PY'
+  "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/scripts/ev_acceptance_observer.py" <<'PY'
 import pathlib
 import sys
 
@@ -176,6 +179,7 @@ dynamic_waypoint_test = pathlib.Path(sys.argv[9]).read_text()
 preflight_test = pathlib.Path(sys.argv[10]).read_text()
 px4_check_source = pathlib.Path(sys.argv[11]).read_text()
 setpoint_gate_test = pathlib.Path(sys.argv[12]).read_text()
+ev_acceptance_source = pathlib.Path(sys.argv[13]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -316,6 +320,30 @@ for expected in (
 ):
     if expected not in px4_check_source:
         raise SystemExit(f"PX4 vision config check failed: missing {expected}")
+for expected in (
+    "Read-only external-vision acceptance observer",
+    "rospy.Subscriber(",
+    "mavros_local_position",
+    "mavros_vision_pose_input",
+    "local_delta",
+    "vision_delta",
+    "delta_direction_cos",
+    "delta_scale",
+    "min_motion_m",
+    "require_disarmed",
+    "require_on_ground",
+):
+    if expected not in ev_acceptance_source:
+        raise SystemExit(f"EV acceptance observer check failed: missing {expected}")
+for forbidden in (
+    "rospy.Publisher(",
+    "ServiceProxy",
+    "SetMode",
+    "CommandBool",
+    "/mavros/setpoint_raw/local",
+):
+    if forbidden in ev_acceptance_source:
+        raise SystemExit(f"EV acceptance observer must remain read-only; found {forbidden}")
 for expected in (
     "_subscribe_setpoint:=false",
     "success: False",

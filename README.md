@@ -381,6 +381,24 @@ ROS graph; it opens no serial device and starts no MAVROS:
 src/robotac_flight/test/run_flight_preflight_sim.sh
 ```
 
+After the read-only preflight passes with MAVROS vision output enabled, run the
+read-only EV acceptance observer on the ground before any armed test. Keep the
+vehicle disarmed and on the ground, then slowly move it by at least the
+configured `min_motion_m` so the script can compare PX4/MAVROS
+`/mavros/local_position/odom` motion against the FAST-LIO vision input on
+`/mavros/vision_pose/pose_cov`. It publishes nothing, calls no services, and
+does not open the FCU serial device:
+
+```bash
+roslaunch robotac_flight ev_acceptance_observer.launch \
+  observe_seconds:=20 min_motion_m:=0.30
+```
+
+This observer is an acceptance evidence step, not a flight controller. It
+checks that local-position motion follows the external-vision input direction
+and scale while MAVROS is connected, disarmed, on ground, and the bridge reports
+healthy output.
+
 For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
 `auto_land` are independent gates. Keep all automatic gates false for the first
 connected test. The checked-in route has `require_auto_land: true`, so an active
