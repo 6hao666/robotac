@@ -33,7 +33,8 @@ class ClosedLoopMavrosSim(object):
         self.subscribe_setpoint = bool(rospy.get_param("~subscribe_setpoint", True))
         self.fault = str(rospy.get_param("~fault", "")).strip().lower()
         self.fault_delay = float(rospy.get_param("~fault_delay", 0.8))
-        if self.fault not in ("", "vision_loss", "vision_output_loss", "setpoint_consumer_loss"):
+        if self.fault not in ("", "vision_loss", "vision_output_loss",
+                              "vision_consumer_loss", "setpoint_consumer_loss"):
             raise ValueError("unsupported simulated fault: %s" % self.fault)
 
         self.mode = "STABILIZED"
@@ -94,8 +95,9 @@ class ClosedLoopMavrosSim(object):
                                                  self._setpoint_cb, queue_size=20)
         # Stand in for MAVROS's vision_pose_estimate plugin so the controller's
         # graph-level consumer check exercises the same ROS topic contract.
-        rospy.Subscriber("/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped,
-                         lambda _msg: None, queue_size=10)
+        self.vision_pose_sub = rospy.Subscriber(
+            "/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped,
+            lambda _msg: None, queue_size=10)
         rospy.Subscriber("/robotac/flight/status", String, self._status_cb, queue_size=10)
         rospy.Subscriber("/robotac/servo/open", Bool, self._payload_cb, queue_size=5)
         rospy.Service("/mavros/set_mode", SetMode, self._set_mode_cb)
@@ -265,6 +267,9 @@ class ClosedLoopMavrosSim(object):
         self._advance_vehicle(dt)
         if self._fault_due():
             self.fault_active = True
+            if self.fault == "vision_consumer_loss" and self.vision_pose_sub is not None:
+                self.vision_pose_sub.unregister()
+                self.vision_pose_sub = None
             if self.fault == "setpoint_consumer_loss" and self.setpoint_sub is not None:
                 self.setpoint_sub.unregister()
                 self.setpoint_sub = None

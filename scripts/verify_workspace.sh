@@ -229,6 +229,8 @@ for expected in (
     "def _enu_to_ned_target",
     "def _ned_to_enu_target",
     "mavlink_ned_route=",
+    "vision_consumer_loss",
+    "self.vision_pose_sub.unregister()",
     "setpoint_consumer_loss",
     "self.setpoint_sub.unregister()",
 ):
@@ -374,6 +376,8 @@ for expected in (
     if expected not in setpoint_gate_test:
         raise SystemExit(f"Setpoint consumer gate regression check failed: missing {expected}")
 for expected in (
+    "vision_consumer_loss",
+    "mavros_vision_pose_consumer_lost",
     "setpoint_consumer_loss",
     "mavros_setpoint_raw_consumer_lost",
     "post_abort_setpoints=0",

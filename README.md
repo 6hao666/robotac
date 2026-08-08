@@ -370,6 +370,13 @@ ROBOTAC_FLIGHT_FAULT=setpoint_consumer_loss \
   src/robotac_flight/test/run_flight_fault_sim.sh
 ```
 
+The same consumer-loss regression exists for the MAVROS vision-pose input:
+
+```bash
+ROBOTAC_FLIGHT_FAULT=vision_consumer_loss \
+  src/robotac_flight/test/run_flight_fault_sim.sh
+```
+
 Before any active test, run the read-only local-flight preflight against the
 existing ROS graph. It subscribes to MAVROS state, grounded/disarmed status,
 local `map -> base_link` odometry, estimator health, FAST-LIO

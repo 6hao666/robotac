@@ -74,6 +74,9 @@ case "${fault}" in
   vision_output_loss)
     expected_error=mavros_vision_pose_timeout
     ;;
+  vision_consumer_loss)
+    expected_error=mavros_vision_pose_consumer_lost
+    ;;
   setpoint_consumer_loss)
     expected_error=mavros_setpoint_raw_consumer_lost
     ;;
