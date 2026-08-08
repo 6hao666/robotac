@@ -1132,7 +1132,8 @@ def write_readonly_evidence(root):
         "metrics": {},
     }, indent=2))
 
-def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8):
+def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8,
+                          corrupt_waypoint_index=None):
     root.mkdir(parents=True, exist_ok=True)
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
@@ -1149,6 +1150,9 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
             [0, 0, 1, 0],
     )[:waypoint_count]
     for index, target in enumerate(route):
+        target = list(target)
+        if corrupt_waypoint_index == index:
+            target[0] += 0.50
         target_records.append({
             "target": target,
             "state": "WAYPOINTS",
@@ -1208,6 +1212,14 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if short_route.returncode == 0 or "expected_waypoints_mismatch:1!=8" not in short_route.stdout:
         raise SystemExit("Goal audit accepted active-flight evidence from the wrong route length")
+    write_active_evidence(active, payload_open=False)
+    write_active_evidence(active, payload_open=False, corrupt_waypoint_index=4)
+    wrong_target = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if wrong_target.returncode == 0 or "route_target_mismatch:waypoints4" not in wrong_target.stdout:
+        raise SystemExit("Goal audit accepted active-flight evidence for the wrong configured route target")
     write_active_evidence(active, payload_open=False)
     payload_missing = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),

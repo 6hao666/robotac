@@ -10,6 +10,7 @@ modes, arms, or sends setpoints.
 
 import argparse
 import json
+import math
 import pathlib
 import sys
 from types import SimpleNamespace
@@ -26,6 +27,7 @@ if str(FLIGHT_SCRIPT_DIR) not in sys.path:
 import analyze_active_flight_evidence  # noqa: E402
 import analyze_readonly_flight_evidence  # noqa: E402
 import local_flight_readiness  # noqa: E402
+import preview_local_route  # noqa: E402
 
 
 def _phase(name, ready, missing=None, notes=None):
@@ -96,6 +98,95 @@ def _active_report(args, configured_waypoints):
     return analyze_active_flight_evidence.build_report(active_args)
 
 
+def _number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _angle_error(a, b):
+    return math.atan2(math.sin(a - b), math.cos(a - b))
+
+
+def _target_tuple(record):
+    target = record.get("target") if isinstance(record, dict) else None
+    if not isinstance(target, list) or len(target) < 4:
+        return None
+    values = tuple(_number(value) for value in target[:4])
+    return values if all(value is not None for value in values) else None
+
+
+def _active_route_match_report(args):
+    if not args.active_evidence:
+        return _phase("active_route_matches_config", False,
+                      ["active_flight_evidence_missing"],
+                      ["pass --active-evidence after active_flight_observer exits"])
+    if args.allow_dynamic_active_route:
+        return _phase("active_route_matches_config", True, [],
+                      ["dynamic active route explicitly allowed; config route target match skipped"])
+
+    _path, data = analyze_active_flight_evidence._load(args.active_evidence)
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    records = summary.get("target_records") if isinstance(summary.get("target_records"), list) else []
+    takeoff_records = [record for record in records
+                       if isinstance(record, dict) and record.get("state") == "TAKEOFF"]
+    if not takeoff_records:
+        return _phase("active_route_matches_config", False, ["route_takeoff_target_missing"])
+    takeoff_target = _target_tuple(takeoff_records[0])
+    if takeoff_target is None:
+        return _phase("active_route_matches_config", False, ["route_takeoff_target_invalid"])
+
+    route_file = pathlib.Path(args.config_root).expanduser().resolve() / "flight" / "local_waypoints.yaml"
+    section, frame, waypoints = preview_local_route._parse_route(str(route_file))
+    preview_local_route._validate(section, waypoints)
+    takeoff_height = preview_local_route._finite_float(
+        section.get("takeoff_height", 1.0), "takeoff_height")
+    origin = (takeoff_target[0], takeoff_target[1], takeoff_target[2] - takeoff_height)
+    origin_yaw = takeoff_target[3]
+    expected_targets = preview_local_route._build_targets(
+        section, frame, waypoints, origin, origin_yaw, include_takeoff=True)
+
+    actual_by_key = {("TAKEOFF", 0): takeoff_target}
+    for record in records:
+        if not isinstance(record, dict) or record.get("state") != "WAYPOINTS":
+            continue
+        try:
+            waypoint_index = int(record.get("waypoint_index"))
+        except (TypeError, ValueError):
+            continue
+        target = _target_tuple(record)
+        if target is not None:
+            actual_by_key[("WAYPOINTS", waypoint_index)] = target
+
+    missing = []
+    max_position_delta = 0.0
+    max_yaw_delta = 0.0
+    position_tolerance = args.route_target_tolerance
+    yaw_tolerance = math.radians(args.route_yaw_tolerance_deg)
+    for index, expected in enumerate(expected_targets):
+        key = ("TAKEOFF", 0) if index == 0 else ("WAYPOINTS", index - 1)
+        actual = actual_by_key.get(key)
+        if actual is None:
+            missing.append("route_target_missing:%s%d" % (key[0].lower(), key[1]))
+            continue
+        expected_target = expected["target"]
+        position_delta = math.sqrt(sum((actual[i] - expected_target[i]) ** 2 for i in range(3)))
+        yaw_delta = abs(_angle_error(actual[3], expected_target[3]))
+        max_position_delta = max(max_position_delta, position_delta)
+        max_yaw_delta = max(max_yaw_delta, yaw_delta)
+        if position_delta > position_tolerance or yaw_delta > yaw_tolerance:
+            missing.append("route_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
+                key[0].lower(), key[1], position_delta, math.degrees(yaw_delta)))
+
+    notes = []
+    if not missing:
+        notes.append("route_targets_match_config=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f" % (
+            len(expected_targets), max_position_delta, math.degrees(max_yaw_delta)))
+    return _phase("active_route_matches_config", not missing, missing, notes)
+
+
 def _config_phase(readiness, name):
     phase = _find_phase(readiness, name)
     return _phase("config_%s" % name, phase["ready"], phase.get("missing"), phase.get("notes"))
@@ -106,6 +197,7 @@ def build_report(args):
     readonly = _readonly_report(args)
     configured_waypoints = int(readiness.get("mission", {}).get("waypoints") or 0)
     active = _active_report(args, configured_waypoints)
+    active_route_match = _active_route_match_report(args)
 
     phases = [
         _config_phase(readiness, "vision_output"),
@@ -136,6 +228,7 @@ def build_report(args):
         phases.append(_phase("payload_local_flight_evidence", False,
                              ["active_flight_evidence_missing"],
                              ["pass --active-evidence and require payload evidence"] ))
+        phases.append(active_route_match)
     else:
         active_phase = _find_phase(active, "active_local_flight")
         payload_phase = _find_phase(active, "payload_local_flight")
@@ -145,6 +238,7 @@ def build_report(args):
                              active_phase["ready"] and payload_phase["ready"],
                              (active_phase.get("missing") or []) + (payload_phase.get("missing") or []),
                              payload_phase.get("notes")))
+        phases.append(active_route_match)
 
     lookup = {phase["name"]: phase for phase in phases}
     groups = {
@@ -162,6 +256,7 @@ def build_report(args):
             "config_active_local_flight",
             "readonly_active_preflight_evidence",
             "active_local_flight_evidence",
+            "active_route_matches_config",
         ),
         "payload_local_flight": (
             "config_vision_output",
@@ -169,6 +264,7 @@ def build_report(args):
             "config_payload_local_flight",
             "readonly_active_preflight_evidence",
             "active_local_flight_evidence",
+            "active_route_matches_config",
             "payload_local_flight_evidence",
         ),
     }
@@ -229,6 +325,10 @@ def _build_parser():
                         help="Exact observed active-flight waypoint count; 0 uses the configured route count")
     parser.add_argument("--allow-dynamic-active-route", action="store_true",
                         help="Do not require active-flight evidence to match the configured route waypoint count")
+    parser.add_argument("--route-target-tolerance", type=float, default=0.05,
+                        help="Position tolerance in metres for matching active evidence targets to the configured route")
+    parser.add_argument("--route-yaw-tolerance-deg", type=float, default=1.0,
+                        help="Yaw tolerance in degrees for matching active evidence targets to the configured route")
     parser.add_argument("--min-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
@@ -244,6 +344,8 @@ def main():
     args = _build_parser().parse_args()
     if args.min_waypoints < 0 or args.expected_waypoints < 0:
         raise ValueError("min-waypoints and expected-waypoints must be non-negative")
+    if args.route_target_tolerance < 0.0 or args.route_yaw_tolerance_deg < 0.0:
+        raise ValueError("route target/yaw tolerances must be non-negative")
     report = build_report(args)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))

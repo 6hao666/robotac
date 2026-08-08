@@ -288,6 +288,7 @@ def _check_evidence_surface(root):
 
     readonly = _read(root / "scripts" / "analyze_readonly_flight_evidence.py")
     active = _read(root / "scripts" / "analyze_active_flight_evidence.py")
+    goal_audit = _read(root / "scripts" / "flight_goal_audit.py")
     ladder = _read(root / "scripts" / "flight_test_ladder.sh")
     missing.extend("readonly_analyzer_missing:%s" % token for token in _contains_all(readonly, (
         "mavros_safe_state",
@@ -308,6 +309,12 @@ def _check_evidence_surface(root):
         "expected_waypoints_mismatch",
         "final_disarmed",
         "final_on_ground",
+    )))
+    missing.extend("goal_audit_missing:%s" % token for token in _contains_all(goal_audit, (
+        "active_route_matches_config",
+        "route_target_mismatch",
+        "route_targets_match_config",
+        "allow_dynamic_active_route",
     )))
     missing.extend("ladder_missing:%s" % token for token in _contains_all(ladder, (
         "active flight commands hidden",

@@ -594,7 +594,7 @@ It reports configuration gates, read-only FAST-LIO→MAVROS/PX4 evidence, and
 active local-flight evidence together. The default required phase is
 `active_local_flight`; add `--require-phase payload_local_flight` for the final
 payload mission. By default it also requires the active-flight evidence waypoint
-count to match `config/flight/local_waypoints.yaml`; use
+count and target coordinates to match `config/flight/local_waypoints.yaml`; use
 `--allow-dynamic-active-route` only when the mission was intentionally replaced
 through `/robotac/flight/waypoints` before `/robotac/flight/start`.
 
