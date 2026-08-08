@@ -4,7 +4,9 @@
   <arg name="tgt_system" default="1" />
   <arg name="tgt_component" default="1" />
   <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
-  <arg name="check_geographiclib" default="true" />
+  <!-- The default plugin list is local-only and does not require GeographicLib.
+       Set true only after intentionally re-enabling global-position plugins. -->
+  <arg name="check_geographiclib" default="false" />
 
   <node if="$(arg check_geographiclib)" pkg="robotac_bringup" type="check_geographiclib.sh"
         name="check_geographiclib" args="--hold" output="screen" required="true" />

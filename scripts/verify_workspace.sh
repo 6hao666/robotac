@@ -55,6 +55,42 @@ with path.open() as stream:
 print(f"Validated JSON: {path}")
 PY
 
+python3 - "${workspace_dir}/config/mavros/px4_pluginlists.yaml" \
+  "${workspace_dir}/src/robotac_bringup/launch/mavros_px4.launch" <<'PY'
+import pathlib
+import sys
+
+import yaml
+
+plugin_path = pathlib.Path(sys.argv[1])
+launch_path = pathlib.Path(sys.argv[2])
+plugins = yaml.safe_load(plugin_path.read_text()) or {}
+whitelist = set(plugins.get("plugin_whitelist") or [])
+blacklist = set(plugins.get("plugin_blacklist") or [])
+required = {
+    "command",
+    "imu",
+    "local_position",
+    "param",
+    "setpoint_raw",
+    "sys_status",
+    "sys_time",
+    "vision_pose_estimate",
+}
+for name in sorted(required):
+    if name not in whitelist:
+        raise SystemExit(f"MAVROS local-only plugin check failed: missing {name}")
+for name in ("global_position", "gps_status", "waypoint"):
+    if name in whitelist:
+        raise SystemExit(f"MAVROS local-only plugin check failed: {name} is whitelisted")
+    if name not in blacklist:
+        raise SystemExit(f"MAVROS local-only plugin check failed: {name} is not blacklisted")
+launch_source = launch_path.read_text()
+if '<arg name="check_geographiclib" default="false" />' not in launch_source:
+    raise SystemExit("MAVROS launch must not require GeographicLib for local-only plugin list")
+print("Validated MAVROS local-only plugin surface and optional GeographicLib check.")
+PY
+
 python3 - "${workspace_dir}/src" <<'PY'
 import pathlib
 import sys

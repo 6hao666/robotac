@@ -70,6 +70,13 @@ udev.
 Install a corresponding PX4 rule from
 `config/udev/99-robotac-px4.rules.template`, and ensure the runtime user is in
 the `dialout` group. MAVROS defaults to `serial:///dev/px4_fcu:921600`.
+The default `config/mavros/px4_pluginlists.yaml` is intentionally local-only:
+it loads MAVROS command, IMU, local-position, parameter, system-status/time,
+setpoint_raw, and vision-pose plugins, while `global_position`, `gps_status`,
+and `waypoint` remain blacklisted. The local waypoint controller therefore does
+not require GPS fixes, latitude/longitude, global mission upload, or
+GeographicLib datasets. Only re-enable the GeographicLib launch check after you
+deliberately add global-position plugins back to the MAVROS plugin list.
 Do not launch `camera_extrinsics.launch` with its zero defaults on an aircraft:
 pass the measured `base_link -> camera_rgb_optical_frame` transform first.
 
