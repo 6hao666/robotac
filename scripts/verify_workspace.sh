@@ -17,6 +17,7 @@ required_paths=(
   src/robotac_flight
   src/robotac_flight/launch/ev_acceptance_observer.launch
   src/robotac_flight/launch/local_flight_preflight.launch
+  src/robotac_flight/scripts/audit_local_mission.py
   src/robotac_flight/scripts/ev_acceptance_observer.py
   src/robotac_flight/scripts/preview_local_route.py
   src/robotac_servo
@@ -197,6 +198,42 @@ printf '%s\n' "${route_preview}"
 [[ "${route_preview}" == *"mavlink_ned_route=(-2.000,3.000,-1.000)->(-1.000,3.000,-1.000)->(-2.000,3.000,-1.000)->(-2.000,2.000,-1.000)->(-2.000,3.000,-1.000)->(-2.000,4.000,-1.000)->(-2.000,3.000,-1.000)->(-3.000,3.000,-1.000)->(-2.000,3.000,-1.000)"* ]]
 [[ "${route_preview}" == *"payload_events=wp6:open@(3.000,-3.000,1.000)"* ]]
 echo "Validated offline local route preview."
+
+mission_audit=$(python3 "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" \
+  --file "${workspace_dir}/config/flight/local_waypoints.yaml" \
+  --origin-x 3.0 --origin-y -2.0 --origin-yaw-deg 90.0 \
+  --require-payload-open)
+printf '%s\n' "${mission_audit}"
+[[ "${mission_audit}" == *"MISSION_AUDIT_PASS"* ]]
+[[ "${mission_audit}" == *"frame=robotac_start_body waypoints=8 targets_with_takeoff=9"* ]]
+[[ "${mission_audit}" == *"takeoff_height_m=1.000 auto_land_required=True land_mode=AUTO.LAND"* ]]
+[[ "${mission_audit}" == *"payload_events=wp6:open@(3.000,-3.000,1.000)"* ]]
+[[ "${mission_audit}" == *"global_coordinates=forbidden"* ]]
+echo "Validated offline local mission audit."
+
+python3 - "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" <<'PY'
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+with tempfile.TemporaryDirectory(prefix="robotac-mission-audit.") as directory:
+    route = pathlib.Path(directory) / "global.yaml"
+    route.write_text("""local_waypoint_flight:
+  waypoint_frame: robotac_start_body
+  require_auto_land: true
+  waypoints:
+    - {x: 0.0, y: 0.0, z: 1.0, latitude: 30.0}
+""", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, sys.argv[1], "--file", str(route)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False)
+    if result.returncode == 0:
+        raise SystemExit("Mission audit unexpectedly accepted a global/GPS waypoint key.")
+PY
+echo "Validated local mission audit rejects global/GPS keys."
 
 python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/mavros/mavros/src/plugins/setpoint_raw.cpp" \

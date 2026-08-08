@@ -151,6 +151,13 @@ else
   echo "Skipped scripts/verify_workspace.sh by request."
 fi
 
+print_section "mission audit"
+python3 "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" \
+  --file "${route_file}" \
+  --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
+  --origin-yaw-deg "${origin_yaw_deg}" \
+  --require-payload-open
+
 print_section "route preview"
 python3 "${workspace_dir}/src/robotac_flight/scripts/preview_local_route.py" \
   --file "${route_file}" \

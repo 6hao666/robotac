@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package()
 
 catkin_install_python(PROGRAMS
+  scripts/audit_local_mission.py
   scripts/check_px4_vision_config.py
   scripts/ev_acceptance_observer.py
   scripts/fastlio_vision_bridge.py

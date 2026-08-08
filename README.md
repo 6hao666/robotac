@@ -291,6 +291,11 @@ touching MAVROS, first dry-run the parser, then publish while the controller is
 idle:
 
 ```bash
+rosrun robotac_flight audit_local_mission.py \
+  --file ~/robotac_ws/config/flight/local_waypoints.yaml \
+  --origin-x 0 --origin-y 0 --origin-z 0 --origin-yaw-deg 0 \
+  --require-payload-open
+
 rosrun robotac_flight preview_local_route.py \
   --file ~/robotac_ws/config/flight/local_waypoints.yaml \
   --origin-x 0 --origin-y 0 --origin-z 0 --origin-yaw-deg 0
@@ -309,10 +314,14 @@ explicitly supplied. It publishes only `/robotac/flight/waypoints`; it never
 calls `/robotac/flight/start`, never requests OFFBOARD, never arms, and never
 sends MAVROS setpoints.
 
-`preview_local_route.py` is fully offline and prints both the controller's
-local ENU targets and the MAVLink local-NED route after MAVROS conversion. Use
-it to confirm front/left/right/rear directions, yaw units, landing return point,
-and payload event location before any armed test.
+`audit_local_mission.py` is the first check for a new route file. It is fully
+offline and fails if the mission contains GPS/global keys, lacks
+`require_auto_land: true`, violates the route limits, or, when requested,
+contains no payload-open action. `preview_local_route.py` is also fully offline
+and prints both the controller's local ENU targets and the MAVLink local-NED
+route after MAVROS conversion. Use them together to confirm
+front/left/right/rear directions, yaw units, landing return point, and payload
+event location before any armed test.
 
 Safe dry-run launch:
 
