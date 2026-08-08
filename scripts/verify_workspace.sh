@@ -688,7 +688,11 @@ for expected in (
     "This script never starts ROS nodes",
     "--show-active",
     "--route-file",
+    "--deploy-workspace",
+    "--deploy-route-file",
     "--evidence-dir",
+    "deploy_workspace",
+    "deploy_route_file",
     "flight_route_file",
     "ev_acceptance_observer.json",
     "Deployment gates are not all true",
@@ -721,6 +725,26 @@ for number, line in enumerate(source.splitlines(), start=1):
         raise SystemExit(
             f"Flight test ladder must only print ROS commands; line {number} executes: {stripped}")
 print("Validated flight test ladder remains offline/read-only by default.")
+PY
+
+python3 - "${workspace_dir}" <<'PY'
+import pathlib
+import subprocess
+import sys
+
+workspace = pathlib.Path(sys.argv[1])
+result = subprocess.run(
+    [str(workspace / "scripts" / "flight_test_ladder.sh"), "--skip-verify"],
+    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+if result.returncode != 0:
+    raise SystemExit("Flight ladder default print failed:\n%s\n%s" % (result.stdout, result.stderr))
+for expected in (
+        'deploy_workspace="${HOME}/robotac_ws"',
+        'route_file="${HOME}/robotac_ws/config/flight/local_waypoints.yaml"',
+        'evidence_dir="${deploy_workspace}/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)"'):
+    if expected not in result.stdout:
+        raise SystemExit("Flight ladder deploy-path print check failed: missing %s" % expected)
+print("Validated flight ladder prints aircraft deploy paths for copy/paste commands.")
 PY
 
 python3 - "${workspace_dir}" <<'PY'

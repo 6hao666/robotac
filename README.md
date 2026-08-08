@@ -175,6 +175,11 @@ was connected, disarmed, and on the ground. The final payload mission block is
 hidden separately until `payload_local_flight` readiness passes. Use
 `--skip-verify` only when you are iterating on the printed route/command ladder
 and have just run the full workspace verification separately.
+When this script is run from the Mac source checkout, its validation still reads
+local files, but the copy/paste aircraft commands default to the deployed
+workspace path `${HOME}/robotac_ws`. Override that printed target with
+`--deploy-workspace /path/to/robotac_ws` or `--deploy-route-file /path/to/route.yaml`
+if the aircraft checkout lives somewhere else.
 
 To inspect the same evidence matrix directly, run the offline readiness report:
 

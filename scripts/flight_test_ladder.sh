@@ -8,6 +8,8 @@ set -euo pipefail
 workspace_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 config_root="${workspace_dir}/config"
 route_file=""
+deploy_workspace='${HOME}/robotac_ws'
+deploy_route_file=""
 origin_x=0.0
 origin_y=0.0
 origin_z=0.0
@@ -29,6 +31,8 @@ hardware.
 Options:
   --config-root PATH              Config directory, default: ./config
   --route-file PATH               Local waypoint YAML, default: CONFIG_ROOT/flight/local_waypoints.yaml
+  --deploy-workspace PATH         Workspace path printed in aircraft commands, default: ${HOME}/robotac_ws
+  --deploy-route-file PATH        Route path printed in aircraft commands, default: mirror route under deploy workspace
   --origin-x M                    Preview start ENU x, default: 0.0
   --origin-y M                    Preview start ENU y, default: 0.0
   --origin-z M                    Preview start ENU z, default: 0.0
@@ -50,6 +54,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --route-file)
       route_file=${2:?--route-file requires a value}
+      shift 2
+      ;;
+    --deploy-workspace)
+      deploy_workspace=${2:?--deploy-workspace requires a value}
+      shift 2
+      ;;
+    --deploy-route-file)
+      deploy_route_file=${2:?--deploy-route-file requires a value}
       shift 2
       ;;
     --origin-x)
@@ -104,6 +116,16 @@ deployment_file="${config_root}/deployment.yaml"
 if [[ -z "${route_file}" ]]; then
   route_file="${config_root}/flight/local_waypoints.yaml"
 fi
+if [[ -z "${deploy_route_file}" ]]; then
+  case "${route_file}" in
+    "${config_root}"/*)
+      deploy_route_file="${deploy_workspace}/config/${route_file#"${config_root}/"}"
+      ;;
+    *)
+      deploy_route_file="${route_file}"
+      ;;
+  esac
+fi
 if [[ ! -f "${deployment_file}" ]]; then
   echo "Missing deployment file: ${deployment_file}" >&2
   exit 1
@@ -115,6 +137,18 @@ fi
 
 print_section() {
   printf '\n=== %s ===\n' "$1"
+}
+
+print_shell_assignment() {
+  local name=$1
+  local value=$2
+  if [[ "${value}" == *"'"* ]]; then
+    printf '%s=%q\n' "${name}" "${value}"
+  elif [[ "${value}" == *'${HOME}'* || "${value}" == "~"* ]]; then
+    printf '%s="%s"\n' "${name}" "${value}"
+  else
+    printf '%s=%q\n' "${name}" "${value}"
+  fi
 }
 
 gate_report=$(python3 - "${deployment_file}" <<'PY'
@@ -209,12 +243,15 @@ roslaunch robotac_bringup full_system.launch \
   enable_vision_bridge:=true vision_enable_output:=true \
   enable_flight_controller:=false enable_servo:=false
 
+EOF
+print_shell_assignment deploy_workspace "${deploy_workspace}"
+cat <<'EOF'
 # Use one evidence directory for strict preflight, EV acceptance, topic capture,
 # and offline analyzers.
-evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
+evidence_dir="${deploy_workspace}/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${evidence_dir}"
 EOF
-printf 'route_file=%q\n' "${route_file}"
+print_shell_assignment route_file "${deploy_route_file}"
 
 if [[ -n "${expected_ev_delay_ms}" ]]; then
   cat <<EOF
@@ -297,11 +334,11 @@ if [[ "${show_active}" == true ]]; then
   rm -f /tmp/robotac-active-evidence.$$
   print_section "active flight commands (not executed by this script)"
   printf 'readonly_evidence_dir=%q\n' "${evidence_dir}"
-  printf 'flight_route_file=%q\n' "${route_file}"
+  print_shell_assignment flight_route_file "${deploy_route_file}"
   cat <<'EOF'
 # First active connected test: controller can stream only after /robotac/flight/start;
 # mode/arming are still manual, auto_land is allowed because the route requires landing.
-flight_evidence_dir=~/robotac_ws/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)
+flight_evidence_dir="${deploy_workspace}/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${flight_evidence_dir}"
 roslaunch robotac_bringup full_system.launch \
   enable_mavros:=true \
@@ -344,7 +381,7 @@ EOF
   cat <<'EOF'
 
 # Final automatic mission only after manual active test succeeds and the test area is clear:
-payload_flight_evidence_dir=~/robotac_ws/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)_payload
+payload_flight_evidence_dir="${deploy_workspace}/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)_payload"
 mkdir -p "${payload_flight_evidence_dir}"
 roslaunch robotac_bringup full_system.launch \
   enable_mavros:=true \

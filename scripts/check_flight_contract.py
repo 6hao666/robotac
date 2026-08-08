@@ -444,6 +444,10 @@ def _check_evidence_surface(root):
     )))
     missing.extend("ladder_missing:%s" % token for token in _contains_all(ladder, (
         "--route-file",
+        "--deploy-workspace",
+        "--deploy-route-file",
+        "deploy_workspace",
+        "deploy_route_file",
         "flight_route_file",
         "active flight commands hidden",
         "Read-only evidence did not pass active_preflight_evidence",
