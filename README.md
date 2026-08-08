@@ -470,6 +470,18 @@ checks that local-position motion follows the external-vision input direction
 and scale while MAVROS is connected, disarmed, on ground, and the bridge reports
 healthy output.
 
+To capture the read-only evidence bundle for later review, run:
+
+```bash
+./scripts/collect_readonly_flight_evidence.sh --duration 8 --bag-seconds 0
+```
+
+The collector only subscribes and inspects the existing ROS graph. It records
+topic lists, topic info, one-message samples, short `rostopic hz` windows, and,
+only when requested with `--bag-seconds`, a rosbag of the relevant MAVROS,
+FAST-LIO, Livox, and vision topics. It never launches ROS nodes, publishes
+topics, calls services, changes PX4 mode, arms, or sends setpoints.
+
 For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
 `auto_land` are independent gates. Keep all automatic gates false for the first
 connected test. The checked-in route has `require_auto_land: true`, so an active

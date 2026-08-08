@@ -36,6 +36,7 @@ required_paths=(
   config/deployment_sim.yaml
   config/udev/99-robotac-servo.rules.template
   config/udev/99-robotac-rgb-camera.rules.template
+  scripts/collect_readonly_flight_evidence.sh
   scripts/flight_test_ladder.sh
 )
 
@@ -557,6 +558,35 @@ for number, line in enumerate(source.splitlines(), start=1):
         raise SystemExit(
             f"Flight test ladder must only print ROS commands; line {number} executes: {stripped}")
 print("Validated flight test ladder remains offline/read-only by default.")
+PY
+
+python3 - "${workspace_dir}/scripts/collect_readonly_flight_evidence.sh" <<'PY'
+import pathlib
+import re
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+for expected in (
+    "Read-only evidence collector",
+    "rostopic info",
+    "rostopic hz",
+    "rostopic echo -n 1",
+    "rosbag record",
+    "safety=no_roslaunch_no_rosservice_no_rostopic_pub_no_setpoints_no_arming_no_mode_change",
+):
+    if expected not in source:
+        raise SystemExit(f"Read-only evidence collector check failed: missing {expected}")
+for number, line in enumerate(source.splitlines(), start=1):
+    stripped = line.strip()
+    if re.match(r"^(roslaunch|rosservice)\b", stripped):
+        raise SystemExit(
+            f"Read-only evidence collector must not execute {stripped} on line {number}")
+    if re.match(r"^rostopic\s+pub\b", stripped) or " rostopic pub " in line:
+        raise SystemExit("Read-only evidence collector must not publish topics")
+for forbidden in ("/mavros/cmd/arming", "/mavros/set_mode", "/robotac/flight/start"):
+    if forbidden in source:
+        raise SystemExit(f"Read-only evidence collector must not reference control path {forbidden}")
+print("Validated read-only flight evidence collector safety surface.")
 PY
 
 for script in "${workspace_dir}"/scripts/*.sh "${workspace_dir}"/src/robotac_bringup/scripts/*.sh; do

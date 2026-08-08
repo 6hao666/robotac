@@ -216,6 +216,9 @@ cat <<'EOF'
 # 4) Read-only EV acceptance: keep vehicle disarmed/on-ground and move it slowly.
 roslaunch robotac_flight ev_acceptance_observer.launch \
   observe_seconds:=20 min_motion_m:=0.30
+
+# 5) Subscriber-only evidence capture after the read-only graph is running.
+./scripts/collect_readonly_flight_evidence.sh --duration 8 --bag-seconds 0
 EOF
 
 if [[ "${show_active}" == true ]]; then
