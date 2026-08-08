@@ -126,6 +126,10 @@ class LocalFlightPreflight(object):
         self.check_px4_vision_params = _as_bool(
             rospy.get_param("~check_px4_vision_params", False))
         self.require_yaw_fusion = _as_bool(rospy.get_param("~require_yaw_fusion", False))
+        self.require_vision_output_consumer = _as_bool(
+            rospy.get_param("~require_vision_output_consumer", self.require_vision_output))
+        self.vision_output_consumer_node = str(rospy.get_param(
+            "~vision_output_consumer_node", "/mavros")).strip()
 
         self.local_parent = str(rospy.get_param("~local_parent", "map")).strip()
         self.local_child = str(rospy.get_param("~local_child", "base_link")).strip()
@@ -171,6 +175,7 @@ class LocalFlightPreflight(object):
         self.vision_status_receive = None
         self.output_enabled = None
         self.output_enabled_receive = None
+        self.vision_output_consumer_issue = "not_checked"
         self.timesync = None
         self.timesync_receive = None
         self.timesync_issue = "waiting"
@@ -219,6 +224,10 @@ class LocalFlightPreflight(object):
             raise ValueError("expected frame names must be non-empty")
         if self.require_vision_output and not self.require_vision:
             raise ValueError("require_vision_output requires require_vision=true")
+        if self.require_vision_output_consumer and not self.require_vision_output:
+            raise ValueError("require_vision_output_consumer requires require_vision_output=true")
+        if self.require_vision_output_consumer and not self.vision_output_consumer_node:
+            raise ValueError("vision_output_consumer_node must be non-empty")
         if not math.isfinite(self.max_timesync_rtt_ms) or self.max_timesync_rtt_ms < 0.0:
             raise ValueError("max_timesync_rtt_ms must be finite and non-negative")
 
@@ -348,6 +357,25 @@ class LocalFlightPreflight(object):
         return (first.last_stamp is not None and second.last_stamp is not None and
                 any(second.last_stamp == stamp for stamp in first.recent_stamps))
 
+    def _vision_output_consumer_present(self):
+        try:
+            code, _message, state = rospy.get_master().getSystemState()
+        except Exception as exc:
+            self.vision_output_consumer_issue = "master_error:%s" % exc
+            return False
+        if code != 1:
+            self.vision_output_consumer_issue = "master_state_unavailable"
+            return False
+        for topic, nodes in state[1]:
+            if topic == self.vision_output_topic:
+                if self.vision_output_consumer_node in nodes:
+                    self.vision_output_consumer_issue = "ok"
+                    return True
+                self.vision_output_consumer_issue = "missing:%s" % self.vision_output_consumer_node
+                return False
+        self.vision_output_consumer_issue = "topic_unsubscribed"
+        return False
+
     def _mavros_ready(self):
         if not self._fresh(self.state_receive, self.mavros_timeout):
             return False
@@ -391,11 +419,14 @@ class LocalFlightPreflight(object):
             self._matching_stamp(self.fastlio_stream, self.preview_stream))
         if not self.require_vision_output:
             return base_ready
-        return (base_ready and self.output_enabled is True and self._fresh(
+        output_ready = (base_ready and self.output_enabled is True and self._fresh(
             self.output_enabled_receive, self.startup_timeout) and
             self._stream_ready(self.output_stream, self.min_output_samples,
                                self.min_output_rate, self.vision_age_limit) and
-                self._matching_stamp(self.preview_stream, self.output_stream))
+            self._matching_stamp(self.preview_stream, self.output_stream))
+        if output_ready and self.require_vision_output_consumer:
+            output_ready = self._vision_output_consumer_present()
+        return output_ready
 
     def _get_px4_param(self, proxy, name):
         response = proxy(param_id=name)
@@ -463,6 +494,9 @@ class LocalFlightPreflight(object):
                 "vision_output=count:%d rate:%.2f issue:%s" % (
                     self.output_stream.count, self.output_stream.rate_hz(),
                     self.output_stream.last_issue),
+                "vision_output_consumer=%s issue:%s" % (
+                    self.vision_output_consumer_node,
+                    self.vision_output_consumer_issue),
                 "preview_output_stamp_match=%s" % (
                     self._matching_stamp(self.preview_stream, self.output_stream)),
             ))

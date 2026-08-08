@@ -222,6 +222,11 @@ for expected in (
     'self.vision_status.startswith("ok ")',
     "ros_clock_unavailable",
     "_matching_stamp",
+    "_vision_output_consumer_present",
+    "getSystemState",
+    "require_vision_output_consumer",
+    "vision_output_consumer_node",
+    "vision_output_consumer_issue",
     "TimesyncStatus",
     "timesync_issue",
 ):
@@ -256,6 +261,7 @@ for expected in (
 for expected in (
     "local_flight_preflight.launch",
     "require_vision_output:=true",
+    "vision_output_consumer_node:=/robotac_flight_dryrun_inputs",
     "vision_output_topic:=/robotac/test/vision_pose",
 ):
     if expected not in preflight_test:

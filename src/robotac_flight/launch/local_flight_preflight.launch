@@ -30,6 +30,8 @@
   <arg name="require_on_ground" default="true" />
   <arg name="check_px4_vision_params" default="false" />
   <arg name="require_yaw_fusion" default="false" />
+  <arg name="require_vision_output_consumer" default="$(eval arg('require_vision_output'))" />
+  <arg name="vision_output_consumer_node" default="/mavros" />
 
   <arg name="local_parent" default="map" />
   <arg name="local_child" default="base_link" />
@@ -78,6 +80,8 @@
     <param name="require_on_ground" value="$(arg require_on_ground)" />
     <param name="check_px4_vision_params" value="$(arg check_px4_vision_params)" />
     <param name="require_yaw_fusion" value="$(arg require_yaw_fusion)" />
+    <param name="require_vision_output_consumer" value="$(arg require_vision_output_consumer)" />
+    <param name="vision_output_consumer_node" value="$(arg vision_output_consumer_node)" />
 
     <param name="local_parent" value="$(arg local_parent)" />
     <param name="local_child" value="$(arg local_child)" />

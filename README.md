@@ -351,9 +351,10 @@ roslaunch robotac_flight local_flight_preflight.launch \
 After the measured transforms, PX4 external-vision parameters, and deployment
 gates have been approved, repeat it with
 `require_vision_output:=true require_timesync:=true check_px4_vision_params:=true`.
-The latter parameter query is read-only. The following regression exercises that
-preflight against a loopback ROS graph; it opens no serial device and starts no
-MAVROS:
+This also checks that the configured consumer node, `/mavros` by default, is
+subscribed to the exact vision-pose topic. The parameter query is read-only. The
+following regression exercises that preflight against a loopback ROS graph; it
+opens no serial device and starts no MAVROS:
 
 ```bash
 src/robotac_flight/test/run_flight_preflight_sim.sh
