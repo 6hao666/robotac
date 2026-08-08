@@ -308,6 +308,18 @@ device or MAVROS node:
 src/robotac_flight/test/run_dynamic_waypoints_sim.sh
 ```
 
+The start gate also has an isolated MAVROS setpoint-consumer regression. It
+starts the same controller against a simulator that deliberately does not
+subscribe to `/mavros/setpoint_raw/local`, then verifies that
+`/robotac/flight/start` is rejected with
+`mavros_setpoint_raw_consumer_unavailable`. This protects against entering an
+active mission when the raw setpoint path is not actually being consumed; it
+opens no serial device and never starts MAVROS:
+
+```bash
+src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh
+```
+
 The corresponding FAST-LIO bridge regression starts only a loopback ROS master
 and publishes simulated `camera_init -> body` odometry. It verifies that the
 bridge preserves the FAST-LIO timestamp, emits the configured local pose, and

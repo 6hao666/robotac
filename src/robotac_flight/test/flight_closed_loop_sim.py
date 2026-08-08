@@ -30,6 +30,7 @@ class ClosedLoopMavrosSim(object):
         self.initial_x = float(rospy.get_param("~initial_x", 0.0))
         self.initial_y = float(rospy.get_param("~initial_y", 0.0))
         self.initial_yaw = math.radians(float(rospy.get_param("~initial_yaw_deg", 0.0)))
+        self.subscribe_setpoint = bool(rospy.get_param("~subscribe_setpoint", True))
         self.fault = str(rospy.get_param("~fault", "")).strip().lower()
         self.fault_delay = float(rospy.get_param("~fault_delay", 0.8))
         if self.fault not in ("", "vision_loss", "vision_output_loss"):
@@ -87,7 +88,9 @@ class ClosedLoopMavrosSim(object):
         self.fault_summary_pub = rospy.Publisher(
             "/robotac/test/flight_fault_summary", String, queue_size=1, latch=True)
 
-        rospy.Subscriber("/mavros/setpoint_raw/local", PositionTarget, self._setpoint_cb, queue_size=20)
+        if self.subscribe_setpoint:
+            rospy.Subscriber("/mavros/setpoint_raw/local", PositionTarget,
+                             self._setpoint_cb, queue_size=20)
         # Stand in for MAVROS's vision_pose_estimate plugin so the controller's
         # graph-level consumer check exercises the same ROS topic contract.
         rospy.Subscriber("/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped,

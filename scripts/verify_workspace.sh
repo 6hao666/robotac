@@ -131,6 +131,7 @@ for script in \
   "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_fault_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_vision_bridge_sim.sh"; do
   bash -n "${script}"
   echo "Validated simulation shell syntax: ${script##*/}"
@@ -158,7 +159,8 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/robotac_flight/scripts/fastlio_vision_bridge.py" \
   "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
-  "${workspace_dir}/src/robotac_flight/scripts/check_px4_vision_config.py" <<'PY'
+  "${workspace_dir}/src/robotac_flight/scripts/check_px4_vision_config.py" \
+  "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" <<'PY'
 import pathlib
 import sys
 
@@ -173,6 +175,7 @@ bridge_source = pathlib.Path(sys.argv[8]).read_text()
 dynamic_waypoint_test = pathlib.Path(sys.argv[9]).read_text()
 preflight_test = pathlib.Path(sys.argv[10]).read_text()
 px4_check_source = pathlib.Path(sys.argv[11]).read_text()
+setpoint_gate_test = pathlib.Path(sys.argv[12]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -292,6 +295,15 @@ for expected in (
 ):
     if expected not in px4_check_source:
         raise SystemExit(f"PX4 vision config check failed: missing {expected}")
+for expected in (
+    "_subscribe_setpoint:=false",
+    "success: False",
+    "mavros_setpoint_raw_consumer_unavailable",
+    "local_waypoint_flight.launch",
+    "enable_control:=true",
+):
+    if expected not in setpoint_gate_test:
+        raise SystemExit(f"Setpoint consumer gate regression check failed: missing {expected}")
 print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 
