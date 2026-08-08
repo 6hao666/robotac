@@ -172,14 +172,33 @@ class VisionBridgeIntegration(object):
         if len(self.outputs) != output_count:
             raise RuntimeError("vision output resumed before the new health window")
 
+        recovered_source = None
         for index in range(1, self.min_samples):
-            self._publish_and_wait(0.11 + 0.01 * index)
+            recovered_source = self._publish_and_wait(0.11 + 0.01 * index)
         self._wait_for(lambda: len(self.outputs) > output_count, 2.0,
                        "vision output after recovered health window")
         recovered = self.outputs[-1]
-        expected_position, _, _ = self._expected_pose(last_source)
-        if not math.isclose(recovered.pose.pose.position.x, expected_position[0], abs_tol=1.0e-6):
+        expected_position, expected_quaternion, expected_covariance = self._expected_pose(recovered_source)
+        recovered_position = np.asarray([
+            recovered.pose.pose.position.x,
+            recovered.pose.pose.position.y,
+            recovered.pose.pose.position.z,
+        ], dtype=float)
+        recovered_quaternion = np.asarray([
+            recovered.pose.pose.orientation.x,
+            recovered.pose.pose.orientation.y,
+            recovered.pose.pose.orientation.z,
+            recovered.pose.pose.orientation.w,
+        ], dtype=float)
+        if recovered.header.stamp != recovered_source.header.stamp:
+            raise RuntimeError("recovered output did not use the latest source timestamp")
+        if not np.allclose(recovered_position, expected_position, atol=1.0e-6):
             raise RuntimeError("recovered output does not contain the latest transformed pose")
+        if abs(float(np.dot(recovered_quaternion, expected_quaternion))) < 1.0 - 1.0e-6:
+            raise RuntimeError("recovered output does not contain the latest transformed orientation")
+        if not np.allclose(np.asarray(recovered.pose.covariance).reshape((6, 6)),
+                           expected_covariance, atol=1.0e-8):
+            raise RuntimeError("recovered output does not contain the latest transformed covariance")
 
         print("Vision bridge integration passed: %d output samples" % len(self.outputs))
 
