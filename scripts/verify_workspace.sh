@@ -20,6 +20,7 @@ required_paths=(
   src/robotac_flight/launch/local_flight_preflight.launch
   src/robotac_flight/scripts/active_flight_observer.py
   src/robotac_flight/scripts/audit_local_mission.py
+  src/robotac_flight/scripts/create_route_file.py
   src/robotac_flight/scripts/ev_acceptance_observer.py
   src/robotac_flight/scripts/local_flight_readiness.py
   src/robotac_flight/scripts/preview_local_route.py
@@ -211,6 +212,58 @@ if python3 "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" \
 fi
 echo "Validated PoseArray publisher rejects payload/hold mission metadata by default."
 
+generated_route_dir=$(mktemp -d "${TMPDIR:-/tmp}/robotac-route-generator.XXXXXX")
+generated_route="${generated_route_dir}/generated_payload_route.yaml"
+python3 "${workspace_dir}/src/robotac_flight/scripts/create_route_file.py" \
+  --output "${generated_route}" \
+  --point 1,0,1,0 \
+  --point 0,0,1,0 \
+  --point 0,1,1,0 \
+  --point 0,0,1,0 \
+  --point 0,-1,1,0 \
+  --point 0,0,1,0 \
+  --point=-1,0,1,0 \
+  --payload-open-index 6 \
+  --append-return-home >/dev/null
+generated_route_preview=$(python3 "${workspace_dir}/src/robotac_flight/scripts/preview_local_route.py" \
+  --file "${generated_route}" \
+  --origin-x 3.0 --origin-y -2.0 --origin-yaw-deg 90.0)
+printf '%s\n' "${generated_route_preview}"
+[[ "${generated_route_preview}" == *"payload_events=wp6:open@(3.000,-3.000,1.000)"* ]]
+generated_route_audit=$(python3 "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" \
+  --file "${generated_route}" \
+  --origin-x 3.0 --origin-y -2.0 --origin-yaw-deg 90.0 \
+  --require-payload-open)
+printf '%s\n' "${generated_route_audit}"
+[[ "${generated_route_audit}" == *"MISSION_AUDIT_PASS"* ]]
+[[ "${generated_route_audit}" == *"frame=robotac_start_body waypoints=8 targets_with_takeoff=9"* ]]
+generated_readiness=$(python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
+  --config-root "${workspace_dir}/config" \
+  --route-file "${generated_route}")
+printf '%s\n' "${generated_readiness}"
+[[ "${generated_readiness}" == *"local_mission_file=READY"* ]]
+python3 - "${workspace_dir}/src/robotac_flight/scripts/create_route_file.py" <<'PY'
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+with tempfile.TemporaryDirectory(prefix="robotac-route-generator-bad.") as directory:
+    waypoint_file = pathlib.Path(directory) / "bad.yaml"
+    waypoint_file.write_text("""waypoints:
+  - {x: 0.0, y: 0.0, z: 1.0, latitude: 30.0}
+""", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, sys.argv[1], "--input", str(waypoint_file), "--dry-run"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False)
+    if result.returncode == 0:
+        raise SystemExit("Route generator unexpectedly accepted a global/GPS key.")
+PY
+rm -rf "${generated_route_dir}"
+echo "Validated local route-file generator."
+
 route_preview=$(python3 "${workspace_dir}/src/robotac_flight/scripts/preview_local_route.py" \
   --file "${workspace_dir}/config/flight/local_waypoints.yaml" \
   --origin-x 3.0 --origin-y -2.0 --origin-yaw-deg 90.0)
@@ -277,6 +330,7 @@ printf '%s\n' "${contract_report}"
 [[ "${contract_report}" == *"mavros_local_only_contract=READY"* ]]
 [[ "${contract_report}" == *"local_relative_route_contract=READY"* ]]
 [[ "${contract_report}" == *"waypoint_controller_contract=READY"* ]]
+[[ "${contract_report}" == *"route_generator_contract=READY"* ]]
 [[ "${contract_report}" == *"fastlio_vision_pose_contract=READY"* ]]
 [[ "${contract_report}" == *"evidence_gate_contract=READY"* ]]
 echo "Validated offline local flight goal contract."

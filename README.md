@@ -333,6 +333,56 @@ latched JSON. After `/robotac/flight/start`, that manifest includes the captured
 local origin, route source (`configured` or `posearray`), fingerprint, waypoint
 count, and absolute local ENU targets used for takeoff and each waypoint.
 
+To generate a full route file from a simple local waypoint list before going to
+the field, use the offline route generator. It writes only YAML: it starts no
+ROS node, opens no serial device, calls no MAVROS service, never arms, and never
+sends setpoints. The generated file keeps `require_auto_land: true` and carries
+the same FAST-LIO vision, MAVROS consumer, timesync, local-frame, fault-release,
+and landing safety fields as the checked-in templates. It also rejects GPS or
+global mission keys such as latitude, longitude, GPS, global mission, or global
+altitude fields.
+
+Example route for the planned payload test: take off to 1 m, fly forward/left/
+right/rear relative to the captured start heading, open the payload servo at the
+rear point, return home, then land:
+
+```bash
+rosrun robotac_flight create_route_file.py \
+  --output ~/robotac_ws/config/flight/my_payload_route.yaml \
+  --point 1,0,1,0 \
+  --point 0,0,1,0 \
+  --point 0,1,1,0 \
+  --point 0,0,1,0 \
+  --point 0,-1,1,0 \
+  --point 0,0,1,0 \
+  --point=-1,0,1,0 \
+  --payload-open-index 6 \
+  --append-return-home
+```
+
+Then inspect the exact controller/MAVLink route offline before loading it into
+the launch:
+
+```bash
+rosrun robotac_flight audit_local_mission.py \
+  --file ~/robotac_ws/config/flight/my_payload_route.yaml \
+  --require-payload-open
+
+rosrun robotac_flight preview_local_route.py \
+  --file ~/robotac_ws/config/flight/my_payload_route.yaml \
+  --origin-x 0 --origin-y 0 --origin-z 0 --origin-yaw-deg 0
+```
+
+For a handwritten simple YAML/JSON input, provide a `waypoints` or `points`
+list with `x`, `y`, `z`, and optional `yaw_deg`, then run:
+
+```bash
+rosrun robotac_flight create_route_file.py \
+  --input simple_points.yaml \
+  --output ~/robotac_ws/config/flight/my_route.yaml \
+  --append-return-home
+```
+
 To publish a position-only waypoint file without starting the mission or
 touching MAVROS, first dry-run the parser, then publish while the controller is
 idle:

@@ -12,6 +12,7 @@ import argparse
 import json
 import pathlib
 import sys
+import tempfile
 from types import SimpleNamespace
 
 import yaml
@@ -24,6 +25,7 @@ if str(FLIGHT_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(FLIGHT_SCRIPT_DIR))
 
 import audit_local_mission  # noqa: E402
+import create_route_file  # noqa: E402
 
 
 MAVROS_REQUIRED_WHITELIST = {
@@ -229,6 +231,104 @@ def _check_controller_source(root):
     return _phase("waypoint_controller_contract", not missing, missing, notes)
 
 
+def _check_route_generator(root):
+    missing = []
+    notes = []
+    path = root / "src" / "robotac_flight" / "scripts" / "create_route_file.py"
+    if not path.exists():
+        return _phase("route_generator_contract", False, ["missing:create_route_file.py"])
+    source = _read(path)
+    missing.extend("route_generator_missing:%s" % token for token in _contains_all(source, (
+        "FORBIDDEN_GLOBAL_KEYS",
+        "BASE_ROUTE_DEFAULTS",
+        "PAYLOAD_ROUTE_DEFAULTS",
+        "require_auto_land",
+        "require_vision_output_consumer",
+        "require_setpoint_consumer",
+        "require_timesync",
+        "--point",
+        "--payload-open-index",
+        "--append-return-home",
+        "starts no ROS node",
+    )))
+    for forbidden in (
+            "import rospy",
+            "rospy.Publisher",
+            "rospy.ServiceProxy",
+            "CommandBool",
+            "SetMode",
+            "/mavros/cmd/arming",
+            "/mavros/set_mode",
+            "/robotac/flight/start"):
+        if forbidden in source:
+            missing.append("route_generator_forbidden_token:%s" % forbidden)
+
+    args = SimpleNamespace(
+        input="",
+        point=[
+            "1,0,1,0",
+            "0,0,1,0",
+            "0,1,1,0",
+            "0,0,1,0",
+            "0,-1,1,0",
+            "0,0,1,0",
+            "-1,0,1,0",
+        ],
+        output="",
+        force=False,
+        dry_run=True,
+        frame="robotac_start_body",
+        takeoff_height=1.0,
+        hold=2.0,
+        yaw_deg=0.0,
+        max_waypoint_xy=20.0,
+        max_waypoint_z=5.0,
+        append_return_home=True,
+        payload_open_index=6,
+        payload_open_last=False,
+        payload_settle=2.0,
+    )
+    try:
+        generated = create_route_file._build_route(args)
+        section = generated.get("local_waypoint_flight", {})
+        if section.get("waypoint_frame") != "robotac_start_body":
+            missing.append("generated_route_frame")
+        if section.get("require_auto_land") is not True:
+            missing.append("generated_route_require_auto_land")
+        waypoints = section.get("waypoints") or []
+        if len(waypoints) != 8:
+            missing.append("generated_route_waypoint_count")
+        if not waypoints or waypoints[6].get("payload_action") != "open":
+            missing.append("generated_route_payload_open_index")
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", encoding="utf-8") as stream:
+            yaml.safe_dump(generated, stream, default_flow_style=False, sort_keys=False)
+            stream.flush()
+            audit_args = SimpleNamespace(
+                file=stream.name,
+                origin_x=3.0,
+                origin_y=-2.0,
+                origin_z=0.0,
+                origin_yaw=None,
+                origin_yaw_deg=90.0,
+                no_takeoff=False,
+                require_auto_land=True,
+                require_payload_open=True,
+                json=False,
+            )
+            summary = audit_local_mission._build_summary(audit_args)
+        if summary.get("targets_with_takeoff") != 9:
+            missing.append("generated_route_targets_with_takeoff")
+        payload_events = summary.get("payload_events") or []
+        if not payload_events or payload_events[0].get("action") != "open":
+            missing.append("generated_route_payload_audit")
+    except Exception as exc:  # pragma: no cover - surfaced in script output
+        missing.append("route_generator_execution:%s" % exc)
+
+    if not missing:
+        notes.append("offline generator expands simple local points into audited full route files")
+    return _phase("route_generator_contract", not missing, missing, notes)
+
+
 def _check_fastlio_vision_bridge(root):
     missing = []
     notes = []
@@ -374,6 +474,7 @@ def build_report(args):
         _check_mavros_local_only(root),
         _check_local_route(root),
         _check_controller_source(root),
+        _check_route_generator(root),
         _check_fastlio_vision_bridge(root),
         _check_evidence_surface(root),
     ]
