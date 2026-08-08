@@ -427,6 +427,7 @@ def _check_evidence_surface(root):
         "max-active-vision-local-delta-m",
         "active_route_manifest",
         "route_manifest_missing",
+        "route_manifest_target_tolerance",
         "route_manifest_observed_target_mismatch",
         "route_status_fingerprint_mismatch",
         "active_vision_output_enabled_seen",

@@ -78,6 +78,10 @@ class ActiveFlightObserver(object):
             rospy.get_param("~require_takeoff_landing_states", True))
         self.require_waypoints_complete = _as_bool(rospy.get_param("~require_waypoints_complete", True))
         self.require_route_manifest = _as_bool(rospy.get_param("~require_route_manifest", True))
+        self.route_manifest_target_tolerance = float(
+            rospy.get_param("~route_manifest_target_tolerance", 0.05))
+        self.route_manifest_yaw_tolerance = math.radians(float(
+            rospy.get_param("~route_manifest_yaw_tolerance_deg", 1.0)))
         self.require_final_disarmed = _as_bool(rospy.get_param("~require_final_disarmed", True))
         self.require_final_on_ground = _as_bool(rospy.get_param("~require_final_on_ground", True))
         self.require_payload_open = _as_bool(rospy.get_param("~require_payload_open", False))
@@ -204,6 +208,10 @@ class ActiveFlightObserver(object):
             raise ValueError("max_active_vision_local_delta_m must be finite and non-negative")
         if not math.isfinite(self.vision_local_pair_timeout) or self.vision_local_pair_timeout <= 0.0:
             raise ValueError("vision_local_pair_timeout must be finite and positive")
+        if not math.isfinite(self.route_manifest_target_tolerance) or self.route_manifest_target_tolerance < 0.0:
+            raise ValueError("route_manifest_target_tolerance must be finite and non-negative")
+        if not math.isfinite(self.route_manifest_yaw_tolerance) or self.route_manifest_yaw_tolerance < 0.0:
+            raise ValueError("route_manifest_yaw_tolerance_deg must be finite and non-negative")
 
     @staticmethod
     def _fresh(receive_time, timeout):
@@ -234,6 +242,47 @@ class ActiveFlightObserver(object):
     @staticmethod
     def _same_target(a, b, tolerance=1.0e-3):
         return all(abs(float(a[i]) - float(b[i])) <= tolerance for i in range(4))
+
+    @staticmethod
+    def _angle_error(a, b):
+        return math.atan2(math.sin(float(a) - float(b)), math.cos(float(a) - float(b)))
+
+    @staticmethod
+    def _target_key(record):
+        if not isinstance(record, dict):
+            return None
+        if record.get("state") == "TAKEOFF":
+            return ("TAKEOFF", 0)
+        if record.get("state") == "WAYPOINTS":
+            try:
+                return ("WAYPOINTS", int(record.get("waypoint_index")))
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    @staticmethod
+    def _record_target(record):
+        if not isinstance(record, dict):
+            return None
+        target = record.get("target")
+        if not isinstance(target, list) or len(target) < 4:
+            return None
+        try:
+            values = tuple(float(value) for value in target[:4])
+        except (TypeError, ValueError):
+            return None
+        return values if _finite(values) else None
+
+    def _target_map(self, records):
+        targets = {}
+        if not isinstance(records, list):
+            return targets
+        for record in records:
+            key = self._target_key(record)
+            target = self._record_target(record)
+            if key is not None and target is not None:
+                targets[key] = target
+        return targets
 
     def _flight_status_cb(self, msg):
         fields = _parse_fields(msg.data)
@@ -554,6 +603,22 @@ class ActiveFlightObserver(object):
         if len(waypoint_targets) != waypoint_count_int:
             return "route_manifest_target_count_mismatch:%d/%d" % (
                 len(waypoint_targets), waypoint_count_int)
+        manifest_targets = self._target_map(target_route)
+        observed_targets = self._target_map(self.target_records)
+        expected_target_count = waypoint_count_int + 1
+        if len(manifest_targets) != expected_target_count:
+            return "route_manifest_target_count_mismatch:%d/%d" % (
+                len(manifest_targets), expected_target_count)
+        for key, expected in manifest_targets.items():
+            actual = observed_targets.get(key)
+            if actual is None:
+                return "route_manifest_observed_target_missing:%s%d" % (key[0].lower(), key[1])
+            position_delta = self._distance3(actual[:3], expected[:3])
+            yaw_delta = abs(self._angle_error(actual[3], expected[3]))
+            if (position_delta > self.route_manifest_target_tolerance or
+                    yaw_delta > self.route_manifest_yaw_tolerance):
+                return "route_manifest_observed_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
+                    key[0].lower(), key[1], position_delta, math.degrees(yaw_delta))
         return None
 
     def _failure_reason(self, final=False):
@@ -698,6 +763,8 @@ class ActiveFlightObserver(object):
                 "require_takeoff_landing_states": self.require_takeoff_landing_states,
                 "require_waypoints_complete": self.require_waypoints_complete,
                 "require_route_manifest": self.require_route_manifest,
+                "route_manifest_target_tolerance": self.route_manifest_target_tolerance,
+                "route_manifest_yaw_tolerance_deg": math.degrees(self.route_manifest_yaw_tolerance),
                 "require_final_disarmed": self.require_final_disarmed,
                 "require_final_on_ground": self.require_final_on_ground,
                 "require_payload_open": self.require_payload_open,

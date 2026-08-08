@@ -615,6 +615,8 @@ for expected in (
     "require_route_manifest",
     "route_manifest_missing",
     "route_manifest_target_route_missing",
+    "route_manifest_target_tolerance",
+    "route_manifest_observed_target_mismatch",
     "route_status_fingerprint_mismatch",
     "active_local_flight_passed",
     "target_records",
