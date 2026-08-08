@@ -522,6 +522,9 @@ for expected in (
     "setpoint_preview_topic",
     "local_position_topic",
     "active_local_flight_passed",
+    "target_records",
+    "target_records_unreached",
+    "waypoint_reach_tolerance",
     "waypoints_incomplete",
     "final_disarmed_not_confirmed",
     "final_on_ground_not_confirmed",
@@ -816,6 +819,8 @@ for expected in (
     "payload_local_flight",
     "active_flight_observer.json",
     "active_local_flight_passed",
+    "target_records_unreached",
+    "waypoint-reach-tolerance",
     "waypoints_incomplete",
     "final_disarmed",
     "final_on_ground",
@@ -967,7 +972,8 @@ import tempfile
 script = sys.argv[1]
 
 def write_evidence(path, *, success=True, reason="active_local_flight_passed",
-                   payload_open=False, state="COMPLETE", abort_reason=None):
+                   payload_open=False, state="COMPLETE", abort_reason=None,
+                   target_reached=True):
     path.write_text(json.dumps({
         "observer": "active_flight_observer",
         "success": success,
@@ -980,6 +986,11 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "total_waypoints": 8,
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
+            "target_records": [
+                {"target": [0, 0, 1, 0], "state": "TAKEOFF", "min_distance_m": 0.08, "reached": True},
+                {"target": [1, 0, 1, 0], "state": "WAYPOINTS", "min_distance_m": 0.12 if target_reached else 0.80, "reached": target_reached},
+                {"target": [0, 0, 1, 0], "state": "WAYPOINTS", "min_distance_m": 0.10, "reached": True},
+            ],
             "local_count": 240,
             "initial_local_z": 0.0,
             "max_relative_local_z": 1.02,
@@ -1006,6 +1017,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if payload_ok.returncode != 0 or "payload_local_flight=READY" not in payload_ok.stdout:
         raise SystemExit("Active flight evidence analyzer rejected valid payload evidence")
+    write_evidence(evidence, target_reached=False)
+    unreached = subprocess.run([sys.executable, script, str(root)], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if unreached.returncode == 0 or "target_records_unreached" not in unreached.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted an unreached waypoint target")
     write_evidence(evidence, success=False, reason="flight_aborted:test", abort_reason="test", state="ABORT")
     failed = subprocess.run([sys.executable, script, str(root)], text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1087,6 +1103,10 @@ def write_active_evidence(root, payload_open=False, success=True):
             "total_waypoints": 8,
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
+            "target_records": [
+                {"target": [0, 0, 1, 0], "state": "TAKEOFF", "min_distance_m": 0.08, "reached": True},
+                {"target": [1, 0, 1, 0], "state": "WAYPOINTS", "min_distance_m": 0.12, "reached": True},
+            ],
             "local_count": 240,
             "max_relative_local_z": 1.02,
             "final_armed": False,

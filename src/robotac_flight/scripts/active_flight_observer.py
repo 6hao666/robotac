@@ -49,6 +49,7 @@ class ActiveFlightObserver(object):
         self.stream_timeout = float(rospy.get_param("~stream_timeout", 1.0))
         self.min_setpoints = int(rospy.get_param("~min_setpoints", 20))
         self.min_airborne_altitude = float(rospy.get_param("~min_airborne_altitude", 0.50))
+        self.waypoint_reach_tolerance = float(rospy.get_param("~waypoint_reach_tolerance", 0.35))
         self.require_waypoints_complete = _as_bool(rospy.get_param("~require_waypoints_complete", True))
         self.require_final_disarmed = _as_bool(rospy.get_param("~require_final_disarmed", True))
         self.require_final_on_ground = _as_bool(rospy.get_param("~require_final_on_ground", True))
@@ -72,6 +73,7 @@ class ActiveFlightObserver(object):
         self.setpoint_count = 0
         self.setpoint_receive = None
         self.unique_setpoints = []
+        self.target_records = []
 
         self.local_count = 0
         self.local_receive = None
@@ -111,6 +113,8 @@ class ActiveFlightObserver(object):
             raise ValueError("min_setpoints must be positive")
         if not math.isfinite(self.min_airborne_altitude) or self.min_airborne_altitude < 0.0:
             raise ValueError("min_airborne_altitude must be finite and non-negative")
+        if not math.isfinite(self.waypoint_reach_tolerance) or self.waypoint_reach_tolerance <= 0.0:
+            raise ValueError("waypoint_reach_tolerance must be finite and positive")
 
     @staticmethod
     def _fresh(receive_time, timeout):
@@ -120,6 +124,12 @@ class ActiveFlightObserver(object):
     def _append_unique(values, item, tolerance=1.0e-3):
         if not values or any(abs(a - b) > tolerance for a, b in zip(values[-1], item)):
             values.append(item)
+            return True
+        return False
+
+    @staticmethod
+    def _distance3(a, b):
+        return math.sqrt(sum((float(a[i]) - float(b[i])) ** 2 for i in range(3)))
 
     def _flight_status_cb(self, msg):
         fields = _parse_fields(msg.data)
@@ -148,7 +158,25 @@ class ActiveFlightObserver(object):
             return
         self.setpoint_count += 1
         self.setpoint_receive = time.monotonic()
-        self._append_unique(self.unique_setpoints, tuple(float(value) for value in values))
+        target = tuple(float(value) for value in values)
+        if self._append_unique(self.unique_setpoints, target):
+            self.target_records.append({
+                "target": [target[0], target[1], target[2], target[3]],
+                "state": self.last_status.get("state", "unknown"),
+                "min_distance_m": None,
+                "reached": False,
+            })
+            if self.final_local_position is not None:
+                self._update_target_hits(self.final_local_position)
+
+    def _update_target_hits(self, position):
+        for record in self.target_records:
+            distance = self._distance3(position, record["target"])
+            previous = record.get("min_distance_m")
+            if previous is None or distance < previous:
+                record["min_distance_m"] = distance
+            if distance <= self.waypoint_reach_tolerance:
+                record["reached"] = True
 
     def _local_position_cb(self, msg):
         values = (msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z)
@@ -164,6 +192,7 @@ class ActiveFlightObserver(object):
         relative_z = z - self.initial_local_z
         self.max_relative_local_z = (relative_z if self.max_relative_local_z is None
                                      else max(self.max_relative_local_z, relative_z))
+        self._update_target_hits(self.final_local_position)
 
     def _mavros_state_cb(self, msg):
         self.mavros_state = msg
@@ -178,6 +207,22 @@ class ActiveFlightObserver(object):
         if fields.get("state", "").lower() == "open" and fields.get("success", "").lower() == "true":
             self.payload_open_seen = True
             self.payload_status_receive = time.monotonic()
+
+    def _target_reach_issue(self):
+        flight_targets = [record for record in self.target_records
+                          if record.get("state") in ("TAKEOFF", "WAYPOINTS")]
+        if not flight_targets:
+            return "target_records_missing"
+        unreached = []
+        for index, record in enumerate(flight_targets):
+            distance = record.get("min_distance_m")
+            if (record.get("reached") is not True or distance is None or
+                    distance > self.waypoint_reach_tolerance):
+                unreached.append("%d:%s" % (
+                    index, "unknown" if distance is None else "%.3f" % distance))
+        if unreached:
+            return "target_records_unreached:%s" % ";".join(unreached)
+        return None
 
     def _failure_reason(self, final=False):
         if self.abort_reason:
@@ -200,6 +245,9 @@ class ActiveFlightObserver(object):
                 return "waypoint_progress_unavailable"
             if self.max_waypoint_index < self.total_waypoints:
                 return "waypoints_incomplete:%d/%d" % (self.max_waypoint_index, self.total_waypoints)
+        target_issue = self._target_reach_issue()
+        if target_issue is not None:
+            return target_issue
         if self.require_final_disarmed:
             if (not self._fresh(self.mavros_state_receive, self.stream_timeout) or
                     self.mavros_state is None or self.mavros_state.armed):
@@ -223,6 +271,7 @@ class ActiveFlightObserver(object):
             "total_waypoints": self.total_waypoints,
             "setpoint_count": self.setpoint_count,
             "unique_setpoints": self.unique_setpoints,
+            "target_records": self.target_records,
             "local_count": self.local_count,
             "initial_local_z": self.initial_local_z,
             "max_local_z": self.max_local_z,
@@ -237,6 +286,7 @@ class ActiveFlightObserver(object):
                 "stream_timeout": self.stream_timeout,
                 "min_setpoints": self.min_setpoints,
                 "min_airborne_altitude": self.min_airborne_altitude,
+                "waypoint_reach_tolerance": self.waypoint_reach_tolerance,
                 "require_waypoints_complete": self.require_waypoints_complete,
                 "require_final_disarmed": self.require_final_disarmed,
                 "require_final_on_ground": self.require_final_on_ground,

@@ -85,6 +85,7 @@ def _active_report(args):
         min_setpoints=args.min_setpoints,
         min_unique_setpoints=args.min_unique_setpoints,
         min_airborne_altitude=args.min_airborne_altitude,
+        waypoint_reach_tolerance=args.waypoint_reach_tolerance,
         json=False,
     )
     return analyze_active_flight_evidence.build_report(active_args)
@@ -220,6 +221,7 @@ def _build_parser():
     parser.add_argument("--min-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
+    parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--require-phase", default="active_local_flight",
                         choices=("configuration", "active_preflight",
                                  "active_local_flight", "payload_local_flight"))

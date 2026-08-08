@@ -549,8 +549,10 @@ The observer subscribes only to `/robotac/flight/status`,
 setpoints, calls services, arms, changes mode, or commands landing. A passing
 `active_flight_observer.json` requires the controller to reach `COMPLETE`, all
 waypoints to be consumed, relative airborne altitude to have been observed, MAVROS to
-finish disarmed/on-ground, and, if `require_payload_open:=true`, a successful
-payload-open acknowledgement.
+finish disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to
+have been observed within the configured `waypoint_reach_tolerance` by
+`/mavros/local_position/odom`. If `require_payload_open:=true`, it also requires
+a successful payload-open acknowledgement.
 
 After the observer exits, analyze the evidence offline:
 

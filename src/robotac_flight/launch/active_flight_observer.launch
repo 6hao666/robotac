@@ -6,6 +6,7 @@
   <arg name="stream_timeout" default="1.0" />
   <arg name="min_setpoints" default="20" />
   <arg name="min_airborne_altitude" default="0.50" />
+  <arg name="waypoint_reach_tolerance" default="0.35" />
   <arg name="require_waypoints_complete" default="true" />
   <arg name="require_final_disarmed" default="true" />
   <arg name="require_final_on_ground" default="true" />
@@ -24,6 +25,7 @@
     <param name="stream_timeout" value="$(arg stream_timeout)" />
     <param name="min_setpoints" value="$(arg min_setpoints)" />
     <param name="min_airborne_altitude" value="$(arg min_airborne_altitude)" />
+    <param name="waypoint_reach_tolerance" value="$(arg waypoint_reach_tolerance)" />
     <param name="require_waypoints_complete" value="$(arg require_waypoints_complete)" />
     <param name="require_final_disarmed" value="$(arg require_final_disarmed)" />
     <param name="require_final_on_ground" value="$(arg require_final_on_ground)" />

@@ -94,6 +94,26 @@ def _base_phase(data, args):
     else:
         notes.append("unique_setpoints=%d" % unique_count)
 
+    target_records = summary.get("target_records")
+    flight_targets = []
+    if isinstance(target_records, list):
+        flight_targets = [record for record in target_records
+                          if isinstance(record, dict) and
+                          record.get("state") in ("TAKEOFF", "WAYPOINTS")]
+    if not flight_targets:
+        missing.append("target_records_missing")
+    else:
+        unreached = []
+        for index, record in enumerate(flight_targets):
+            distance = _number(record.get("min_distance_m"))
+            if record.get("reached") is not True or distance is None or distance > args.waypoint_reach_tolerance:
+                unreached.append("%d:%s" % (index, "unknown" if distance is None else "%.3f" % distance))
+        if unreached:
+            missing.append("target_records_unreached:%s" % ";".join(unreached))
+        else:
+            notes.append("target_records_reached=%d tolerance=%.2f" % (
+                len(flight_targets), args.waypoint_reach_tolerance))
+
     max_relative_z = _number(summary.get("max_relative_local_z"))
     if max_relative_z is None or max_relative_z < args.min_airborne_altitude:
         missing.append("relative_airborne_altitude_below_%.2f" % args.min_airborne_altitude)
@@ -158,6 +178,7 @@ def _build_parser():
     parser.add_argument("--min-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
+    parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -168,6 +189,8 @@ def main():
         raise ValueError("minimum waypoint/setpoint counts must be positive")
     if not math.isfinite(args.min_airborne_altitude) or args.min_airborne_altitude < 0.0:
         raise ValueError("min-airborne-altitude must be finite and non-negative")
+    if not math.isfinite(args.waypoint_reach_tolerance) or args.waypoint_reach_tolerance <= 0.0:
+        raise ValueError("waypoint-reach-tolerance must be finite and positive")
     report = build_report(args)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
