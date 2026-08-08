@@ -81,16 +81,22 @@ def _string_data(text):
     return match.group(1).strip().strip("'\"")
 
 
-def _info_has_node(text, section, node):
+def _info_nodes(text, section):
     marker = section + ":"
     if marker not in text:
-        return False
+        return []
     tail = text.split(marker, 1)[1]
     next_sections = [index for index in (
         tail.find("Publishers:"), tail.find("Subscribers:")) if index > 0]
     if next_sections:
         tail = tail[:min(next_sections)]
-    return re.search(r"\*\s+%s(?:\s|\(|$)" % re.escape(node), tail) is not None
+    if re.search(r"^\s*None\s*$", tail, flags=re.MULTILINE):
+        return []
+    return re.findall(r"\*\s+(\S+)", tail)
+
+
+def _info_has_node(text, section, node):
+    return node in _info_nodes(text, section)
 
 
 def _phase(name, ready, missing=None, notes=None):
@@ -176,6 +182,18 @@ def _consumer_phase(directory, name, topic, consumer):
     return _phase(name, not missing, missing, notes)
 
 
+def _no_publishers_phase(directory, name, topic):
+    text = _read(directory, _topic_file("info", topic))
+    publishers = _info_nodes(text, "Publishers")
+    missing = []
+    notes = []
+    if publishers:
+        missing.append("%s_publishers_present:%s" % (topic, ",".join(publishers)))
+    else:
+        notes.append("no publishers on %s" % topic)
+    return _phase(name, not missing, missing, notes)
+
+
 def build_report(args):
     directory = pathlib.Path(args.evidence_dir).expanduser().resolve()
     phases = [
@@ -193,6 +211,7 @@ def build_report(args):
                         args.mavros_node),
         _consumer_phase(directory, "mavros_setpoint_raw_consumer", "/mavros/setpoint_raw/local",
                         args.mavros_node),
+        _no_publishers_phase(directory, "read_only_no_setpoint_publishers", "/mavros/setpoint_raw/local"),
     ]
     phase_lookup = {phase["name"]: phase for phase in phases}
     phase_groups = {
@@ -217,6 +236,7 @@ def build_report(args):
             "fastlio_vision_health",
             "mavros_vision_pose_consumer",
             "mavros_setpoint_raw_consumer",
+            "read_only_no_setpoint_publishers",
         ),
     }
     group_status = {}

@@ -487,8 +487,9 @@ reads that bundle offline and reports whether `mavros_safe_state`,
 required phase is `active_preflight_evidence`, so it exits non-zero until MAVROS
 is connected, disarmed, on ground, FAST-LIO vision is healthy, MAVROS consumes
 `/mavros/vision_pose/pose_cov`, MAVROS consumes `/mavros/setpoint_raw/local`,
-and the required local-position, vision-pose, FAST-LIO odometry, and time-sync
-streams meet the configured rate thresholds.
+no node publishes `/mavros/setpoint_raw/local` during this read-only evidence
+window, and the required local-position, vision-pose, FAST-LIO odometry, and
+time-sync streams meet the configured rate thresholds.
 
 For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
 `auto_land` are independent gates. Keep all automatic gates false for the first

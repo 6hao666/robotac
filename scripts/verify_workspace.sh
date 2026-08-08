@@ -611,6 +611,7 @@ for expected in (
     "active_preflight_evidence",
     "mavros_vision_pose_consumer",
     "mavros_setpoint_raw_consumer",
+    "read_only_no_setpoint_publishers",
     "connected/disarmed/on-ground",
 ):
     if expected not in source:
@@ -682,6 +683,14 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
                          text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if bad.returncode == 0 or "mavros_vision_pose_consumer=BLOCKED" not in bad.stdout:
         raise SystemExit("Read-only evidence analyzer unexpectedly accepted missing MAVROS vision consumer")
+    write(root / "topic_info_mavros_vision_pose_pose_cov.txt",
+          "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
+    write(root / "topic_info_mavros_setpoint_raw_local.txt",
+          "Type: mavros_msgs/PositionTarget\nPublishers:\n * /local_waypoint_flight\nSubscribers:\n * /mavros\n")
+    unsafe = subprocess.run([sys.executable, script, str(root)], text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if unsafe.returncode == 0 or "read_only_no_setpoint_publishers=BLOCKED" not in unsafe.stdout:
+        raise SystemExit("Read-only evidence analyzer unexpectedly accepted a setpoint publisher")
 print("Validated read-only flight evidence analyzer with synthetic evidence.")
 PY
 
