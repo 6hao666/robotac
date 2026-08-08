@@ -13,6 +13,7 @@ origin_z=0.0
 origin_yaw_deg=0.0
 expected_ev_delay_ms=""
 ev_delay_tolerance_ms=20.0
+evidence_dir=""
 show_active=false
 skip_verify=false
 
@@ -32,6 +33,7 @@ Options:
   --origin-yaw-deg DEG            Preview captured start yaw, default: 0.0
   --expected-ev-delay-ms MS       Include require_ev_delay command argument
   --ev-delay-tolerance-ms MS      EV delay tolerance, default: 20.0
+  --evidence-dir PATH             Read-only evidence directory to analyze before --show-active
   --skip-verify                   Skip scripts/verify_workspace.sh
   --show-active                   Print active commands only after readiness gates pass
   -h, --help                      Show this help
@@ -66,6 +68,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ev-delay-tolerance-ms)
       ev_delay_tolerance_ms=${2:?--ev-delay-tolerance-ms requires a value}
+      shift 2
+      ;;
+    --evidence-dir)
+      evidence_dir=${2:?--evidence-dir requires a value}
       shift 2
       ;;
     --skip-verify)
@@ -244,6 +250,26 @@ if [[ "${show_active}" == true ]]; then
     exit 2
   fi
   rm -f /tmp/robotac-active-readiness.$$
+  if [[ -z "${evidence_dir}" ]]; then
+    print_section "active flight commands blocked"
+    echo "Evidence directory is required for --show-active; run collect_readonly_flight_evidence.sh and pass --evidence-dir." >&2
+    exit 2
+  fi
+  if [[ ! -d "${evidence_dir}" ]]; then
+    print_section "active flight commands blocked"
+    echo "Evidence directory does not exist: ${evidence_dir}" >&2
+    exit 2
+  fi
+  if ! python3 "${workspace_dir}/scripts/analyze_readonly_flight_evidence.py" \
+      "${evidence_dir}" --require-phase active_preflight_evidence \
+      >/tmp/robotac-active-evidence.$$ 2>&1; then
+    print_section "active flight commands blocked"
+    echo "Read-only evidence did not pass active_preflight_evidence; refusing to print active commands." >&2
+    cat /tmp/robotac-active-evidence.$$ >&2
+    rm -f /tmp/robotac-active-evidence.$$
+    exit 2
+  fi
+  rm -f /tmp/robotac-active-evidence.$$
   print_section "active flight commands (not executed by this script)"
   cat <<'EOF'
 # First active connected test: controller can stream only after /robotac/flight/start;

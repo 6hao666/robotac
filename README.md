@@ -165,11 +165,12 @@ next read-only aircraft commands. It never starts ROS nodes, opens serial
 devices, sends setpoints, changes modes, arms, or calls MAVROS services. Active
 flight commands are hidden unless `--show-active` is supplied, and even then the
 script refuses to print them until both the active-flight deployment gates in
-`config/deployment.yaml` and the `active_local_flight` readiness report pass.
-The final payload mission block is hidden separately until
-`payload_local_flight` readiness passes. Use `--skip-verify` only when you are
-iterating on the printed route/command ladder and have just run the full
-workspace verification separately.
+`config/deployment.yaml`, the `active_local_flight` readiness report, and a
+passed read-only evidence bundle supplied via `--evidence-dir` all pass. The
+final payload mission block is hidden separately until `payload_local_flight`
+readiness passes. Use `--skip-verify` only when you are iterating on the printed
+route/command ladder and have just run the full workspace verification
+separately.
 
 To inspect the same evidence matrix directly, run the offline readiness report:
 

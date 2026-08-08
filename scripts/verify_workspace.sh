@@ -554,8 +554,11 @@ source = path.read_text()
 for expected in (
     "This script never starts ROS nodes",
     "--show-active",
+    "--evidence-dir",
     "Deployment gates are not all true",
     "Readiness report did not pass active_local_flight",
+    "Read-only evidence did not pass active_preflight_evidence",
+    "Evidence directory is required for --show-active",
     "Payload readiness did not pass payload_local_flight",
     "rosservice call /robotac/flight/start",
     "enable_flight_controller:=false",
@@ -608,6 +611,85 @@ with tempfile.TemporaryDirectory(prefix="robotac-ladder-readiness.") as director
     if "active flight commands (not executed by this script)" in result.stdout:
         raise SystemExit("Flight ladder printed active commands before readiness passed")
 print("Validated flight ladder requires readiness before active command printing.")
+PY
+
+python3 - "${workspace_dir}" <<'PY'
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+workspace = pathlib.Path(sys.argv[1])
+expected_types = {
+    "mavros_state": "mavros_msgs/State",
+    "mavros_extended_state": "mavros_msgs/ExtendedState",
+    "mavros_local_position_odom": "nav_msgs/Odometry",
+    "mavros_estimator_status": "mavros_msgs/EstimatorStatus",
+    "mavros_timesync_status": "mavros_msgs/TimesyncStatus",
+    "mavros_vision_pose_pose_cov": "geometry_msgs/PoseWithCovarianceStamped",
+    "mavros_setpoint_raw_local": "mavros_msgs/PositionTarget",
+    "robotac_fastlio_vision_healthy": "std_msgs/Bool",
+    "robotac_fastlio_vision_status": "std_msgs/String",
+    "robotac_fastlio_vision_output_enabled": "std_msgs/Bool",
+    "robotac_fastlio_vision_pose_preview": "geometry_msgs/PoseWithCovarianceStamped",
+    "Odometry": "nav_msgs/Odometry",
+}
+
+def write(path, text):
+    path.write_text(text, encoding="utf-8")
+
+def write_valid_evidence(root):
+    for safe, message_type in expected_types.items():
+        write(root / f"topic_type_{safe}.txt", f"### type\n{message_type}\n")
+        write(root / f"topic_hz_{safe}.txt", "average rate: 10.000\n")
+        write(root / f"topic_info_{safe}.txt",
+              "Type: %s\nPublishers:\n * /producer\nSubscribers:\n * /listener\n" % message_type)
+        write(root / f"topic_echo_{safe}.txt", "---\n")
+    write(root / "topic_echo_mavros_state.txt", "connected: True\narmed: False\nmode: MANUAL\n")
+    write(root / "topic_echo_mavros_extended_state.txt", "landed_state: 1\n")
+    write(root / "topic_echo_robotac_fastlio_vision_healthy.txt", "data: True\n")
+    write(root / "topic_echo_robotac_fastlio_vision_status.txt",
+          "data: ok rate_hz=10.0 valid=20 dropped=0\n")
+    write(root / "topic_echo_robotac_fastlio_vision_output_enabled.txt", "data: True\n")
+    write(root / "topic_info_mavros_vision_pose_pose_cov.txt",
+          "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
+    write(root / "topic_info_mavros_setpoint_raw_local.txt",
+          "Type: mavros_msgs/PositionTarget\nPublishers: None\nSubscribers:\n * /mavros\n")
+
+with tempfile.TemporaryDirectory(prefix="robotac-ladder-evidence.") as directory:
+    root = pathlib.Path(directory)
+    config_root = root / "config"
+    evidence = root / "evidence"
+    evidence.mkdir()
+    shutil.copytree(str(workspace / "config"), str(config_root))
+    shutil.copyfile(str(workspace / "config" / "deployment_sim.yaml"),
+                    str(config_root / "deployment.yaml"))
+    shutil.copyfile(str(workspace / "config" / "fastlio" / "vision_bridge_sim.yaml"),
+                    str(config_root / "fastlio" / "vision_bridge.yaml"))
+    missing_evidence = subprocess.run(
+        [str(workspace / "scripts" / "flight_test_ladder.sh"),
+         "--config-root", str(config_root), "--skip-verify", "--show-active"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_evidence.returncode != 2:
+        raise SystemExit("Flight ladder should require --evidence-dir when active readiness passes")
+    if "Evidence directory is required for --show-active" not in missing_evidence.stderr:
+        raise SystemExit("Flight ladder did not report missing evidence directory")
+
+    write_valid_evidence(evidence)
+    ready = subprocess.run(
+        [str(workspace / "scripts" / "flight_test_ladder.sh"),
+         "--config-root", str(config_root), "--skip-verify", "--show-active",
+         "--evidence-dir", str(evidence)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if ready.returncode != 0:
+        raise SystemExit("Flight ladder rejected valid synthetic readiness/evidence:\n%s\n%s" %
+                         (ready.stdout, ready.stderr))
+    if "active flight commands (not executed by this script)" not in ready.stdout:
+        raise SystemExit("Flight ladder did not print active command block after valid evidence")
+    if "payload flight commands (not executed by this script)" not in ready.stdout:
+        raise SystemExit("Flight ladder did not print payload command block after valid payload readiness")
+print("Validated flight ladder requires and accepts read-only evidence before active command printing.")
 PY
 
 python3 - "${workspace_dir}/scripts/collect_readonly_flight_evidence.sh" <<'PY'
