@@ -199,6 +199,11 @@ roslaunch robotac_bringup full_system.launch \
   enable_mavros:=true \
   enable_vision_bridge:=true vision_enable_output:=true \
   enable_flight_controller:=false enable_servo:=false
+
+# Use one evidence directory for strict preflight, EV acceptance, topic capture,
+# and offline analyzers.
+evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${evidence_dir}"
 EOF
 
 if [[ -n "${expected_ev_delay_ms}" ]]; then
@@ -207,13 +212,15 @@ roslaunch robotac_flight local_flight_preflight.launch \\
   observe_seconds:=30 require_vision_output:=true require_timesync:=true \\
   check_px4_vision_params:=true require_setpoint_consumer:=true \\
   require_ev_delay:=true expected_ev_delay_ms:=${expected_ev_delay_ms} \\
-  ev_delay_tolerance_ms:=${ev_delay_tolerance_ms}
+  ev_delay_tolerance_ms:=${ev_delay_tolerance_ms} \\
+  evidence_file:="\${evidence_dir}/local_flight_preflight.json"
 EOF
 else
   cat <<'EOF'
 roslaunch robotac_flight local_flight_preflight.launch \
   observe_seconds:=30 require_vision_output:=true require_timesync:=true \
-  check_px4_vision_params:=true require_setpoint_consumer:=true
+  check_px4_vision_params:=true require_setpoint_consumer:=true \
+  evidence_file:="${evidence_dir}/local_flight_preflight.json"
 # Add require_ev_delay:=true expected_ev_delay_ms:=... after measuring FAST-LIO->FCU delay.
 EOF
 fi
@@ -221,8 +228,6 @@ fi
 cat <<'EOF'
 
 # 4) Read-only EV acceptance: keep vehicle disarmed/on-ground and move it slowly.
-evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
-mkdir -p "${evidence_dir}"
 roslaunch robotac_flight ev_acceptance_observer.launch \
   observe_seconds:=20 min_motion_m:=0.30 \
   evidence_file:="${evidence_dir}/ev_acceptance_observer.json"
@@ -231,7 +236,7 @@ roslaunch robotac_flight ev_acceptance_observer.launch \
 ./scripts/collect_readonly_flight_evidence.sh \
   --duration 8 --bag-seconds 0 --output-dir "${evidence_dir}"
 
-# 6) Analyze the same directory. This now requires ev_acceptance_observer.json.
+# 6) Analyze the same directory. This requires preflight and EV acceptance JSON.
 ./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
 
 # 7) Top-level goal audit stays BLOCKED until active-flight evidence is added.

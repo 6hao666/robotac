@@ -724,6 +724,34 @@ def write_valid_evidence(root):
   "metrics": {}
 }
 """)
+    write(root / "local_flight_preflight.json", """{
+  "observer": "local_flight_preflight",
+  "success": true,
+  "reason": "local_flight_preflight_passed",
+  "summary": {
+    "px4_params_checked": true,
+    "px4_params_issue": "ok",
+    "vision_output_consumer_issue": "ok",
+    "setpoint_consumer_issue": "ok",
+    "px4_param_values": {
+      "EKF2_EV_CTRL": 3,
+      "EKF2_EV_POS_X": 0.0,
+      "EKF2_EV_POS_Y": 0.0,
+      "EKF2_EV_POS_Z": 0.0
+    }
+  },
+  "parameters": {
+    "require_vision": true,
+    "require_vision_output": true,
+    "require_timesync": true,
+    "require_disarmed": true,
+    "require_on_ground": true,
+    "check_px4_vision_params": true,
+    "require_vision_output_consumer": true,
+    "require_setpoint_consumer": true
+  }
+}
+""")
 
 with tempfile.TemporaryDirectory(prefix="robotac-ladder-evidence.") as directory:
     root = pathlib.Path(directory)
@@ -802,6 +830,9 @@ for expected in (
     "mavros_vision_pose_consumer",
     "mavros_setpoint_raw_consumer",
     "read_only_no_setpoint_publishers",
+    "local_flight_preflight",
+    "px4_vision_params_not_checked",
+    "check_px4_vision_params",
     "ev_acceptance_observer",
     "connected/disarmed/on-ground",
 ):
@@ -878,6 +909,7 @@ for expected in (
     "payload_local_flight_evidence",
     "active_local_flight",
     "payload_local_flight",
+    "preflight_evidence_file",
 ):
     if expected not in source:
         raise SystemExit(f"Flight goal audit check failed: missing {expected}")
@@ -957,6 +989,38 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
     "require_vision_status_ok": true
   },
   "metrics": {}
+}
+""")
+    missing_preflight = subprocess.run([sys.executable, script, str(root)], text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_preflight.returncode == 0 or "local_flight_preflight=BLOCKED" not in missing_preflight.stdout:
+        raise SystemExit("Read-only evidence analyzer unexpectedly accepted missing local preflight evidence")
+    write(root / "local_flight_preflight.json", """{
+  "observer": "local_flight_preflight",
+  "success": true,
+  "reason": "local_flight_preflight_passed",
+  "summary": {
+    "px4_params_checked": true,
+    "px4_params_issue": "ok",
+    "vision_output_consumer_issue": "ok",
+    "setpoint_consumer_issue": "ok",
+    "px4_param_values": {
+      "EKF2_EV_CTRL": 3,
+      "EKF2_EV_POS_X": 0.0,
+      "EKF2_EV_POS_Y": 0.0,
+      "EKF2_EV_POS_Z": 0.0
+    }
+  },
+  "parameters": {
+    "require_vision": true,
+    "require_vision_output": true,
+    "require_timesync": true,
+    "require_disarmed": true,
+    "require_on_ground": true,
+    "check_px4_vision_params": true,
+    "require_vision_output_consumer": true,
+    "require_setpoint_consumer": true
+  }
 }
 """)
     ok = subprocess.run([sys.executable, script, str(root)], text=True,
@@ -1178,6 +1242,33 @@ def write_readonly_evidence(root):
             "require_vision_status_ok": True,
         },
         "metrics": {},
+    }, indent=2))
+    write(root / "local_flight_preflight.json", json.dumps({
+        "observer": "local_flight_preflight",
+        "success": True,
+        "reason": "local_flight_preflight_passed",
+        "summary": {
+            "px4_params_checked": True,
+            "px4_params_issue": "ok",
+            "vision_output_consumer_issue": "ok",
+            "setpoint_consumer_issue": "ok",
+            "px4_param_values": {
+                "EKF2_EV_CTRL": 3,
+                "EKF2_EV_POS_X": 0.0,
+                "EKF2_EV_POS_Y": 0.0,
+                "EKF2_EV_POS_Z": 0.0,
+            },
+        },
+        "parameters": {
+            "require_vision": True,
+            "require_vision_output": True,
+            "require_timesync": True,
+            "require_disarmed": True,
+            "require_on_ground": True,
+            "check_px4_vision_params": True,
+            "require_vision_output_consumer": True,
+            "require_setpoint_consumer": True,
+        },
     }, indent=2))
 
 def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8,

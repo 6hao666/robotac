@@ -477,6 +477,18 @@ chain, add `require_ev_delay:=true expected_ev_delay_ms:=...` with a suitable
 printed. The following regression exercises that preflight against a loopback
 ROS graph; it opens no serial device and starts no MAVROS:
 
+For strict preflight, write the result into the same evidence directory used by
+EV acceptance and topic capture:
+
+```bash
+evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${evidence_dir}"
+roslaunch robotac_flight local_flight_preflight.launch \
+  observe_seconds:=30 require_vision_output:=true require_timesync:=true \
+  check_px4_vision_params:=true require_setpoint_consumer:=true \
+  evidence_file:="${evidence_dir}/local_flight_preflight.json"
+```
+
 ```bash
 src/robotac_flight/test/run_flight_preflight_sim.sh
 ```
@@ -490,8 +502,7 @@ configured `min_motion_m` so the script can compare PX4/MAVROS
 does not open the FCU serial device:
 
 ```bash
-evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
-mkdir -p "${evidence_dir}"
+# Reuse the evidence_dir created by the strict preflight step above.
 roslaunch robotac_flight ev_acceptance_observer.launch \
   observe_seconds:=20 min_motion_m:=0.30 \
   evidence_file:="${evidence_dir}/ev_acceptance_observer.json"
@@ -525,7 +536,8 @@ required phase is `active_preflight_evidence`, so it exits non-zero until MAVROS
 is connected, disarmed, on ground, FAST-LIO vision is healthy, MAVROS consumes
 `/mavros/vision_pose/pose_cov`, MAVROS consumes `/mavros/setpoint_raw/local`,
 no node publishes `/mavros/setpoint_raw/local` during this read-only evidence
-window, EV acceptance passed from the same directory, and the required
+window, `local_flight_preflight.json` confirms the read-only PX4 external-vision
+parameter check passed, EV acceptance passed from the same directory, and the required
 local-position, vision-pose, FAST-LIO odometry, and time-sync streams meet the
 configured rate thresholds.
 

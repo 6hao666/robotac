@@ -70,6 +70,7 @@ def _readonly_report(args):
         min_fastlio_hz=args.min_fastlio_hz,
         min_vision_hz=args.min_vision_hz,
         min_timesync_hz=args.min_timesync_hz,
+        preflight_evidence_file=args.preflight_evidence_file,
         ev_acceptance_file=args.ev_acceptance_file,
         require_phase="active_preflight_evidence",
         json=False,
@@ -441,6 +442,8 @@ def _build_parser():
                         help="Directory containing read-only topic evidence and ev_acceptance_observer.json")
     parser.add_argument("--active-evidence", default="",
                         help="active_flight_observer.json or directory containing it")
+    parser.add_argument("--preflight-evidence-file", default="",
+                        help="local_flight_preflight.json path; default: READONLY_EVIDENCE/local_flight_preflight.json")
     parser.add_argument("--ev-acceptance-file", default="")
     parser.add_argument("--mavros-node", default="/mavros")
     parser.add_argument("--origin-x", type=float, default=0.0)

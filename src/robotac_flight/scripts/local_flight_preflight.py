@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Read-only readiness check for local MAVROS flight with FAST-LIO vision.
 
-This node only subscribes to existing ROS topics. It never creates publishers,
-calls flight-control services, changes PX4 parameters, or emits MAVROS setpoints.
+This node only subscribes to existing ROS topics by default. When
+``check_px4_vision_params`` is enabled, it also calls MAVROS' read-only
+``/mavros/param/get`` service. It never creates publishers, calls
+flight-control services, changes PX4 parameters, or emits MAVROS setpoints.
 """
 
+import json
 import math
+import pathlib
 import sys
 import time
 
@@ -140,6 +144,7 @@ class LocalFlightPreflight(object):
             rospy.get_param("~require_setpoint_consumer", False))
         self.setpoint_consumer_node = str(rospy.get_param(
             "~setpoint_consumer_node", "/mavros")).strip()
+        self.evidence_file = str(rospy.get_param("~evidence_file", "")).strip()
 
         self.local_parent = str(rospy.get_param("~local_parent", "map")).strip()
         self.local_child = str(rospy.get_param("~local_child", "base_link")).strip()
@@ -193,6 +198,7 @@ class LocalFlightPreflight(object):
         self.timesync_issue = "waiting"
         self.px4_params_checked = not self.check_px4_vision_params
         self.px4_params_issue = "not_requested"
+        self.px4_param_values = {}
         self.exit_code = 1
         self.started = time.monotonic()
         self.observation_ready_since = None
@@ -464,7 +470,9 @@ class LocalFlightPreflight(object):
         response = proxy(param_id=name)
         if not response.success:
             return None
-        return int(response.value.integer) if response.value.integer != 0 else float(response.value.real)
+        value = int(response.value.integer) if response.value.integer != 0 else float(response.value.real)
+        self.px4_param_values[name] = value
+        return value
 
     def _check_px4_params(self):
         if self.px4_params_checked:
@@ -567,7 +575,72 @@ class LocalFlightPreflight(object):
                 self._fresh(self.timesync_receive, self.timesync_timeout)))
         return " | ".join(parts)
 
+    def _stream_evidence(self, stream):
+        return {
+            "count": stream.count,
+            "rate_hz": stream.rate_hz(),
+            "last_issue": stream.last_issue,
+            "fresh": stream.fresh(self.vision_age_limit),
+        }
+
+    def _evidence_payload(self, success, reason):
+        return {
+            "observer": "local_flight_preflight",
+            "success": bool(success),
+            "reason": reason,
+            "generated_at_wall_time": time.time(),
+            "summary": {
+                "mavros_connected": None if self.state is None else bool(self.state.connected),
+                "mavros_armed": None if self.state is None else bool(self.state.armed),
+                "landed_state": None if self.extended_state is None else int(self.extended_state.landed_state),
+                "estimator_issue": self.estimator_issue,
+                "local_stream": self._stream_evidence(self.local_stream),
+                "fastlio_stream": self._stream_evidence(self.fastlio_stream),
+                "preview_stream": self._stream_evidence(self.preview_stream),
+                "vision_healthy": bool(self.vision_healthy),
+                "vision_status": self.vision_status,
+                "vision_output_enabled": self.output_enabled,
+                "vision_output_stream": self._stream_evidence(self.output_stream),
+                "vision_output_consumer_issue": self.vision_output_consumer_issue,
+                "setpoint_consumer_issue": self.setpoint_consumer_issue,
+                "timesync_issue": self.timesync_issue,
+                "px4_params_checked": bool(self.px4_params_checked),
+                "px4_params_issue": self.px4_params_issue,
+                "px4_param_values": self.px4_param_values,
+            },
+            "parameters": {
+                "require_vision": self.require_vision,
+                "require_vision_output": self.require_vision_output,
+                "require_timesync": self.require_timesync,
+                "require_estimator": self.require_estimator,
+                "require_disarmed": self.require_disarmed,
+                "require_on_ground": self.require_on_ground,
+                "check_px4_vision_params": self.check_px4_vision_params,
+                "require_yaw_fusion": self.require_yaw_fusion,
+                "require_ev_offsets_zero": self.require_ev_offsets_zero,
+                "ev_offset_tolerance_m": self.ev_offset_tolerance_m,
+                "require_ev_delay": self.require_ev_delay,
+                "expected_ev_delay_ms": self.expected_ev_delay_ms,
+                "ev_delay_tolerance_ms": self.ev_delay_tolerance_ms,
+                "require_vision_output_consumer": self.require_vision_output_consumer,
+                "require_setpoint_consumer": self.require_setpoint_consumer,
+                "setpoint_consumer_node": self.setpoint_consumer_node,
+                "vision_output_consumer_node": self.vision_output_consumer_node,
+            },
+        }
+
+    def _write_evidence(self, success, reason):
+        if not self.evidence_file:
+            return
+        path = pathlib.Path(self.evidence_file).expanduser()
+        if path.parent:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self._evidence_payload(success, reason),
+                                   indent=2, sort_keys=True),
+                        encoding="utf-8")
+
     def _finish(self, success, reason):
+        self._write_evidence(success, reason)
         self.exit_code = 0 if success else 2
         level = rospy.loginfo if success else rospy.logerr
         level("%s: %s\n%s", "PASS" if success else "FAIL", reason, self._summary())

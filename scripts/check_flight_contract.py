@@ -295,6 +295,9 @@ def _check_evidence_surface(root):
         "vision_to_mavros",
         "active_preflight_evidence",
         "ev_acceptance_observer.json",
+        "local_flight_preflight",
+        "px4_vision_params_not_checked",
+        "check_px4_vision_params",
         "read_only_no_setpoint_publishers",
     )))
     missing.extend("active_analyzer_missing:%s" % token for token in _contains_all(active, (
@@ -328,6 +331,7 @@ def _check_evidence_surface(root):
         "allow_dynamic_active_route",
         "dynamic_route_manifest_missing",
         "prefix=\"dynamic_route\"",
+        "preflight_evidence_file",
     )))
     missing.extend("ladder_missing:%s" % token for token in _contains_all(ladder, (
         "active flight commands hidden",

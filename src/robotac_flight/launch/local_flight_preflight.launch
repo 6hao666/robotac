@@ -57,6 +57,7 @@
   <arg name="vision_output_enabled_topic" default="/robotac/fastlio_vision/output_enabled" />
   <arg name="vision_output_topic" default="/mavros/vision_pose/pose_cov" />
   <arg name="param_get_service" default="/mavros/param/get" />
+  <arg name="evidence_file" default="" />
 
   <node pkg="robotac_flight" type="local_flight_preflight.py"
         name="local_flight_preflight" output="screen" required="true">
@@ -115,5 +116,6 @@
     <param name="vision_output_enabled_topic" value="$(arg vision_output_enabled_topic)" />
     <param name="vision_output_topic" value="$(arg vision_output_topic)" />
     <param name="param_get_service" value="$(arg param_get_service)" />
+    <param name="evidence_file" value="$(arg evidence_file)" />
   </node>
 </launch>

@@ -235,6 +235,62 @@ def _ev_acceptance_phase(directory, path):
     return _phase("ev_acceptance_observer", not missing, missing, notes)
 
 
+def _local_preflight_phase(directory, path):
+    evidence_path = pathlib.Path(path).expanduser() if path else pathlib.Path(directory) / "local_flight_preflight.json"
+    missing = []
+    notes = []
+    if not evidence_path.exists():
+        return _phase("local_flight_preflight", False,
+                      ["local_flight_preflight_json"],
+                      ["expected=%s" % evidence_path])
+    try:
+        data = json.loads(evidence_path.read_text(encoding="utf-8", errors="replace"))
+    except Exception as exc:
+        return _phase("local_flight_preflight", False,
+                      ["local_flight_preflight_json_invalid:%s" % exc],
+                      ["path=%s" % evidence_path])
+    if not isinstance(data, dict):
+        return _phase("local_flight_preflight", False,
+                      ["local_flight_preflight_json_not_mapping"],
+                      ["path=%s" % evidence_path])
+    if data.get("observer") != "local_flight_preflight":
+        missing.append("local_flight_preflight_identity")
+    reason = str(data.get("reason", ""))
+    if data.get("success") is not True:
+        missing.append("local_flight_preflight_failed:%s" % (reason or "unknown"))
+    elif reason != "local_flight_preflight_passed":
+        missing.append("local_flight_preflight_reason:%s" % (reason or "empty"))
+
+    parameters = data.get("parameters") if isinstance(data.get("parameters"), dict) else {}
+    for key in (
+            "require_vision",
+            "require_vision_output",
+            "require_timesync",
+            "require_disarmed",
+            "require_on_ground",
+            "check_px4_vision_params",
+            "require_vision_output_consumer",
+            "require_setpoint_consumer",
+    ):
+        if parameters.get(key) is not True:
+            missing.append("local_preflight_%s" % key)
+
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    if summary.get("px4_params_checked") is not True:
+        missing.append("px4_vision_params_not_checked")
+    if summary.get("px4_params_issue") != "ok":
+        missing.append("px4_vision_params:%s" % summary.get("px4_params_issue", "unknown"))
+    if summary.get("vision_output_consumer_issue") != "ok":
+        missing.append("local_preflight_vision_output_consumer:%s" % summary.get("vision_output_consumer_issue", "unknown"))
+    if summary.get("setpoint_consumer_issue") != "ok":
+        missing.append("local_preflight_setpoint_consumer:%s" % summary.get("setpoint_consumer_issue", "unknown"))
+
+    if not missing:
+        notes.append("path=%s" % evidence_path)
+        notes.append("px4_params=ok")
+    return _phase("local_flight_preflight", not missing, missing, notes)
+
+
 def build_report(args):
     directory = pathlib.Path(args.evidence_dir).expanduser().resolve()
     phases = [
@@ -253,6 +309,7 @@ def build_report(args):
         _consumer_phase(directory, "mavros_setpoint_raw_consumer", "/mavros/setpoint_raw/local",
                         args.mavros_node),
         _no_publishers_phase(directory, "read_only_no_setpoint_publishers", "/mavros/setpoint_raw/local"),
+        _local_preflight_phase(directory, args.preflight_evidence_file),
         _ev_acceptance_phase(directory, args.ev_acceptance_file),
     ]
     phase_lookup = {phase["name"]: phase for phase in phases}
@@ -279,6 +336,7 @@ def build_report(args):
             "mavros_vision_pose_consumer",
             "mavros_setpoint_raw_consumer",
             "read_only_no_setpoint_publishers",
+            "local_flight_preflight",
             "ev_acceptance_observer",
         ),
     }
@@ -317,6 +375,8 @@ def _build_parser():
     parser.add_argument("--min-timesync-hz", type=float, default=2.0)
     parser.add_argument("--ev-acceptance-file", default="",
                         help="EV acceptance JSON; default: EVIDENCE_DIR/ev_acceptance_observer.json")
+    parser.add_argument("--preflight-evidence-file", default="",
+                        help="Local preflight JSON; default: EVIDENCE_DIR/local_flight_preflight.json")
     parser.add_argument("--require-phase", default="active_preflight_evidence",
                         choices=("topic_types", "mavros_safe_state", "vision_to_mavros",
                                  "active_preflight_evidence"))
