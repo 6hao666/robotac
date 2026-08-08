@@ -54,6 +54,8 @@ Before connecting hardware, update these files:
   covariance, timestamp, rate, and jump limits.
 - `config/flight/local_waypoints.yaml`: takeoff height, local relative ENU
   waypoints, landing profile, and flight limits.
+- `config/flight/posearray_waypoints_example.yaml`: position-only runtime
+  waypoint example for `/robotac/flight/waypoints`.
 - `config/deployment.yaml`: deployment gate checklist.
 
 Install `config/udev/99-robotac-rgb-camera.rules.template` as
@@ -250,6 +252,28 @@ the controller is `IDLE`. Its `header.frame_id` must exactly match
 frame is rejected. Each pose position is metres in that frame and its yaw is
 relative to the heading captured at `/robotac/flight/start`. The controller
 locks the accepted route once a mission starts; call reset before replacing it.
+`PoseArray` can carry only position and yaw, so it is for position-only routes.
+The checked-in payload mission with per-waypoint hold and `payload_action` must
+be loaded through `config/flight/local_waypoints.yaml` at launch.
+
+To publish a position-only waypoint file without starting the mission or
+touching MAVROS, first dry-run the parser, then publish while the controller is
+idle:
+
+```bash
+rosrun robotac_flight publish_waypoints.py \
+  --file ~/robotac_ws/config/flight/posearray_waypoints_example.yaml \
+  --dry-run
+
+rosrun robotac_flight publish_waypoints.py \
+  --file ~/robotac_ws/config/flight/posearray_waypoints_example.yaml
+```
+
+The helper intentionally refuses YAML containing fields `PoseArray` cannot
+carry, such as `hold` or `payload_action`, unless `--allow-metadata-drop` is
+explicitly supplied. It publishes only `/robotac/flight/waypoints`; it never
+calls `/robotac/flight/start`, never requests OFFBOARD, never arms, and never
+sends MAVROS setpoints.
 
 Safe dry-run launch:
 

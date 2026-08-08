@@ -18,6 +18,7 @@ catkin_install_python(PROGRAMS
   scripts/fastlio_vision_bridge.py
   scripts/local_flight_preflight.py
   scripts/local_waypoint_flight.py
+  scripts/publish_waypoints.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

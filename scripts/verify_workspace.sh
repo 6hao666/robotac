@@ -22,6 +22,7 @@ required_paths=(
   config/fastlio/vision_bridge.yaml
   config/fastlio/vision_bridge_sim.yaml
   config/flight/local_waypoints.yaml
+  config/flight/posearray_waypoints_example.yaml
   config/mavros/px4.yaml
   config/apriltag/settings.yaml
   config/apriltag/tags.yaml
@@ -133,6 +134,18 @@ for script in \
   bash -n "${script}"
   echo "Validated simulation shell syntax: ${script##*/}"
 done
+
+python3 "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" \
+  --file "${workspace_dir}/config/flight/posearray_waypoints_example.yaml" \
+  --dry-run >/dev/null
+echo "Validated position-only waypoint YAML publisher dry run."
+if python3 "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" \
+  --file "${workspace_dir}/config/flight/local_waypoints.yaml" \
+  --dry-run >/dev/null 2>&1; then
+  echo "Waypoint publisher unexpectedly accepted full mission metadata." >&2
+  exit 1
+fi
+echo "Validated PoseArray publisher rejects payload/hold mission metadata by default."
 
 python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/mavros/mavros/src/plugins/setpoint_raw.cpp" \
