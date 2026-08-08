@@ -277,6 +277,28 @@ bridge regression above:
 src/robotac_flight/test/run_flight_fault_sim.sh
 ```
 
+Before any active test, run the read-only local-flight preflight against the
+existing ROS graph. It subscribes to MAVROS state, grounded/disarmed status,
+local `map -> base_link` odometry, estimator health, FAST-LIO
+`camera_init -> body` odometry, bridge preview/health/status and their matching
+timestamps, and optionally the MAVROS vision-pose input. It creates no
+publishers, sends no setpoints, and does not call flight-control services:
+
+```bash
+rosrun robotac_flight local_flight_preflight.py \
+  _observe_seconds:=30 _require_vision_output:=false
+```
+
+After the measured transforms, PX4 external-vision parameters, and deployment
+gates have been approved, repeat it with
+`_require_vision_output:=true _check_px4_vision_params:=true`. The latter
+parameter query is read-only. The following regression exercises that preflight
+against a loopback ROS graph; it opens no serial device and starts no MAVROS:
+
+```bash
+src/robotac_flight/test/run_flight_preflight_sim.sh
+```
+
 For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
 `auto_land` are independent gates. Keep all automatic gates false for the first
 connected test. The checked-in route has `require_auto_land: true`, so an active

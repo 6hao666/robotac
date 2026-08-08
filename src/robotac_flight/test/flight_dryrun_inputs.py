@@ -5,23 +5,17 @@ import rospy
 from geometry_msgs.msg import Point, Pose, PoseWithCovariance, Quaternion
 from mavros_msgs.msg import EstimatorStatus, ExtendedState, State
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Bool
 
 
 def main():
     rospy.init_node("robotac_flight_dryrun_inputs")
-    vision_output_enabled = bool(rospy.get_param("~vision_output_enabled", False))
     rate = rospy.Rate(20.0)
     odom_pub = rospy.Publisher("/Odometry", Odometry, queue_size=2)
     local_pub = rospy.Publisher("/mavros/local_position/odom", Odometry, queue_size=2)
     state_pub = rospy.Publisher("/mavros/state", State, queue_size=2)
     extended_pub = rospy.Publisher("/mavros/extended_state", ExtendedState, queue_size=2)
     estimator_pub = rospy.Publisher("/mavros/estimator_status", EstimatorStatus, queue_size=2)
-    vision_pub = rospy.Publisher("/robotac/fastlio_vision/healthy", Bool, queue_size=1, latch=True)
-    output_pub = rospy.Publisher("/robotac/fastlio_vision/output_enabled", Bool, queue_size=1, latch=True)
     rospy.sleep(1.0)
-    vision_pub.publish(Bool(data=True))
-    output_pub.publish(Bool(data=vision_output_enabled))
     while not rospy.is_shutdown():
         now = rospy.Time.now()
         odom = Odometry()
