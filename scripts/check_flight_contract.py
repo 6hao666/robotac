@@ -302,6 +302,9 @@ def _check_evidence_surface(root):
         "waypoints_incomplete",
         "target_records_missing",
         "target_records_unreached",
+        "takeoff_target_record_missing",
+        "waypoint_target_records_missing",
+        "waypoint_target_records",
         "final_disarmed",
         "final_on_ground",
     )))

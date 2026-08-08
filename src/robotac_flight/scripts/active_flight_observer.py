@@ -69,6 +69,8 @@ class ActiveFlightObserver(object):
         self.abort_reason = None
         self.max_waypoint_index = -1
         self.total_waypoints = None
+        self.current_waypoint_index = None
+        self.current_waypoint_total = None
 
         self.setpoint_count = 0
         self.setpoint_receive = None
@@ -131,6 +133,19 @@ class ActiveFlightObserver(object):
     def _distance3(a, b):
         return math.sqrt(sum((float(a[i]) - float(b[i])) ** 2 for i in range(3)))
 
+    def _target_reached(self, record):
+        distance = record.get("min_distance_m")
+        try:
+            distance = float(distance)
+        except (TypeError, ValueError):
+            return False
+        return (record.get("reached") is True and math.isfinite(distance) and
+                distance <= self.waypoint_reach_tolerance)
+
+    @staticmethod
+    def _same_target(a, b, tolerance=1.0e-3):
+        return all(abs(float(a[i]) - float(b[i])) <= tolerance for i in range(4))
+
     def _flight_status_cb(self, msg):
         fields = _parse_fields(msg.data)
         if not fields:
@@ -145,12 +160,39 @@ class ActiveFlightObserver(object):
         if "/" in waypoint:
             current, total = waypoint.split("/", 1)
             try:
-                self.max_waypoint_index = max(self.max_waypoint_index, int(current))
-                self.total_waypoints = int(total)
+                self.current_waypoint_index = int(current)
+                self.current_waypoint_total = int(total)
+                self.max_waypoint_index = max(self.max_waypoint_index, self.current_waypoint_index)
+                self.total_waypoints = self.current_waypoint_total
             except ValueError:
                 pass
         if state == "ABORT":
             self.abort_reason = fields.get("error", "unknown")
+
+    def _append_target_record_if_needed(self, target):
+        state = self.last_status.get("state", "unknown")
+        if state not in ("TAKEOFF", "WAYPOINTS"):
+            return
+        waypoint_index = self.current_waypoint_index
+        waypoint_total = self.current_waypoint_total
+        if self.target_records:
+            previous = self.target_records[-1]
+            previous_target = previous.get("target")
+            if (previous.get("state") == state and
+                    previous.get("waypoint_index") == waypoint_index and
+                    isinstance(previous_target, list) and len(previous_target) == 4 and
+                    self._same_target(previous_target, target)):
+                return
+        self.target_records.append({
+            "target": [target[0], target[1], target[2], target[3]],
+            "state": state,
+            "waypoint_index": waypoint_index,
+            "waypoint_total": waypoint_total,
+            "min_distance_m": None,
+            "reached": False,
+        })
+        if self.final_local_position is not None:
+            self._update_target_hits(self.final_local_position)
 
     def _setpoint_preview_cb(self, msg):
         values = (msg.position.x, msg.position.y, msg.position.z, msg.yaw)
@@ -159,15 +201,8 @@ class ActiveFlightObserver(object):
         self.setpoint_count += 1
         self.setpoint_receive = time.monotonic()
         target = tuple(float(value) for value in values)
-        if self._append_unique(self.unique_setpoints, target):
-            self.target_records.append({
-                "target": [target[0], target[1], target[2], target[3]],
-                "state": self.last_status.get("state", "unknown"),
-                "min_distance_m": None,
-                "reached": False,
-            })
-            if self.final_local_position is not None:
-                self._update_target_hits(self.final_local_position)
+        self._append_unique(self.unique_setpoints, target)
+        self._append_target_record_if_needed(target)
 
     def _update_target_hits(self, position):
         for record in self.target_records:
@@ -213,13 +248,32 @@ class ActiveFlightObserver(object):
                           if record.get("state") in ("TAKEOFF", "WAYPOINTS")]
         if not flight_targets:
             return "target_records_missing"
+        if not any(record.get("state") == "TAKEOFF" for record in flight_targets):
+            return "takeoff_target_record_missing"
+        if self.require_waypoints_complete and self.total_waypoints is not None:
+            reached_indices = set()
+            for record in flight_targets:
+                if record.get("state") != "WAYPOINTS" or not self._target_reached(record):
+                    continue
+                try:
+                    reached_indices.add(int(record.get("waypoint_index")))
+                except (TypeError, ValueError):
+                    pass
+            missing_indices = [index for index in range(self.total_waypoints)
+                               if index not in reached_indices]
+            if missing_indices:
+                return "waypoint_target_records_missing:%s" % ",".join(
+                    str(index) for index in missing_indices)
         unreached = []
         for index, record in enumerate(flight_targets):
             distance = record.get("min_distance_m")
-            if (record.get("reached") is not True or distance is None or
-                    distance > self.waypoint_reach_tolerance):
+            if not self._target_reached(record):
+                try:
+                    distance_text = "%.3f" % float(distance)
+                except (TypeError, ValueError):
+                    distance_text = "unknown"
                 unreached.append("%d:%s" % (
-                    index, "unknown" if distance is None else "%.3f" % distance))
+                    index, distance_text))
         if unreached:
             return "target_records_unreached:%s" % ";".join(unreached)
         return None
@@ -269,6 +323,8 @@ class ActiveFlightObserver(object):
             "abort_reason": self.abort_reason,
             "max_waypoint_index": self.max_waypoint_index,
             "total_waypoints": self.total_waypoints,
+            "current_waypoint_index": self.current_waypoint_index,
+            "current_waypoint_total": self.current_waypoint_total,
             "setpoint_count": self.setpoint_count,
             "unique_setpoints": self.unique_setpoints,
             "target_records": self.target_records,

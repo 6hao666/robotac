@@ -56,6 +56,11 @@ def _phase(name, ready, missing=None, notes=None):
     }
 
 
+def _target_reached(record, tolerance):
+    distance = _number(record.get("min_distance_m"))
+    return record.get("reached") is True and distance is not None and distance <= tolerance
+
+
 def _base_phase(data, args):
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     last_status = summary.get("last_status") if isinstance(summary.get("last_status"), dict) else {}
@@ -103,11 +108,32 @@ def _base_phase(data, args):
     if not flight_targets:
         missing.append("target_records_missing")
     else:
+        takeoff_targets = [record for record in flight_targets if record.get("state") == "TAKEOFF"]
+        if not takeoff_targets:
+            missing.append("takeoff_target_record_missing")
+        waypoint_targets = [record for record in flight_targets if record.get("state") == "WAYPOINTS"]
+        if total_waypoints is not None:
+            reached_indices = set()
+            for record in waypoint_targets:
+                waypoint_index = _int(record.get("waypoint_index"))
+                if waypoint_index is not None and _target_reached(record, args.waypoint_reach_tolerance):
+                    reached_indices.add(waypoint_index)
+            missing_indices = [index for index in range(total_waypoints) if index not in reached_indices]
+            if missing_indices:
+                missing.append("waypoint_target_records_missing:%s" % ",".join(
+                    str(index) for index in missing_indices))
+            else:
+                notes.append("waypoint_target_records=%d/%d" % (len(reached_indices), total_waypoints))
         unreached = []
         for index, record in enumerate(flight_targets):
             distance = _number(record.get("min_distance_m"))
-            if record.get("reached") is not True or distance is None or distance > args.waypoint_reach_tolerance:
-                unreached.append("%d:%s" % (index, "unknown" if distance is None else "%.3f" % distance))
+            if not _target_reached(record, args.waypoint_reach_tolerance):
+                label = "%s" % record.get("state")
+                waypoint_index = _int(record.get("waypoint_index"))
+                if waypoint_index is not None:
+                    label = "%s[%d]" % (label, waypoint_index)
+                unreached.append("%d:%s:%s" % (
+                    index, label, "unknown" if distance is None else "%.3f" % distance))
         if unreached:
             missing.append("target_records_unreached:%s" % ";".join(unreached))
         else:

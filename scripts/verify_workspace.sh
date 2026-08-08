@@ -536,7 +536,10 @@ for expected in (
     "target_records",
     "target_records_unreached",
     "waypoint_reach_tolerance",
+    "waypoint_index",
     "waypoints_incomplete",
+    "takeoff_target_record_missing",
+    "waypoint_target_records_missing",
     "final_disarmed_not_confirmed",
     "final_on_ground_not_confirmed",
     "payload_open_not_observed",
@@ -984,7 +987,33 @@ script = sys.argv[1]
 
 def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    payload_open=False, state="COMPLETE", abort_reason=None,
-                   target_reached=True):
+                   target_reached=True, missing_waypoint_index=None):
+    target_records = [
+        {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
+         "waypoint_total": 8, "min_distance_m": 0.08, "reached": True},
+    ]
+    route = [
+        [1, 0, 1, 0],
+        [0, 0, 1, 0],
+        [0, 1, 1, 0],
+        [0, 0, 1, 0],
+        [0, -1, 1, 0],
+        [0, 0, 1, 0],
+        [-1, 0, 1, 0],
+        [0, 0, 1, 0],
+    ]
+    for index, target in enumerate(route):
+        if missing_waypoint_index == index:
+            continue
+        reached = target_reached or index != 1
+        target_records.append({
+            "target": target,
+            "state": "WAYPOINTS",
+            "waypoint_index": index,
+            "waypoint_total": 8,
+            "min_distance_m": 0.12 if reached else 0.80,
+            "reached": reached,
+        })
     path.write_text(json.dumps({
         "observer": "active_flight_observer",
         "success": success,
@@ -997,11 +1026,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "total_waypoints": 8,
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
-            "target_records": [
-                {"target": [0, 0, 1, 0], "state": "TAKEOFF", "min_distance_m": 0.08, "reached": True},
-                {"target": [1, 0, 1, 0], "state": "WAYPOINTS", "min_distance_m": 0.12 if target_reached else 0.80, "reached": target_reached},
-                {"target": [0, 0, 1, 0], "state": "WAYPOINTS", "min_distance_m": 0.10, "reached": True},
-            ],
+            "target_records": target_records,
             "local_count": 240,
             "initial_local_z": 0.0,
             "max_relative_local_z": 1.02,
@@ -1033,6 +1058,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if unreached.returncode == 0 or "target_records_unreached" not in unreached.stdout:
         raise SystemExit("Active flight evidence analyzer accepted an unreached waypoint target")
+    write_evidence(evidence, missing_waypoint_index=3)
+    missing_waypoint = subprocess.run([sys.executable, script, str(root)], text=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_waypoint.returncode == 0 or "waypoint_target_records_missing:3" not in missing_waypoint.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted missing per-waypoint target evidence")
     write_evidence(evidence, success=False, reason="flight_aborted:test", abort_reason="test", state="ABORT")
     failed = subprocess.run([sys.executable, script, str(root)], text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1103,6 +1133,28 @@ def write_readonly_evidence(root):
 
 def write_active_evidence(root, payload_open=False, success=True):
     root.mkdir(parents=True, exist_ok=True)
+    target_records = [
+        {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
+         "waypoint_total": 8, "min_distance_m": 0.08, "reached": True},
+    ]
+    for index, target in enumerate((
+            [1, 0, 1, 0],
+            [0, 0, 1, 0],
+            [0, 1, 1, 0],
+            [0, 0, 1, 0],
+            [0, -1, 1, 0],
+            [0, 0, 1, 0],
+            [-1, 0, 1, 0],
+            [0, 0, 1, 0],
+    )):
+        target_records.append({
+            "target": target,
+            "state": "WAYPOINTS",
+            "waypoint_index": index,
+            "waypoint_total": 8,
+            "min_distance_m": 0.12,
+            "reached": True,
+        })
     write(root / "active_flight_observer.json", json.dumps({
         "observer": "active_flight_observer",
         "success": success,
@@ -1114,10 +1166,7 @@ def write_active_evidence(root, payload_open=False, success=True):
             "total_waypoints": 8,
             "setpoint_count": 120,
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
-            "target_records": [
-                {"target": [0, 0, 1, 0], "state": "TAKEOFF", "min_distance_m": 0.08, "reached": True},
-                {"target": [1, 0, 1, 0], "state": "WAYPOINTS", "min_distance_m": 0.12, "reached": True},
-            ],
+            "target_records": target_records,
             "local_count": 240,
             "max_relative_local_z": 1.02,
             "final_armed": False,
