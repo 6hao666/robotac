@@ -226,6 +226,10 @@ confirms the MAVROS setpoint_raw plugin is present before the controller tries
 to stream OFFBOARD setpoints. During the active mission, those MAVROS consumer
 checks are repeated at the configured `consumer_check_interval`; losing either
 required consumer enters `ABORT` and closes the raw setpoint transmission gate.
+The active-flight observer also compares relative motion from
+`/mavros/local_position/odom` against `/mavros/vision_pose/pose_cov`; this avoids
+depending on matching `map`/`odom` absolute origins while still proving PX4 local
+position moved consistently with the FAST-LIO vision input during the mission.
 
 Interfaces:
 
@@ -599,7 +603,10 @@ seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and the
 analyzer rejects evidence that lacks a reached-and-dwelled record for any
 configured waypoint. It also requires active-flight `/mavros/vision_pose/pose_cov`
 samples, a seen `fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision
-status by default. Active evidence must also show MAVROS connected, armed, and in
+status by default. It then checks paired local-position / vision-pose relative
+motion samples; by default at least 5 pairs must exist and their maximum relative
+displacement disagreement must stay within `max_active_vision_local_delta_m`
+(`0.75 m`). Active evidence must also show MAVROS connected, armed, and in
 `OFFBOARD` during the mission window before ending disarmed/on-ground. If
 `require_payload_open:=true`, it additionally requires a successful payload-open
 acknowledgement.

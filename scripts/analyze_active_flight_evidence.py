@@ -176,6 +176,25 @@ def _base_phase(data, args):
             missing.append("active_vision_output_enabled_seen")
         if summary.get("active_fastlio_vision_status_ok_seen") is not True:
             missing.append("active_fastlio_vision_status_ok_seen")
+        if args.min_active_vision_local_pairs > 0:
+            pair_count = _int(summary.get("active_vision_local_pair_count"))
+            if pair_count is None or pair_count < args.min_active_vision_local_pairs:
+                missing.append("active_vision_local_pairs_below_%d" % args.min_active_vision_local_pairs)
+            else:
+                max_error = _number(summary.get("active_vision_local_max_delta_error_m"))
+                rms_error = _number(summary.get("active_vision_local_rms_delta_error_m"))
+                max_motion = _number(summary.get("active_vision_local_max_motion_m"))
+                if max_error is None:
+                    missing.append("active_vision_local_delta_error_missing")
+                elif max_error > args.max_active_vision_local_delta_m:
+                    missing.append("active_vision_local_delta_error:%.3f>%.3f" % (
+                        max_error, args.max_active_vision_local_delta_m))
+                else:
+                    notes.append("active_vision_local_pairs=%d max_error=%.3f rms_error=%s max_motion=%s" % (
+                        pair_count,
+                        max_error,
+                        "unknown" if rms_error is None else "%.3f" % rms_error,
+                        "unknown" if max_motion is None else "%.3f" % max_motion))
 
     if args.require_active_mavros_control:
         active_mavros_count = _int(summary.get("active_mavros_state_count"))
@@ -258,6 +277,10 @@ def _build_parser():
                         help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
     parser.add_argument("--min-active-vision-pose-count", type=int, default=5,
                         help="Require at least this many /mavros/vision_pose/pose_cov samples during active flight; 0 disables")
+    parser.add_argument("--min-active-vision-local-pairs", type=int, default=5,
+                        help="Require this many paired local_position / vision_pose relative-motion samples; 0 disables")
+    parser.add_argument("--max-active-vision-local-delta-m", type=float, default=0.75,
+                        help="Maximum allowed relative-motion disagreement between MAVROS local_position and vision_pose")
     parser.add_argument("--no-require-active-mavros-control", dest="require_active_mavros_control",
                         action="store_false", default=True,
                         help="Do not require active evidence to show MAVROS connected, armed, and OFFBOARD")
@@ -274,6 +297,10 @@ def main():
         raise ValueError("minimum waypoint/setpoint counts must be positive")
     if args.min_active_vision_pose_count < 0:
         raise ValueError("min-active-vision-pose-count must be non-negative")
+    if args.min_active_vision_local_pairs < 0:
+        raise ValueError("min-active-vision-local-pairs must be non-negative")
+    if not math.isfinite(args.max_active_vision_local_delta_m) or args.max_active_vision_local_delta_m < 0.0:
+        raise ValueError("max-active-vision-local-delta-m must be finite and non-negative")
     if args.expected_waypoints < 0:
         raise ValueError("expected-waypoints must be non-negative")
     if not math.isfinite(args.min_airborne_altitude) or args.min_airborne_altitude < 0.0:

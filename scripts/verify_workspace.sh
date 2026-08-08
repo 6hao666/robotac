@@ -554,6 +554,9 @@ for expected in (
     "flight_status_topic",
     "setpoint_preview_topic",
     "local_position_topic",
+    "active_vision_local_pair_count",
+    "active_vision_local_max_delta_error_m",
+    "require_active_vision_local_consistency",
     "active_local_flight_passed",
     "target_records",
     "target_records_unreached",
@@ -894,6 +897,9 @@ for expected in (
     "min-target-dwell-s",
     "expected_waypoints_mismatch",
     "waypoint-reach-tolerance",
+    "active_vision_local_delta_error",
+    "min-active-vision-local-pairs",
+    "max-active-vision-local-delta-m",
     "waypoints_incomplete",
     "final_disarmed",
     "final_on_ground",
@@ -1082,6 +1088,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    payload_open=False, state="COMPLETE", abort_reason=None,
                    target_reached=True, missing_waypoint_index=None,
                    target_dwell_s=1.0, active_vision=True,
+                   active_vision_local_error=0.05,
                    active_mavros_control=True, include_landing_state=True):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
@@ -1130,6 +1137,12 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "active_vision_pose_parent": "odom" if active_vision else None,
             "active_vision_pose_first_stamp": 10.0 if active_vision else None,
             "active_vision_pose_last_stamp": 13.0 if active_vision else None,
+            "active_vision_local_pair_count": 24 if active_vision else 0,
+            "active_vision_local_max_delta_error_m": active_vision_local_error if active_vision else None,
+            "active_vision_local_rms_delta_error_m": active_vision_local_error / 2.0 if active_vision else None,
+            "active_vision_local_max_motion_m": 1.0 if active_vision else None,
+            "active_vision_local_last_local_delta": [1.0, 0.0, 0.0] if active_vision else None,
+            "active_vision_local_last_vision_delta": [1.0 - active_vision_local_error, 0.0, 0.0] if active_vision else None,
             "vision_output_enabled_latest": bool(active_vision),
             "active_vision_output_enabled_seen": bool(active_vision),
             "active_fastlio_vision_status_ok_seen": bool(active_vision),
@@ -1176,6 +1189,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if no_vision.returncode == 0 or "active_vision_pose_count_below_5" not in no_vision.stdout:
         raise SystemExit("Active flight evidence analyzer accepted missing active vision pose evidence")
+    write_evidence(evidence, active_vision_local_error=1.50)
+    bad_ev_local = subprocess.run([sys.executable, script, str(root)], text=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if bad_ev_local.returncode == 0 or "active_vision_local_delta_error" not in bad_ev_local.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted inconsistent active vision/local motion evidence")
     write_evidence(evidence, active_mavros_control=False)
     no_mavros_control = subprocess.run([sys.executable, script, str(root)], text=True,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1341,6 +1359,12 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "active_vision_pose_parent": "odom",
         "active_vision_pose_first_stamp": 10.0,
         "active_vision_pose_last_stamp": 13.0,
+        "active_vision_local_pair_count": 24,
+        "active_vision_local_max_delta_error_m": 0.05,
+        "active_vision_local_rms_delta_error_m": 0.025,
+        "active_vision_local_max_motion_m": 1.0,
+        "active_vision_local_last_local_delta": [1.0, 0.0, 0.0],
+        "active_vision_local_last_vision_delta": [0.95, 0.0, 0.0],
         "vision_output_enabled_latest": True,
         "active_vision_output_enabled_seen": True,
         "active_fastlio_vision_status_ok_seen": True,

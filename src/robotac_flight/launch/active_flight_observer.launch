@@ -11,6 +11,10 @@
   <arg name="require_active_vision_pose" default="true" />
   <arg name="min_active_vision_pose_count" default="5" />
   <arg name="expected_vision_parent" default="odom" />
+  <arg name="require_active_vision_local_consistency" default="true" />
+  <arg name="min_active_vision_local_pairs" default="5" />
+  <arg name="max_active_vision_local_delta_m" default="0.75" />
+  <arg name="vision_local_pair_timeout" default="0.30" />
   <arg name="require_active_mavros_control" default="true" />
   <arg name="require_takeoff_landing_states" default="true" />
   <arg name="require_waypoints_complete" default="true" />
@@ -40,6 +44,10 @@
     <param name="require_active_vision_pose" value="$(arg require_active_vision_pose)" />
     <param name="min_active_vision_pose_count" value="$(arg min_active_vision_pose_count)" />
     <param name="expected_vision_parent" value="$(arg expected_vision_parent)" />
+    <param name="require_active_vision_local_consistency" value="$(arg require_active_vision_local_consistency)" />
+    <param name="min_active_vision_local_pairs" value="$(arg min_active_vision_local_pairs)" />
+    <param name="max_active_vision_local_delta_m" value="$(arg max_active_vision_local_delta_m)" />
+    <param name="vision_local_pair_timeout" value="$(arg vision_local_pair_timeout)" />
     <param name="require_active_mavros_control" value="$(arg require_active_mavros_control)" />
     <param name="require_takeoff_landing_states" value="$(arg require_takeoff_landing_states)" />
     <param name="require_waypoints_complete" value="$(arg require_waypoints_complete)" />

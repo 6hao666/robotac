@@ -97,6 +97,8 @@ def _active_report(args, configured_waypoints):
         waypoint_reach_tolerance=args.waypoint_reach_tolerance,
         min_target_dwell_s=args.min_target_dwell_s,
         min_active_vision_pose_count=args.min_active_vision_pose_count,
+        min_active_vision_local_pairs=args.min_active_vision_local_pairs,
+        max_active_vision_local_delta_m=args.max_active_vision_local_delta_m,
         require_active_mavros_control=args.require_active_mavros_control,
         require_takeoff_landing_states=args.require_takeoff_landing_states,
         json=False,
@@ -485,6 +487,10 @@ def _build_parser():
                         help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
     parser.add_argument("--min-active-vision-pose-count", type=int, default=5,
                         help="Require active-flight evidence to include this many MAVROS vision pose samples; 0 disables")
+    parser.add_argument("--min-active-vision-local-pairs", type=int, default=5,
+                        help="Require active-flight evidence to show local_position and vision_pose relative motion agree; 0 disables")
+    parser.add_argument("--max-active-vision-local-delta-m", type=float, default=0.75,
+                        help="Maximum active-flight local_position vs vision_pose relative-motion disagreement")
     parser.add_argument("--no-require-active-mavros-control", dest="require_active_mavros_control",
                         action="store_false", default=True,
                         help="Do not require active evidence to show MAVROS connected, armed, and OFFBOARD")
@@ -509,6 +515,10 @@ def main():
         raise ValueError("min-target-dwell-s must be non-negative")
     if args.min_active_vision_pose_count < 0:
         raise ValueError("min-active-vision-pose-count must be non-negative")
+    if args.min_active_vision_local_pairs < 0:
+        raise ValueError("min-active-vision-local-pairs must be non-negative")
+    if not math.isfinite(args.max_active_vision_local_delta_m) or args.max_active_vision_local_delta_m < 0.0:
+        raise ValueError("max-active-vision-local-delta-m must be finite and non-negative")
     report = build_report(args)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))

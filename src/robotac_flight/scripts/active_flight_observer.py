@@ -64,6 +64,14 @@ class ActiveFlightObserver(object):
         self.require_active_vision_pose = _as_bool(rospy.get_param("~require_active_vision_pose", True))
         self.min_active_vision_pose_count = int(rospy.get_param("~min_active_vision_pose_count", 5))
         self.expected_vision_parent = str(rospy.get_param("~expected_vision_parent", "odom")).strip()
+        self.require_active_vision_local_consistency = _as_bool(rospy.get_param(
+            "~require_active_vision_local_consistency", True))
+        self.min_active_vision_local_pairs = int(rospy.get_param(
+            "~min_active_vision_local_pairs", 5))
+        self.max_active_vision_local_delta_m = float(rospy.get_param(
+            "~max_active_vision_local_delta_m", 0.75))
+        self.vision_local_pair_timeout = float(rospy.get_param(
+            "~vision_local_pair_timeout", 0.30))
         self.require_active_mavros_control = _as_bool(
             rospy.get_param("~require_active_mavros_control", True))
         self.require_takeoff_landing_states = _as_bool(
@@ -110,9 +118,21 @@ class ActiveFlightObserver(object):
         self.active_fastlio_vision_status_ok_seen = False
         self.active_fastlio_vision_status_receive = None
         self.last_fastlio_vision_status = None
+        self.latest_vision_position = None
+        self.latest_vision_receive = None
+        self.vision_local_origin_local = None
+        self.vision_local_origin_vision = None
+        self.active_vision_local_pair_count = 0
+        self.active_vision_local_max_delta_error_m = None
+        self.active_vision_local_sum_sq_error = 0.0
+        self.active_vision_local_max_motion_m = None
+        self.active_vision_local_last_local_delta = None
+        self.active_vision_local_last_vision_delta = None
+        self.active_vision_local_last_pair = None
 
         self.local_count = 0
         self.local_receive = None
+        self.latest_local_position = None
         self.initial_local_position = None
         self.initial_local_yaw = None
         self.initial_local_z = None
@@ -177,6 +197,12 @@ class ActiveFlightObserver(object):
             raise ValueError("min_active_vision_pose_count must be non-negative")
         if self.require_active_vision_pose and not self.expected_vision_parent:
             raise ValueError("expected_vision_parent must be non-empty")
+        if self.min_active_vision_local_pairs < 0:
+            raise ValueError("min_active_vision_local_pairs must be non-negative")
+        if not math.isfinite(self.max_active_vision_local_delta_m) or self.max_active_vision_local_delta_m < 0.0:
+            raise ValueError("max_active_vision_local_delta_m must be finite and non-negative")
+        if not math.isfinite(self.vision_local_pair_timeout) or self.vision_local_pair_timeout <= 0.0:
+            raise ValueError("vision_local_pair_timeout must be finite and positive")
 
     @staticmethod
     def _fresh(receive_time, timeout):
@@ -297,6 +323,7 @@ class ActiveFlightObserver(object):
         self.local_count += 1
         self.local_receive = time.monotonic()
         self.final_local_position = tuple(float(value) for value in values)
+        self.latest_local_position = self.final_local_position
         quaternion = msg.pose.pose.orientation
         self.final_local_yaw = (_yaw_from_quaternion(quaternion)
                                 if _finite((quaternion.x, quaternion.y, quaternion.z, quaternion.w))
@@ -312,6 +339,44 @@ class ActiveFlightObserver(object):
         self.max_relative_local_z = (relative_z if self.max_relative_local_z is None
                                      else max(self.max_relative_local_z, relative_z))
         self._update_target_hits(self.final_local_position, self.local_receive)
+        self._update_vision_local_consistency()
+
+    @staticmethod
+    def _delta3(current, origin):
+        return tuple(float(current[index]) - float(origin[index]) for index in range(3))
+
+    def _update_vision_local_consistency(self):
+        if not self._mission_active():
+            return
+        if self.latest_local_position is None or self.latest_vision_position is None:
+            return
+        if self.local_receive is None or self.latest_vision_receive is None:
+            return
+        if abs(self.local_receive - self.latest_vision_receive) > self.vision_local_pair_timeout:
+            return
+        pair_key = (self.local_receive, self.latest_vision_receive)
+        if pair_key == self.active_vision_local_last_pair:
+            return
+        self.active_vision_local_last_pair = pair_key
+        if self.vision_local_origin_local is None:
+            self.vision_local_origin_local = self.latest_local_position
+            self.vision_local_origin_vision = self.latest_vision_position
+        local_delta = self._delta3(self.latest_local_position, self.vision_local_origin_local)
+        vision_delta = self._delta3(self.latest_vision_position, self.vision_local_origin_vision)
+        delta_error = self._distance3(local_delta, vision_delta)
+        local_motion = self._distance3(local_delta, (0.0, 0.0, 0.0))
+        vision_motion = self._distance3(vision_delta, (0.0, 0.0, 0.0))
+        motion = max(local_motion, vision_motion)
+        self.active_vision_local_pair_count += 1
+        self.active_vision_local_sum_sq_error += delta_error * delta_error
+        self.active_vision_local_max_delta_error_m = (
+            delta_error if self.active_vision_local_max_delta_error_m is None
+            else max(self.active_vision_local_max_delta_error_m, delta_error))
+        self.active_vision_local_max_motion_m = (
+            motion if self.active_vision_local_max_motion_m is None
+            else max(self.active_vision_local_max_motion_m, motion))
+        self.active_vision_local_last_local_delta = local_delta
+        self.active_vision_local_last_vision_delta = vision_delta
 
     def _public_target_records(self):
         public_records = []
@@ -387,12 +452,16 @@ class ActiveFlightObserver(object):
             return
         self.active_vision_pose_count += 1
         self.active_vision_pose_receive = time.monotonic()
+        self.latest_vision_position = tuple(float(value) for value in (
+            pose.position.x, pose.position.y, pose.position.z))
+        self.latest_vision_receive = self.active_vision_pose_receive
         stamp = msg.header.stamp.to_sec()
         self.active_vision_pose_parent = msg.header.frame_id
         if stamp > 0.0:
             if self.active_vision_pose_first_stamp is None:
                 self.active_vision_pose_first_stamp = stamp
             self.active_vision_pose_last_stamp = stamp
+        self._update_vision_local_consistency()
 
     def _vision_output_enabled_cb(self, msg):
         self.vision_output_enabled_latest = bool(msg.data)
@@ -479,6 +548,14 @@ class ActiveFlightObserver(object):
             if (not final and
                     not self._fresh(self.active_vision_pose_receive, self.stream_timeout)):
                 return "active_vision_pose_missing_or_stale"
+            if self.require_active_vision_local_consistency:
+                if self.active_vision_local_pair_count < self.min_active_vision_local_pairs:
+                    return "active_vision_local_pairs_below_%d" % self.min_active_vision_local_pairs
+                if (self.active_vision_local_max_delta_error_m is None or
+                        self.active_vision_local_max_delta_error_m > self.max_active_vision_local_delta_m):
+                    return "active_vision_local_delta_error:%.3f" % (
+                        -1.0 if self.active_vision_local_max_delta_error_m is None
+                        else self.active_vision_local_max_delta_error_m)
         if self.require_active_mavros_control:
             if self.active_mavros_state_count < 1:
                 return "active_mavros_state_missing"
@@ -523,6 +600,14 @@ class ActiveFlightObserver(object):
             "active_vision_pose_first_stamp": self.active_vision_pose_first_stamp,
             "active_vision_pose_last_stamp": self.active_vision_pose_last_stamp,
             "active_vision_pose_parent": self.active_vision_pose_parent,
+            "active_vision_local_pair_count": self.active_vision_local_pair_count,
+            "active_vision_local_max_delta_error_m": self.active_vision_local_max_delta_error_m,
+            "active_vision_local_rms_delta_error_m": (
+                None if self.active_vision_local_pair_count < 1 else
+                math.sqrt(self.active_vision_local_sum_sq_error / self.active_vision_local_pair_count)),
+            "active_vision_local_max_motion_m": self.active_vision_local_max_motion_m,
+            "active_vision_local_last_local_delta": self.active_vision_local_last_local_delta,
+            "active_vision_local_last_vision_delta": self.active_vision_local_last_vision_delta,
             "vision_output_enabled_latest": self.vision_output_enabled_latest,
             "active_vision_output_enabled_seen": self.active_vision_output_enabled_seen,
             "active_fastlio_vision_status_ok_seen": self.active_fastlio_vision_status_ok_seen,
@@ -558,6 +643,10 @@ class ActiveFlightObserver(object):
                 "require_active_vision_pose": self.require_active_vision_pose,
                 "min_active_vision_pose_count": self.min_active_vision_pose_count,
                 "expected_vision_parent": self.expected_vision_parent,
+                "require_active_vision_local_consistency": self.require_active_vision_local_consistency,
+                "min_active_vision_local_pairs": self.min_active_vision_local_pairs,
+                "max_active_vision_local_delta_m": self.max_active_vision_local_delta_m,
+                "vision_local_pair_timeout": self.vision_local_pair_timeout,
                 "require_active_mavros_control": self.require_active_mavros_control,
                 "require_takeoff_landing_states": self.require_takeoff_landing_states,
                 "require_waypoints_complete": self.require_waypoints_complete,
