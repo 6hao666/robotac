@@ -23,6 +23,7 @@ required_paths=(
   src/robotac_flight/scripts/ev_acceptance_observer.py
   src/robotac_flight/scripts/local_flight_readiness.py
   src/robotac_flight/scripts/preview_local_route.py
+  src/robotac_flight/test/run_route_file_sim.sh
   src/robotac_servo
   config/lidar/mid360s.json
   config/camera/rgb.yaml
@@ -191,6 +192,7 @@ for script in \
   "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_fault_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/test/run_route_file_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_vision_bridge_sim.sh"; do
   bash -n "${script}"
@@ -300,6 +302,7 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/robotac_flight/scripts/fastlio_vision_bridge.py" \
   "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_preflight_sim.sh" \
+  "${workspace_dir}/src/robotac_flight/test/run_route_file_sim.sh" \
   "${workspace_dir}/src/robotac_flight/scripts/check_px4_vision_config.py" \
   "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" \
   "${workspace_dir}/src/robotac_flight/scripts/ev_acceptance_observer.py" \
@@ -318,11 +321,12 @@ flight_source = pathlib.Path(sys.argv[7]).read_text()
 bridge_source = pathlib.Path(sys.argv[8]).read_text()
 dynamic_waypoint_test = pathlib.Path(sys.argv[9]).read_text()
 preflight_test = pathlib.Path(sys.argv[10]).read_text()
-px4_check_source = pathlib.Path(sys.argv[11]).read_text()
-setpoint_gate_test = pathlib.Path(sys.argv[12]).read_text()
-ev_acceptance_source = pathlib.Path(sys.argv[13]).read_text()
-active_observer_source = pathlib.Path(sys.argv[14]).read_text()
-flight_fault_test = pathlib.Path(sys.argv[15]).read_text()
+route_file_test = pathlib.Path(sys.argv[11]).read_text()
+px4_check_source = pathlib.Path(sys.argv[12]).read_text()
+setpoint_gate_test = pathlib.Path(sys.argv[13]).read_text()
+ev_acceptance_source = pathlib.Path(sys.argv[14]).read_text()
+active_observer_source = pathlib.Path(sys.argv[15]).read_text()
+flight_fault_test = pathlib.Path(sys.argv[16]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -486,6 +490,15 @@ for expected in (
 ):
     if expected not in dynamic_waypoint_test:
         raise SystemExit(f"Dynamic waypoint regression check failed: missing {expected}")
+for expected in (
+    "local_waypoints_simple_box.yaml",
+    "route_file:=",
+    "enable_payload:=false",
+    "payload_open_at=none",
+    "Route-file closed-loop flight simulation passed.",
+):
+    if expected not in route_file_test:
+        raise SystemExit(f"Route-file regression check failed: missing {expected}")
 for expected in (
     "local_flight_preflight.launch",
     "require_vision_output:=true",

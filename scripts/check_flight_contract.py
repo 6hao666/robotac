@@ -277,6 +277,7 @@ def _check_evidence_surface(root):
         "src/robotac_flight/scripts/local_flight_preflight.py",
         "src/robotac_flight/scripts/ev_acceptance_observer.py",
         "src/robotac_flight/scripts/active_flight_observer.py",
+        "src/robotac_flight/test/run_route_file_sim.sh",
         "scripts/collect_readonly_flight_evidence.sh",
         "scripts/analyze_readonly_flight_evidence.py",
         "scripts/analyze_active_flight_evidence.py",
@@ -291,6 +292,7 @@ def _check_evidence_surface(root):
     active = _read(root / "scripts" / "analyze_active_flight_evidence.py")
     goal_audit = _read(root / "scripts" / "flight_goal_audit.py")
     ladder = _read(root / "scripts" / "flight_test_ladder.sh")
+    route_file_test = _read(root / "src" / "robotac_flight" / "test" / "run_route_file_sim.sh")
     full_system = _read(root / "src" / "robotac_bringup" / "launch" / "full_system.launch")
     missing.extend("readonly_analyzer_missing:%s" % token for token in _contains_all(readonly, (
         "mavros_safe_state",
@@ -349,6 +351,13 @@ def _check_evidence_surface(root):
     missing.extend("full_system_missing:%s" % token for token in _contains_all(full_system, (
         '<arg name="flight_route_file" default="$(arg config_root)/flight/local_waypoints.yaml" />',
         '<arg name="route_file" value="$(arg flight_route_file)" />',
+    )))
+    missing.extend("route_file_test_missing:%s" % token for token in _contains_all(route_file_test, (
+        "local_waypoints_simple_box.yaml",
+        "route_file:=",
+        "enable_payload:=false",
+        "payload_open_at=none",
+        "Route-file closed-loop flight simulation passed.",
     )))
     if not missing:
         notes.append("read-only and active evidence gates cover vision input, target reach, landing, and payload")
