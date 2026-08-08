@@ -306,6 +306,8 @@ def _check_evidence_surface(root):
         "takeoff_target_record_missing",
         "waypoint_target_records_missing",
         "waypoint_target_records",
+        "max_continuous_reach_s",
+        "min_target_dwell_s",
         "expected_waypoints_mismatch",
         "final_disarmed",
         "final_on_ground",

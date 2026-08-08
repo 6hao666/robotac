@@ -564,9 +564,10 @@ setpoints, calls services, arms, changes mode, or commands landing. A passing
 waypoints to be consumed, relative airborne altitude to have been observed, MAVROS to
 finish disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to
 have been observed within the configured `waypoint_reach_tolerance` by
-`/mavros/local_position/odom`. `WAYPOINTS` records include the corresponding
-`waypoint_index`, and the analyzer rejects evidence that lacks a reached record
-for any configured waypoint. If `require_payload_open:=true`, it also requires a
+`/mavros/local_position/odom` for at least `min_target_dwell_s` continuous
+seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and
+the analyzer rejects evidence that lacks a reached-and-dwelled record for any
+configured waypoint. If `require_payload_open:=true`, it also requires a
 successful payload-open acknowledgement.
 
 After the observer exits, analyze the evidence offline:

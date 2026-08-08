@@ -50,6 +50,7 @@ class ActiveFlightObserver(object):
         self.min_setpoints = int(rospy.get_param("~min_setpoints", 20))
         self.min_airborne_altitude = float(rospy.get_param("~min_airborne_altitude", 0.50))
         self.waypoint_reach_tolerance = float(rospy.get_param("~waypoint_reach_tolerance", 0.35))
+        self.min_target_dwell_s = float(rospy.get_param("~min_target_dwell_s", 0.25))
         self.require_waypoints_complete = _as_bool(rospy.get_param("~require_waypoints_complete", True))
         self.require_final_disarmed = _as_bool(rospy.get_param("~require_final_disarmed", True))
         self.require_final_on_ground = _as_bool(rospy.get_param("~require_final_on_ground", True))
@@ -117,6 +118,8 @@ class ActiveFlightObserver(object):
             raise ValueError("min_airborne_altitude must be finite and non-negative")
         if not math.isfinite(self.waypoint_reach_tolerance) or self.waypoint_reach_tolerance <= 0.0:
             raise ValueError("waypoint_reach_tolerance must be finite and positive")
+        if not math.isfinite(self.min_target_dwell_s) or self.min_target_dwell_s < 0.0:
+            raise ValueError("min_target_dwell_s must be finite and non-negative")
 
     @staticmethod
     def _fresh(receive_time, timeout):
@@ -137,10 +140,12 @@ class ActiveFlightObserver(object):
         distance = record.get("min_distance_m")
         try:
             distance = float(distance)
+            dwell = float(record.get("max_continuous_reach_s") or 0.0)
         except (TypeError, ValueError):
             return False
         return (record.get("reached") is True and math.isfinite(distance) and
-                distance <= self.waypoint_reach_tolerance)
+                distance <= self.waypoint_reach_tolerance and
+                math.isfinite(dwell) and dwell >= self.min_target_dwell_s)
 
     @staticmethod
     def _same_target(a, b, tolerance=1.0e-3):
@@ -189,6 +194,8 @@ class ActiveFlightObserver(object):
             "waypoint_index": waypoint_index,
             "waypoint_total": waypoint_total,
             "min_distance_m": None,
+            "max_continuous_reach_s": 0.0,
+            "_inside_since_wall": None,
             "reached": False,
         })
         if self.final_local_position is not None:
@@ -204,7 +211,7 @@ class ActiveFlightObserver(object):
         self._append_unique(self.unique_setpoints, target)
         self._append_target_record_if_needed(target)
 
-    def _update_target_hits(self, position):
+    def _update_target_hits(self, position, sample_time=None):
         for record in self.target_records:
             distance = self._distance3(position, record["target"])
             previous = record.get("min_distance_m")
@@ -212,6 +219,16 @@ class ActiveFlightObserver(object):
                 record["min_distance_m"] = distance
             if distance <= self.waypoint_reach_tolerance:
                 record["reached"] = True
+                if sample_time is not None:
+                    inside_since = record.get("_inside_since_wall")
+                    if inside_since is None:
+                        record["_inside_since_wall"] = sample_time
+                        inside_since = sample_time
+                    continuous = max(0.0, sample_time - float(inside_since))
+                    record["max_continuous_reach_s"] = max(
+                        float(record.get("max_continuous_reach_s") or 0.0), continuous)
+            else:
+                record["_inside_since_wall"] = None
 
     def _local_position_cb(self, msg):
         values = (msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z)
@@ -227,7 +244,16 @@ class ActiveFlightObserver(object):
         relative_z = z - self.initial_local_z
         self.max_relative_local_z = (relative_z if self.max_relative_local_z is None
                                      else max(self.max_relative_local_z, relative_z))
-        self._update_target_hits(self.final_local_position)
+        self._update_target_hits(self.final_local_position, self.local_receive)
+
+    def _public_target_records(self):
+        public_records = []
+        for record in self.target_records:
+            public_records.append({
+                key: value for key, value in record.items()
+                if not str(key).startswith("_")
+            })
+        return public_records
 
     def _mavros_state_cb(self, msg):
         self.mavros_state = msg
@@ -327,7 +353,7 @@ class ActiveFlightObserver(object):
             "current_waypoint_total": self.current_waypoint_total,
             "setpoint_count": self.setpoint_count,
             "unique_setpoints": self.unique_setpoints,
-            "target_records": self.target_records,
+            "target_records": self._public_target_records(),
             "local_count": self.local_count,
             "initial_local_z": self.initial_local_z,
             "max_local_z": self.max_local_z,
@@ -343,6 +369,7 @@ class ActiveFlightObserver(object):
                 "min_setpoints": self.min_setpoints,
                 "min_airborne_altitude": self.min_airborne_altitude,
                 "waypoint_reach_tolerance": self.waypoint_reach_tolerance,
+                "min_target_dwell_s": self.min_target_dwell_s,
                 "require_waypoints_complete": self.require_waypoints_complete,
                 "require_final_disarmed": self.require_final_disarmed,
                 "require_final_on_ground": self.require_final_on_ground,

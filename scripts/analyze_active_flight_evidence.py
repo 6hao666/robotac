@@ -56,9 +56,13 @@ def _phase(name, ready, missing=None, notes=None):
     }
 
 
-def _target_reached(record, tolerance):
+def _target_reached(record, tolerance, min_dwell_s):
     distance = _number(record.get("min_distance_m"))
-    return record.get("reached") is True and distance is not None and distance <= tolerance
+    dwell = _number(record.get("max_continuous_reach_s"))
+    if min_dwell_s <= 0.0 and dwell is None:
+        dwell = 0.0
+    return (record.get("reached") is True and distance is not None and distance <= tolerance and
+            dwell is not None and dwell >= min_dwell_s)
 
 
 def _base_phase(data, args):
@@ -120,7 +124,8 @@ def _base_phase(data, args):
             reached_indices = set()
             for record in waypoint_targets:
                 waypoint_index = _int(record.get("waypoint_index"))
-                if waypoint_index is not None and _target_reached(record, args.waypoint_reach_tolerance):
+                if waypoint_index is not None and _target_reached(
+                        record, args.waypoint_reach_tolerance, args.min_target_dwell_s):
                     reached_indices.add(waypoint_index)
             missing_indices = [index for index in range(total_waypoints) if index not in reached_indices]
             if missing_indices:
@@ -131,18 +136,21 @@ def _base_phase(data, args):
         unreached = []
         for index, record in enumerate(flight_targets):
             distance = _number(record.get("min_distance_m"))
-            if not _target_reached(record, args.waypoint_reach_tolerance):
+            if not _target_reached(record, args.waypoint_reach_tolerance, args.min_target_dwell_s):
                 label = "%s" % record.get("state")
                 waypoint_index = _int(record.get("waypoint_index"))
                 if waypoint_index is not None:
                     label = "%s[%d]" % (label, waypoint_index)
+                dwell = _number(record.get("max_continuous_reach_s"))
                 unreached.append("%d:%s:%s" % (
-                    index, label, "unknown" if distance is None else "%.3f" % distance))
+                    index, label,
+                    "unknown" if distance is None else "%.3f/dwell=%.3f" % (
+                        distance, -1.0 if dwell is None else dwell)))
         if unreached:
             missing.append("target_records_unreached:%s" % ";".join(unreached))
         else:
-            notes.append("target_records_reached=%d tolerance=%.2f" % (
-                len(flight_targets), args.waypoint_reach_tolerance))
+            notes.append("target_records_reached=%d tolerance=%.2f dwell=%.2f" % (
+                len(flight_targets), args.waypoint_reach_tolerance, args.min_target_dwell_s))
 
     max_relative_z = _number(summary.get("max_relative_local_z"))
     if max_relative_z is None or max_relative_z < args.min_airborne_altitude:
@@ -211,6 +219,8 @@ def _build_parser():
     parser.add_argument("--min-unique-setpoints", type=int, default=2)
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
     parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
+    parser.add_argument("--min-target-dwell-s", type=float, default=0.25,
+                        help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -225,6 +235,8 @@ def main():
         raise ValueError("min-airborne-altitude must be finite and non-negative")
     if not math.isfinite(args.waypoint_reach_tolerance) or args.waypoint_reach_tolerance <= 0.0:
         raise ValueError("waypoint-reach-tolerance must be finite and positive")
+    if not math.isfinite(args.min_target_dwell_s) or args.min_target_dwell_s < 0.0:
+        raise ValueError("min-target-dwell-s must be finite and non-negative")
     report = build_report(args)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))

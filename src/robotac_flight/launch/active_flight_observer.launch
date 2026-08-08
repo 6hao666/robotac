@@ -7,6 +7,7 @@
   <arg name="min_setpoints" default="20" />
   <arg name="min_airborne_altitude" default="0.50" />
   <arg name="waypoint_reach_tolerance" default="0.35" />
+  <arg name="min_target_dwell_s" default="0.25" />
   <arg name="require_waypoints_complete" default="true" />
   <arg name="require_final_disarmed" default="true" />
   <arg name="require_final_on_ground" default="true" />
@@ -26,6 +27,7 @@
     <param name="min_setpoints" value="$(arg min_setpoints)" />
     <param name="min_airborne_altitude" value="$(arg min_airborne_altitude)" />
     <param name="waypoint_reach_tolerance" value="$(arg waypoint_reach_tolerance)" />
+    <param name="min_target_dwell_s" value="$(arg min_target_dwell_s)" />
     <param name="require_waypoints_complete" value="$(arg require_waypoints_complete)" />
     <param name="require_final_disarmed" value="$(arg require_final_disarmed)" />
     <param name="require_final_on_ground" value="$(arg require_final_on_ground)" />

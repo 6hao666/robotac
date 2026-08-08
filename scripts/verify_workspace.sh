@@ -536,6 +536,8 @@ for expected in (
     "target_records",
     "target_records_unreached",
     "waypoint_reach_tolerance",
+    "min_target_dwell_s",
+    "max_continuous_reach_s",
     "waypoint_index",
     "waypoints_incomplete",
     "takeoff_target_record_missing",
@@ -834,6 +836,7 @@ for expected in (
     "active_flight_observer.json",
     "active_local_flight_passed",
     "target_records_unreached",
+    "min-target-dwell-s",
     "expected_waypoints_mismatch",
     "waypoint-reach-tolerance",
     "waypoints_incomplete",
@@ -988,10 +991,12 @@ script = sys.argv[1]
 
 def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    payload_open=False, state="COMPLETE", abort_reason=None,
-                   target_reached=True, missing_waypoint_index=None):
+                   target_reached=True, missing_waypoint_index=None,
+                   target_dwell_s=1.0):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
-         "waypoint_total": 8, "min_distance_m": 0.08, "reached": True},
+         "waypoint_total": 8, "min_distance_m": 0.08,
+         "max_continuous_reach_s": target_dwell_s, "reached": True},
     ]
     route = [
         [1, 0, 1, 0],
@@ -1013,6 +1018,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "waypoint_index": index,
             "waypoint_total": 8,
             "min_distance_m": 0.12 if reached else 0.80,
+            "max_continuous_reach_s": target_dwell_s if reached else 0.0,
             "reached": reached,
         })
     path.write_text(json.dumps({
@@ -1059,6 +1065,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if unreached.returncode == 0 or "target_records_unreached" not in unreached.stdout:
         raise SystemExit("Active flight evidence analyzer accepted an unreached waypoint target")
+    write_evidence(evidence, target_dwell_s=0.0)
+    low_dwell = subprocess.run([sys.executable, script, str(root)], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if low_dwell.returncode == 0 or "target_records_unreached" not in low_dwell.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted a no-dwell waypoint target")
     write_evidence(evidence, missing_waypoint_index=3)
     missing_waypoint = subprocess.run([sys.executable, script, str(root)], text=True,
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1137,7 +1148,8 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
     root.mkdir(parents=True, exist_ok=True)
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
-         "waypoint_total": waypoint_count, "min_distance_m": 0.08, "reached": True},
+         "waypoint_total": waypoint_count, "min_distance_m": 0.08,
+         "max_continuous_reach_s": 1.0, "reached": True},
     ]
     route = (
             [1, 0, 1, 0],
@@ -1159,6 +1171,7 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
             "waypoint_index": index,
             "waypoint_total": waypoint_count,
             "min_distance_m": 0.12,
+            "max_continuous_reach_s": 1.0,
             "reached": True,
         })
     write(root / "active_flight_observer.json", json.dumps({
