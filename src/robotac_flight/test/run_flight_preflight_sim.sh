@@ -75,11 +75,11 @@ roslaunch robotac_flight fastlio_vision_bridge.launch \
   enable_mavros_output:=true >"${log_dir}/bridge.log" 2>&1 &
 bridge_pid=$!
 
-python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_preflight.py" \
-  _observe_seconds:=1.0 _startup_timeout:=12.0 \
-  _vision_health_window_seconds:=0.5 \
-  _require_vision_output:=true \
-  _vision_output_topic:=/robotac/test/vision_pose \
+roslaunch robotac_flight local_flight_preflight.launch \
+  observe_seconds:=1.0 startup_timeout:=12.0 \
+  vision_health_window_seconds:=0.5 \
+  require_vision_output:=true \
+  vision_output_topic:=/robotac/test/vision_pose \
   >"${log_dir}/preflight.log" 2>&1
 cat "${log_dir}/preflight.log"
 grep -q 'PASS: local_flight_preflight_passed' "${log_dir}/preflight.log"
@@ -90,11 +90,11 @@ kill -INT "${bridge_pid}" 2>/dev/null || true
 wait "${bridge_pid}" 2>/dev/null || true
 bridge_pid=
 set +e
-python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_preflight.py" \
-  _observe_seconds:=0.5 _startup_timeout:=2.0 \
-  _vision_health_window_seconds:=0.5 \
-  _require_vision_output:=true \
-  _vision_output_topic:=/robotac/test/vision_pose \
+roslaunch robotac_flight local_flight_preflight.launch \
+  observe_seconds:=0.5 startup_timeout:=2.0 \
+  vision_health_window_seconds:=0.5 \
+  require_vision_output:=true \
+  vision_output_topic:=/robotac/test/vision_pose \
   >"${log_dir}/preflight-bridge-loss.log" 2>&1
 bridge_loss_status=$?
 set -e

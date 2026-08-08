@@ -133,6 +133,7 @@ roslaunch robotac_bringup apriltag_rgb.launch
 roslaunch robotac_servo servo.launch
 roslaunch robotac_bringup full_system.launch enable_mavros:=false
 roslaunch robotac_flight fastlio_vision_bridge.launch enable_mavros_output:=false
+roslaunch robotac_flight local_flight_preflight.launch require_vision_output:=false
 roslaunch robotac_flight local_waypoint_flight.launch enable_control:=false
 ```
 
@@ -337,19 +338,22 @@ Before any active test, run the read-only local-flight preflight against the
 existing ROS graph. It subscribes to MAVROS state, grounded/disarmed status,
 local `map -> base_link` odometry, estimator health, FAST-LIO
 `camera_init -> body` odometry, bridge preview/health/status and their matching
-timestamps, MAVROS time-sync status, and optionally the MAVROS vision-pose input. It creates no
-publishers, sends no setpoints, and does not call flight-control services:
+timestamps, MAVROS time-sync status, and optionally the MAVROS vision-pose
+input. The launch starts only the preflight node: it creates no publishers,
+sends no setpoints, opens no serial device, and does not call flight-control
+services:
 
 ```bash
-rosrun robotac_flight local_flight_preflight.py \
-  _observe_seconds:=30 _require_vision_output:=false
+roslaunch robotac_flight local_flight_preflight.launch \
+  observe_seconds:=30 require_vision_output:=false
 ```
 
 After the measured transforms, PX4 external-vision parameters, and deployment
 gates have been approved, repeat it with
-`_require_vision_output:=true _require_timesync:=true _check_px4_vision_params:=true`. The latter
-parameter query is read-only. The following regression exercises that preflight
-against a loopback ROS graph; it opens no serial device and starts no MAVROS:
+`require_vision_output:=true require_timesync:=true check_px4_vision_params:=true`.
+The latter parameter query is read-only. The following regression exercises that
+preflight against a loopback ROS graph; it opens no serial device and starts no
+MAVROS:
 
 ```bash
 src/robotac_flight/test/run_flight_preflight_sim.sh
