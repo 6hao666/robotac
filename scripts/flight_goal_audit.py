@@ -119,6 +119,13 @@ def _target_tuple(record):
     return values if all(value is not None for value in values) else None
 
 
+def _position_tuple(values):
+    if not isinstance(values, (list, tuple)) or len(values) < 3:
+        return None
+    result = tuple(_number(value) for value in values[:3])
+    return result if all(value is not None for value in result) else None
+
+
 def _active_route_match_report(args):
     if not args.active_evidence:
         return _phase("active_route_matches_config", False,
@@ -149,6 +156,27 @@ def _active_route_match_report(args):
     expected_targets = preview_local_route._build_targets(
         section, frame, waypoints, origin, origin_yaw, include_takeoff=True)
 
+    missing = []
+    notes = []
+    initial_position = _position_tuple(summary.get("initial_local_position"))
+    initial_yaw = _number(summary.get("initial_local_yaw"))
+    max_origin_delta = 0.0
+    max_origin_yaw_delta = 0.0
+    if initial_position is None:
+        missing.append("route_origin_position_missing")
+    else:
+        origin_delta = math.sqrt(sum((origin[i] - initial_position[i]) ** 2 for i in range(3)))
+        max_origin_delta = origin_delta
+        if origin_delta > args.route_origin_tolerance:
+            missing.append("route_origin_mismatch:pos=%.3f" % origin_delta)
+    if initial_yaw is None:
+        missing.append("route_origin_yaw_missing")
+    else:
+        origin_yaw_delta = abs(_angle_error(origin_yaw, initial_yaw))
+        max_origin_yaw_delta = origin_yaw_delta
+        if origin_yaw_delta > math.radians(args.route_yaw_tolerance_deg):
+            missing.append("route_origin_yaw_mismatch:deg=%.2f" % math.degrees(origin_yaw_delta))
+
     actual_by_key = {("TAKEOFF", 0): takeoff_target}
     for record in records:
         if not isinstance(record, dict) or record.get("state") != "WAYPOINTS":
@@ -161,7 +189,6 @@ def _active_route_match_report(args):
         if target is not None:
             actual_by_key[("WAYPOINTS", waypoint_index)] = target
 
-    missing = []
     max_position_delta = 0.0
     max_yaw_delta = 0.0
     position_tolerance = args.route_target_tolerance
@@ -181,10 +208,10 @@ def _active_route_match_report(args):
             missing.append("route_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
                 key[0].lower(), key[1], position_delta, math.degrees(yaw_delta)))
 
-    notes = []
     if not missing:
-        notes.append("route_targets_match_config=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f" % (
-            len(expected_targets), max_position_delta, math.degrees(max_yaw_delta)))
+        notes.append("route_targets_match_config=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f origin_delta=%.3f origin_yaw_delta_deg=%.2f" % (
+            len(expected_targets), max_position_delta, math.degrees(max_yaw_delta),
+            max_origin_delta, math.degrees(max_origin_yaw_delta)))
     return _phase("active_route_matches_config", not missing, missing, notes)
 
 
@@ -328,6 +355,8 @@ def _build_parser():
                         help="Do not require active-flight evidence to match the configured route waypoint count")
     parser.add_argument("--route-target-tolerance", type=float, default=0.05,
                         help="Position tolerance in metres for matching active evidence targets to the configured route")
+    parser.add_argument("--route-origin-tolerance", type=float, default=0.35,
+                        help="Position tolerance in metres for matching the inferred route origin to the observed initial local position")
     parser.add_argument("--route-yaw-tolerance-deg", type=float, default=1.0,
                         help="Yaw tolerance in degrees for matching active evidence targets to the configured route")
     parser.add_argument("--min-setpoints", type=int, default=20)
@@ -347,7 +376,8 @@ def main():
     args = _build_parser().parse_args()
     if args.min_waypoints < 0 or args.expected_waypoints < 0:
         raise ValueError("min-waypoints and expected-waypoints must be non-negative")
-    if args.route_target_tolerance < 0.0 or args.route_yaw_tolerance_deg < 0.0:
+    if (args.route_target_tolerance < 0.0 or args.route_origin_tolerance < 0.0 or
+            args.route_yaw_tolerance_deg < 0.0):
         raise ValueError("route target/yaw tolerances must be non-negative")
     if args.min_target_dwell_s < 0.0:
         raise ValueError("min-target-dwell-s must be non-negative")

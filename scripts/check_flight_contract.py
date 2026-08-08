@@ -315,6 +315,8 @@ def _check_evidence_surface(root):
     missing.extend("goal_audit_missing:%s" % token for token in _contains_all(goal_audit, (
         "active_route_matches_config",
         "route_target_mismatch",
+        "route_origin_mismatch",
+        "initial_local_position",
         "route_targets_match_config",
         "allow_dynamic_active_route",
     )))

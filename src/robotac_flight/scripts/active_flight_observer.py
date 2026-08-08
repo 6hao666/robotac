@@ -43,6 +43,15 @@ def _finite(values):
     return all(math.isfinite(float(value)) for value in values)
 
 
+def _yaw_from_quaternion(quaternion):
+    x = float(quaternion.x)
+    y = float(quaternion.y)
+    z = float(quaternion.z)
+    w = float(quaternion.w)
+    return math.atan2(2.0 * (w * z + x * y),
+                      1.0 - 2.0 * (y * y + z * z))
+
+
 class ActiveFlightObserver(object):
     def __init__(self):
         self.observe_timeout = float(rospy.get_param("~observe_timeout", 900.0))
@@ -80,10 +89,13 @@ class ActiveFlightObserver(object):
 
         self.local_count = 0
         self.local_receive = None
+        self.initial_local_position = None
+        self.initial_local_yaw = None
         self.initial_local_z = None
         self.max_local_z = None
         self.max_relative_local_z = None
         self.final_local_position = None
+        self.final_local_yaw = None
 
         self.mavros_state = None
         self.mavros_state_receive = None
@@ -237,7 +249,14 @@ class ActiveFlightObserver(object):
         self.local_count += 1
         self.local_receive = time.monotonic()
         self.final_local_position = tuple(float(value) for value in values)
+        quaternion = msg.pose.pose.orientation
+        self.final_local_yaw = (_yaw_from_quaternion(quaternion)
+                                if _finite((quaternion.x, quaternion.y, quaternion.z, quaternion.w))
+                                else None)
         z = self.final_local_position[2]
+        if self.initial_local_position is None:
+            self.initial_local_position = self.final_local_position
+            self.initial_local_yaw = self.final_local_yaw
         if self.initial_local_z is None:
             self.initial_local_z = z
         self.max_local_z = z if self.max_local_z is None else max(self.max_local_z, z)
@@ -355,10 +374,13 @@ class ActiveFlightObserver(object):
             "unique_setpoints": self.unique_setpoints,
             "target_records": self._public_target_records(),
             "local_count": self.local_count,
+            "initial_local_position": self.initial_local_position,
+            "initial_local_yaw": self.initial_local_yaw,
             "initial_local_z": self.initial_local_z,
             "max_local_z": self.max_local_z,
             "max_relative_local_z": self.max_relative_local_z,
             "final_local_position": self.final_local_position,
+            "final_local_yaw": self.final_local_yaw,
             "final_armed": None if self.mavros_state is None else bool(self.mavros_state.armed),
             "final_mode": None if self.mavros_state is None else self.mavros_state.mode,
             "final_landed_state": None if self.extended_state is None else self.extended_state.landed_state,

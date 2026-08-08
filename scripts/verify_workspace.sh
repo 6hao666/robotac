@@ -1035,6 +1035,8 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
             "target_records": target_records,
             "local_count": 240,
+            "initial_local_position": [0, 0, 0],
+            "initial_local_yaw": 0.0,
             "initial_local_z": 0.0,
             "max_relative_local_z": 1.02,
             "final_armed": False,
@@ -1144,7 +1146,7 @@ def write_readonly_evidence(root):
     }, indent=2))
 
 def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8,
-                          corrupt_waypoint_index=None):
+                          corrupt_waypoint_index=None, corrupt_initial_origin=False):
     root.mkdir(parents=True, exist_ok=True)
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
@@ -1187,6 +1189,8 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
             "target_records": target_records,
             "local_count": 240,
+            "initial_local_position": [0.50 if corrupt_initial_origin else 0.0, 0.0, 0.0],
+            "initial_local_yaw": 0.0,
             "max_relative_local_z": 1.02,
             "final_armed": False,
             "final_landed_state": 1,
@@ -1233,6 +1237,14 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if wrong_target.returncode == 0 or "route_target_mismatch:waypoints4" not in wrong_target.stdout:
         raise SystemExit("Goal audit accepted active-flight evidence for the wrong configured route target")
+    write_active_evidence(active, payload_open=False)
+    write_active_evidence(active, payload_open=False, corrupt_initial_origin=True)
+    wrong_origin = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if wrong_origin.returncode == 0 or "route_origin_mismatch" not in wrong_origin.stdout:
+        raise SystemExit("Goal audit accepted active-flight evidence with the wrong local route origin")
     write_active_evidence(active, payload_open=False)
     payload_missing = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),

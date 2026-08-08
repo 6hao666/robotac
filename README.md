@@ -597,7 +597,10 @@ active local-flight evidence together. The default required phase is
 payload mission. By default it also requires the active-flight evidence waypoint
 count and target coordinates to match `config/flight/local_waypoints.yaml`; use
 `--allow-dynamic-active-route` only when the mission was intentionally replaced
-through `/robotac/flight/waypoints` before `/robotac/flight/start`.
+through `/robotac/flight/waypoints` before `/robotac/flight/start`. Start the
+active observer before `/robotac/flight/start`: its initial MAVROS local pose is
+used as independent evidence that the route targets were generated relative to
+the actual local takeoff pose.
 
 The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
 rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG
