@@ -15,8 +15,10 @@ required_paths=(
   src/apriltag_ros/apriltag_ros
   src/robotac_bringup
   src/robotac_flight
+  src/robotac_flight/launch/active_flight_observer.launch
   src/robotac_flight/launch/ev_acceptance_observer.launch
   src/robotac_flight/launch/local_flight_preflight.launch
+  src/robotac_flight/scripts/active_flight_observer.py
   src/robotac_flight/scripts/audit_local_mission.py
   src/robotac_flight/scripts/ev_acceptance_observer.py
   src/robotac_flight/scripts/local_flight_readiness.py
@@ -279,6 +281,7 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/src/robotac_flight/scripts/check_px4_vision_config.py" \
   "${workspace_dir}/src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh" \
   "${workspace_dir}/src/robotac_flight/scripts/ev_acceptance_observer.py" \
+  "${workspace_dir}/src/robotac_flight/scripts/active_flight_observer.py" \
   "${workspace_dir}/src/robotac_flight/test/run_flight_fault_sim.sh" <<'PY'
 import pathlib
 import sys
@@ -296,7 +299,8 @@ preflight_test = pathlib.Path(sys.argv[10]).read_text()
 px4_check_source = pathlib.Path(sys.argv[11]).read_text()
 setpoint_gate_test = pathlib.Path(sys.argv[12]).read_text()
 ev_acceptance_source = pathlib.Path(sys.argv[13]).read_text()
-flight_fault_test = pathlib.Path(sys.argv[14]).read_text()
+active_observer_source = pathlib.Path(sys.argv[14]).read_text()
+flight_fault_test = pathlib.Path(sys.argv[15]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -509,6 +513,32 @@ for forbidden in (
 ):
     if forbidden in ev_acceptance_source:
         raise SystemExit(f"EV acceptance observer must remain read-only; found {forbidden}")
+for expected in (
+    "Read-only observer for a real Robotac local waypoint flight",
+    "active_flight_observer",
+    "flight_status_topic",
+    "setpoint_preview_topic",
+    "local_position_topic",
+    "active_local_flight_passed",
+    "waypoints_incomplete",
+    "final_disarmed_not_confirmed",
+    "final_on_ground_not_confirmed",
+    "payload_open_not_observed",
+):
+    if expected not in active_observer_source:
+        raise SystemExit(f"Active flight observer check failed: missing {expected}")
+for forbidden in (
+    "rospy.Publisher(",
+    "ServiceProxy",
+    "SetMode",
+    "CommandBool",
+    "/mavros/set_mode",
+    "/mavros/cmd/arming",
+    "/mavros/setpoint_raw/local",
+    "/robotac/flight/start",
+):
+    if forbidden in active_observer_source:
+        raise SystemExit(f"Active flight observer must remain read-only; found {forbidden}")
 for expected in (
     "_subscribe_setpoint:=false",
     "success: False",

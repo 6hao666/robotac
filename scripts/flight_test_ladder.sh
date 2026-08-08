@@ -278,12 +278,18 @@ if [[ "${show_active}" == true ]]; then
   cat <<'EOF'
 # First active connected test: controller can stream only after /robotac/flight/start;
 # mode/arming are still manual, auto_land is allowed because the route requires landing.
+flight_evidence_dir=~/robotac_ws/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${flight_evidence_dir}"
 roslaunch robotac_bringup full_system.launch \
   enable_mavros:=true \
   enable_vision_bridge:=true vision_enable_output:=true \
   enable_flight_controller:=true flight_enable_control:=true \
   flight_auto_mode:=false flight_auto_arm:=false flight_auto_land:=true \
   flight_enable_payload:=false enable_servo:=false
+
+# In another terminal before the start request, record read-only completion evidence:
+roslaunch robotac_flight active_flight_observer.launch \
+  evidence_file:="${flight_evidence_dir}/active_flight_observer.json"
 
 # Explicit operator start after preflight/visual checks pass:
 rosservice call /robotac/flight/start
@@ -306,12 +312,17 @@ EOF
   cat <<'EOF'
 
 # Final automatic mission only after manual active test succeeds and the test area is clear:
+payload_flight_evidence_dir=~/robotac_ws/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)_payload
+mkdir -p "${payload_flight_evidence_dir}"
 roslaunch robotac_bringup full_system.launch \
   enable_mavros:=true \
   enable_vision_bridge:=true vision_enable_output:=true \
   enable_flight_controller:=true flight_enable_control:=true \
   flight_auto_mode:=true flight_auto_arm:=true flight_auto_land:=true \
   enable_servo:=true flight_enable_payload:=true
+roslaunch robotac_flight active_flight_observer.launch \
+  require_payload_open:=true \
+  evidence_file:="${payload_flight_evidence_dir}/active_flight_observer.json"
 rosservice call /robotac/flight/start
 EOF
 else

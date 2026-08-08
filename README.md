@@ -142,6 +142,7 @@ roslaunch robotac_bringup full_system.launch enable_mavros:=false
 roslaunch robotac_flight fastlio_vision_bridge.launch enable_mavros_output:=false
 roslaunch robotac_flight local_flight_preflight.launch require_vision_output:=false
 roslaunch robotac_flight local_waypoint_flight.launch enable_control:=false
+roslaunch robotac_flight active_flight_observer.launch
 ```
 
 For a read-only FCU telemetry session, use
@@ -530,6 +531,25 @@ The flight node must receive an initial latched
 `state=... success=... seq=... boot=...` status before it accepts a start
 request; each mission command then requires a strictly newer sequence number
 from the same servo process instance.
+
+During any active local-flight test, start the read-only active-flight observer
+in a separate terminal before calling `/robotac/flight/start`:
+
+```bash
+flight_evidence_dir=~/robotac_ws/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${flight_evidence_dir}"
+roslaunch robotac_flight active_flight_observer.launch \
+  evidence_file:="${flight_evidence_dir}/active_flight_observer.json"
+```
+
+The observer subscribes only to `/robotac/flight/status`,
+`/robotac/flight/setpoint_preview`, `/mavros/local_position/odom`,
+`/mavros/state`, `/mavros/extended_state`, and servo status. It never publishes
+setpoints, calls services, arms, changes mode, or commands landing. A passing
+`active_flight_observer.json` requires the controller to reach `COMPLETE`, all
+waypoints to be consumed, relative airborne altitude to have been observed, MAVROS to
+finish disarmed/on-ground, and, if `require_payload_open:=true`, a successful
+payload-open acknowledgement.
 
 The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
 rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG

@@ -1,0 +1,39 @@
+<launch>
+  <!-- Read-only observer for an active local waypoint flight. This launch
+       starts only active_flight_observer.py; it never publishes setpoints,
+       calls services, arms, changes modes, or writes PX4 parameters. -->
+  <arg name="observe_timeout" default="900.0" />
+  <arg name="stream_timeout" default="1.0" />
+  <arg name="min_setpoints" default="20" />
+  <arg name="min_airborne_altitude" default="0.50" />
+  <arg name="require_waypoints_complete" default="true" />
+  <arg name="require_final_disarmed" default="true" />
+  <arg name="require_final_on_ground" default="true" />
+  <arg name="require_payload_open" default="false" />
+  <arg name="evidence_file" default="" />
+  <arg name="flight_status_topic" default="/robotac/flight/status" />
+  <arg name="setpoint_preview_topic" default="/robotac/flight/setpoint_preview" />
+  <arg name="local_position_topic" default="/mavros/local_position/odom" />
+  <arg name="mavros_state_topic" default="/mavros/state" />
+  <arg name="extended_state_topic" default="/mavros/extended_state" />
+  <arg name="payload_status_topic" default="/robotac/servo/status" />
+
+  <node pkg="robotac_flight" type="active_flight_observer.py"
+        name="active_flight_observer" output="screen" required="true">
+    <param name="observe_timeout" value="$(arg observe_timeout)" />
+    <param name="stream_timeout" value="$(arg stream_timeout)" />
+    <param name="min_setpoints" value="$(arg min_setpoints)" />
+    <param name="min_airborne_altitude" value="$(arg min_airborne_altitude)" />
+    <param name="require_waypoints_complete" value="$(arg require_waypoints_complete)" />
+    <param name="require_final_disarmed" value="$(arg require_final_disarmed)" />
+    <param name="require_final_on_ground" value="$(arg require_final_on_ground)" />
+    <param name="require_payload_open" value="$(arg require_payload_open)" />
+    <param name="evidence_file" value="$(arg evidence_file)" />
+    <param name="flight_status_topic" value="$(arg flight_status_topic)" />
+    <param name="setpoint_preview_topic" value="$(arg setpoint_preview_topic)" />
+    <param name="local_position_topic" value="$(arg local_position_topic)" />
+    <param name="mavros_state_topic" value="$(arg mavros_state_topic)" />
+    <param name="extended_state_topic" value="$(arg extended_state_topic)" />
+    <param name="payload_status_topic" value="$(arg payload_status_topic)" />
+  </node>
+</launch>
