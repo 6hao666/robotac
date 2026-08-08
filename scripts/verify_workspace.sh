@@ -36,6 +36,7 @@ required_paths=(
   config/deployment_sim.yaml
   config/udev/99-robotac-servo.rules.template
   config/udev/99-robotac-rgb-camera.rules.template
+  scripts/analyze_readonly_flight_evidence.py
   scripts/collect_readonly_flight_evidence.sh
   scripts/flight_test_ladder.sh
 )
@@ -167,6 +168,16 @@ for directory in (pathlib.Path(value) for value in sys.argv[1:]):
     for path in sorted(directory.glob("*.py")):
         py_compile.compile(str(path), doraise=True)
         print(f"Validated flight Python syntax: {path.name}")
+PY
+
+python3 - "${workspace_dir}/scripts" <<'PY'
+import pathlib
+import py_compile
+import sys
+
+for path in sorted(pathlib.Path(sys.argv[1]).glob("*.py")):
+    py_compile.compile(str(path), doraise=True)
+    print(f"Validated top-level Python syntax: {path.name}")
 PY
 
 for script in \
@@ -587,6 +598,91 @@ for forbidden in ("/mavros/cmd/arming", "/mavros/set_mode", "/robotac/flight/sta
     if forbidden in source:
         raise SystemExit(f"Read-only evidence collector must not reference control path {forbidden}")
 print("Validated read-only flight evidence collector safety surface.")
+PY
+
+python3 - "${workspace_dir}/scripts/analyze_readonly_flight_evidence.py" <<'PY'
+import pathlib
+import re
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+for expected in (
+    "READ_ONLY_EVIDENCE_ANALYSIS",
+    "active_preflight_evidence",
+    "mavros_vision_pose_consumer",
+    "mavros_setpoint_raw_consumer",
+    "connected/disarmed/on-ground",
+):
+    if expected not in source:
+        raise SystemExit(f"Read-only evidence analyzer check failed: missing {expected}")
+for forbidden in (
+    "rospy.Publisher",
+    "ServiceProxy",
+    "rosservice",
+    "rostopic pub",
+    "/mavros/cmd/arming",
+    "/mavros/set_mode",
+    "/robotac/flight/start",
+):
+    if forbidden in source:
+        raise SystemExit(f"Read-only evidence analyzer must not reference control path {forbidden}")
+if re.search(r"subprocess\.run|subprocess\.Popen|os\.system", source):
+    raise SystemExit("Read-only evidence analyzer must only read files, not execute commands")
+print("Validated read-only flight evidence analyzer safety surface.")
+PY
+
+python3 - "${workspace_dir}/scripts/analyze_readonly_flight_evidence.py" <<'PY'
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+script = sys.argv[1]
+expected_types = {
+    "mavros_state": "mavros_msgs/State",
+    "mavros_extended_state": "mavros_msgs/ExtendedState",
+    "mavros_local_position_odom": "nav_msgs/Odometry",
+    "mavros_estimator_status": "mavros_msgs/EstimatorStatus",
+    "mavros_timesync_status": "mavros_msgs/TimesyncStatus",
+    "mavros_vision_pose_pose_cov": "geometry_msgs/PoseWithCovarianceStamped",
+    "mavros_setpoint_raw_local": "mavros_msgs/PositionTarget",
+    "robotac_fastlio_vision_healthy": "std_msgs/Bool",
+    "robotac_fastlio_vision_status": "std_msgs/String",
+    "robotac_fastlio_vision_output_enabled": "std_msgs/Bool",
+    "robotac_fastlio_vision_pose_preview": "geometry_msgs/PoseWithCovarianceStamped",
+    "Odometry": "nav_msgs/Odometry",
+}
+
+def write(path, text):
+    path.write_text(text, encoding="utf-8")
+
+with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directory:
+    root = pathlib.Path(directory)
+    for safe, message_type in expected_types.items():
+        write(root / f"topic_type_{safe}.txt", f"### type\n{message_type}\n")
+        write(root / f"topic_hz_{safe}.txt", "average rate: 10.000\n")
+        write(root / f"topic_info_{safe}.txt", "Type: %s\nPublishers:\n * /producer\nSubscribers:\n * /listener\n" % message_type)
+        write(root / f"topic_echo_{safe}.txt", "---\n")
+    write(root / "topic_echo_mavros_state.txt", "connected: True\narmed: False\nmode: MANUAL\n")
+    write(root / "topic_echo_mavros_extended_state.txt", "landed_state: 1\n")
+    write(root / "topic_echo_robotac_fastlio_vision_healthy.txt", "data: True\n")
+    write(root / "topic_echo_robotac_fastlio_vision_status.txt", "data: ok rate_hz=10.0 valid=20 dropped=0\n")
+    write(root / "topic_echo_robotac_fastlio_vision_output_enabled.txt", "data: True\n")
+    write(root / "topic_info_mavros_vision_pose_pose_cov.txt",
+          "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
+    write(root / "topic_info_mavros_setpoint_raw_local.txt",
+          "Type: mavros_msgs/PositionTarget\nPublishers: None\nSubscribers:\n * /mavros\n")
+    ok = subprocess.run([sys.executable, script, str(root)], text=True,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if ok.returncode != 0 or "active_preflight_evidence=READY" not in ok.stdout:
+        raise SystemExit("Read-only evidence analyzer unexpectedly failed valid synthetic evidence:\n%s\n%s" % (ok.stdout, ok.stderr))
+    write(root / "topic_info_mavros_vision_pose_pose_cov.txt",
+          "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /rviz\n")
+    bad = subprocess.run([sys.executable, script, str(root), "--require-phase", "vision_to_mavros"],
+                         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if bad.returncode == 0 or "mavros_vision_pose_consumer=BLOCKED" not in bad.stdout:
+        raise SystemExit("Read-only evidence analyzer unexpectedly accepted missing MAVROS vision consumer")
+print("Validated read-only flight evidence analyzer with synthetic evidence.")
 PY
 
 for script in "${workspace_dir}"/scripts/*.sh "${workspace_dir}"/src/robotac_bringup/scripts/*.sh; do

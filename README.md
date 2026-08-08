@@ -474,13 +474,21 @@ To capture the read-only evidence bundle for later review, run:
 
 ```bash
 ./scripts/collect_readonly_flight_evidence.sh --duration 8 --bag-seconds 0
+./scripts/analyze_readonly_flight_evidence.py logs/read_only_evidence/YYYYMMDD_HHMMSS
 ```
 
 The collector only subscribes and inspects the existing ROS graph. It records
 topic lists, topic info, one-message samples, short `rostopic hz` windows, and,
 only when requested with `--bag-seconds`, a rosbag of the relevant MAVROS,
 FAST-LIO, Livox, and vision topics. It never launches ROS nodes, publishes
-topics, calls services, changes PX4 mode, arms, or sends setpoints.
+topics, calls services, changes PX4 mode, arms, or sends setpoints. The analyzer
+reads that bundle offline and reports whether `mavros_safe_state`,
+`vision_to_mavros`, and `active_preflight_evidence` are ready. Its default
+required phase is `active_preflight_evidence`, so it exits non-zero until MAVROS
+is connected, disarmed, on ground, FAST-LIO vision is healthy, MAVROS consumes
+`/mavros/vision_pose/pose_cov`, MAVROS consumes `/mavros/setpoint_raw/local`,
+and the required local-position, vision-pose, FAST-LIO odometry, and time-sync
+streams meet the configured rate thresholds.
 
 For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
 `auto_land` are independent gates. Keep all automatic gates false for the first

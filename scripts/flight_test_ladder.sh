@@ -219,6 +219,9 @@ roslaunch robotac_flight ev_acceptance_observer.launch \
 
 # 5) Subscriber-only evidence capture after the read-only graph is running.
 ./scripts/collect_readonly_flight_evidence.sh --duration 8 --bag-seconds 0
+
+# 6) Analyze the collected directory printed by the previous command.
+./scripts/analyze_readonly_flight_evidence.py logs/read_only_evidence/YYYYMMDD_HHMMSS
 EOF
 
 if [[ "${show_active}" == true ]]; then
