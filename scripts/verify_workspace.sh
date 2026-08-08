@@ -555,6 +555,8 @@ for expected in (
     "This script never starts ROS nodes",
     "--show-active",
     "Deployment gates are not all true",
+    "Readiness report did not pass active_local_flight",
+    "Payload readiness did not pass payload_local_flight",
     "rosservice call /robotac/flight/start",
     "enable_flight_controller:=false",
     "flight_auto_arm:=true",
@@ -580,6 +582,32 @@ for number, line in enumerate(source.splitlines(), start=1):
         raise SystemExit(
             f"Flight test ladder must only print ROS commands; line {number} executes: {stripped}")
 print("Validated flight test ladder remains offline/read-only by default.")
+PY
+
+python3 - "${workspace_dir}" <<'PY'
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+workspace = pathlib.Path(sys.argv[1])
+with tempfile.TemporaryDirectory(prefix="robotac-ladder-readiness.") as directory:
+    config_root = pathlib.Path(directory) / "config"
+    shutil.copytree(str(workspace / "config"), str(config_root))
+    shutil.copyfile(str(workspace / "config" / "deployment_sim.yaml"),
+                    str(config_root / "deployment.yaml"))
+    result = subprocess.run(
+        [str(workspace / "scripts" / "flight_test_ladder.sh"),
+         "--config-root", str(config_root), "--skip-verify", "--show-active"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if result.returncode != 2:
+        raise SystemExit("Flight ladder should fail closed when readiness is blocked despite deployment gates")
+    if "Readiness report did not pass active_local_flight" not in result.stderr:
+        raise SystemExit("Flight ladder did not report active readiness failure")
+    if "active flight commands (not executed by this script)" in result.stdout:
+        raise SystemExit("Flight ladder printed active commands before readiness passed")
+print("Validated flight ladder requires readiness before active command printing.")
 PY
 
 python3 - "${workspace_dir}/scripts/collect_readonly_flight_evidence.sh" <<'PY'

@@ -33,7 +33,7 @@ Options:
   --expected-ev-delay-ms MS       Include require_ev_delay command argument
   --ev-delay-tolerance-ms MS      EV delay tolerance, default: 20.0
   --skip-verify                   Skip scripts/verify_workspace.sh
-  --show-active                   Print active flight commands only if deployment gates are true
+  --show-active                   Print active commands only after readiness gates pass
   -h, --help                      Show this help
 EOF
 }
@@ -159,10 +159,11 @@ python3 "${workspace_dir}/src/robotac_flight/scripts/audit_local_mission.py" \
   --require-payload-open
 
 print_section "readiness report"
-python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
+readiness_report=$(python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
   --config-root "${config_root}" \
   --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
-  --origin-yaw-deg "${origin_yaw_deg}"
+  --origin-yaw-deg "${origin_yaw_deg}")
+printf '%s\n' "${readiness_report}"
 
 print_section "route preview"
 python3 "${workspace_dir}/src/robotac_flight/scripts/preview_local_route.py" \
@@ -231,6 +232,18 @@ if [[ "${show_active}" == true ]]; then
     printf '%s\n' "${gate_report}" >&2
     exit 2
   fi
+  if ! python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
+      --config-root "${config_root}" \
+      --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
+      --origin-yaw-deg "${origin_yaw_deg}" \
+      --require-phase active_local_flight >/tmp/robotac-active-readiness.$$ 2>&1; then
+    print_section "active flight commands blocked"
+    echo "Readiness report did not pass active_local_flight; refusing to print active commands." >&2
+    cat /tmp/robotac-active-readiness.$$ >&2
+    rm -f /tmp/robotac-active-readiness.$$
+    exit 2
+  fi
+  rm -f /tmp/robotac-active-readiness.$$
   print_section "active flight commands (not executed by this script)"
   cat <<'EOF'
 # First active connected test: controller can stream only after /robotac/flight/start;
@@ -244,6 +257,23 @@ roslaunch robotac_bringup full_system.launch \
 
 # Explicit operator start after preflight/visual checks pass:
 rosservice call /robotac/flight/start
+EOF
+
+  if ! python3 "${workspace_dir}/src/robotac_flight/scripts/local_flight_readiness.py" \
+      --config-root "${config_root}" \
+      --origin-x "${origin_x}" --origin-y "${origin_y}" --origin-z "${origin_z}" \
+      --origin-yaw-deg "${origin_yaw_deg}" \
+      --require-phase payload_local_flight >/tmp/robotac-payload-readiness.$$ 2>&1; then
+    print_section "payload flight commands blocked"
+    echo "Payload readiness did not pass payload_local_flight; final payload mission hidden." >&2
+    cat /tmp/robotac-payload-readiness.$$ >&2
+    rm -f /tmp/robotac-payload-readiness.$$
+    exit 0
+  fi
+  rm -f /tmp/robotac-payload-readiness.$$
+
+  print_section "payload flight commands (not executed by this script)"
+  cat <<'EOF'
 
 # Final automatic mission only after manual active test succeeds and the test area is clear:
 roslaunch robotac_bringup full_system.launch \
@@ -256,5 +286,5 @@ rosservice call /robotac/flight/start
 EOF
 else
   print_section "active flight commands hidden"
-  echo "Run this script with --show-active after deployment gates are true to print active flight commands."
+  echo "Run this script with --show-active after deployment and readiness gates are true to print active flight commands."
 fi
