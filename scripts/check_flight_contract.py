@@ -233,6 +233,66 @@ def _check_controller_source(root):
     return _phase("waypoint_controller_contract", not missing, missing, notes)
 
 
+def _check_local_takeoff_landing(root):
+    """Verify takeoff/landing remain local-setpoint based, not global mission based."""
+    missing = []
+    notes = []
+    source_path = root / "src" / "robotac_flight" / "scripts" / "local_waypoint_flight.py"
+    route_path = root / "config" / "flight" / "local_waypoints.yaml"
+    source = _read(source_path)
+    route = _load_yaml(route_path).get("local_waypoint_flight", {})
+    if not isinstance(route, dict):
+        return _phase("local_takeoff_landing_contract", False, ["local_waypoint_flight_mapping"])
+
+    missing.extend("takeoff_land_source_missing:%s" % token for token in _contains_all(source, (
+        "elif self.state == self.WAIT_OFFBOARD:",
+        "elif self.auto_mode:",
+        "self._request_mode(\"OFFBOARD\")",
+        "elif self.state == self.WAIT_ARMED:",
+        "elif self.auto_arm:",
+        "self._request_arm()",
+        "elif self.state == self.TAKEOFF:",
+        "self.target = (self.origin[0], self.origin[1], self.origin[2] + self.takeoff_height, self.origin_yaw)",
+        "self._publish_setpoint(self.target)",
+        "self._enter(self.WAYPOINTS if self.waypoints else self.WAIT_LAND)",
+        "elif self.state == self.LANDING:",
+        "switch_z = self.origin[2] + self.land_switch_height",
+        "self.landing_target[2] - self.land_descent_rate / max(1.0, self.control_rate)",
+        "self._request_mode(self.land_mode)",
+        "ExtendedState.LANDED_STATE_ON_GROUND",
+        "not self.fcu.armed",
+        "return TriggerResponse(False, \"auto_land_required_for_this_route\")",
+        "return TriggerResponse(False, \"refuse_start_while_armed\")",
+        "return TriggerResponse(False, \"vehicle_not_reported_on_ground\")",
+    )))
+    for forbidden in (
+            "/mavros/cmd/takeoff",
+            "/mavros/cmd/land",
+            "CommandTOL",
+            "WaypointPush",
+            "WaypointPull",
+            "WaypointSetCurrent"):
+        if forbidden in source:
+            missing.append("takeoff_land_forbidden_global_or_tol:%s" % forbidden)
+
+    expected_route_values = {
+        "takeoff_height": 1.0,
+        "require_auto_land": True,
+        "land_mode": "AUTO.LAND",
+        "land_descent_rate": 0.30,
+        "land_switch_height": 0.50,
+        "waypoint_frame": "robotac_start_body",
+    }
+    for key, expected in expected_route_values.items():
+        if route.get(key) != expected:
+            missing.append("takeoff_land_route_%s" % key)
+    if route.get("setpoint_topic") != "/mavros/setpoint_raw/local":
+        missing.append("takeoff_land_route_setpoint_topic")
+    if not missing:
+        notes.append("takeoff climbs on local raw setpoints; landing descends locally then requests AUTO.LAND")
+    return _phase("local_takeoff_landing_contract", not missing, missing, notes)
+
+
 def _check_route_generator(root):
     missing = []
     notes = []
@@ -488,6 +548,7 @@ def build_report(args):
         _check_mavros_local_only(root),
         _check_local_route(root),
         _check_controller_source(root),
+        _check_local_takeoff_landing(root),
         _check_route_generator(root),
         _check_fastlio_vision_bridge(root),
         _check_evidence_surface(root),

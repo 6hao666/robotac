@@ -330,6 +330,7 @@ printf '%s\n' "${contract_report}"
 [[ "${contract_report}" == *"mavros_local_only_contract=READY"* ]]
 [[ "${contract_report}" == *"local_relative_route_contract=READY"* ]]
 [[ "${contract_report}" == *"waypoint_controller_contract=READY"* ]]
+[[ "${contract_report}" == *"local_takeoff_landing_contract=READY"* ]]
 [[ "${contract_report}" == *"route_generator_contract=READY"* ]]
 [[ "${contract_report}" == *"fastlio_vision_pose_contract=READY"* ]]
 [[ "${contract_report}" == *"evidence_gate_contract=READY"* ]]
