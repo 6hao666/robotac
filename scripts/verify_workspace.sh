@@ -1416,6 +1416,47 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if ready.returncode != 0 or "active_local_flight=READY" not in ready.stdout:
         raise SystemExit("Goal audit rejected valid synthetic active-flight evidence:\n%s\n%s" % (ready.stdout, ready.stderr))
+    custom_route = root / "custom_route.yaml"
+    custom_route.write_text("""local_waypoint_flight:
+  waypoint_frame: robotac_start_body
+  takeoff_height: 1.0
+  require_auto_land: true
+  waypoints:
+    - {x: 1.5, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 1.0}
+  require_vision: true
+  require_vision_output: true
+  require_estimator_status: true
+  require_horizontal_relative: true
+  require_vertical_estimate: true
+  require_vision_output_consumer: true
+  require_setpoint_consumer: true
+  require_timesync: true
+  land_mode: AUTO.LAND
+""", encoding="utf-8")
+    write_active_evidence(active, payload_open=False, waypoint_count=1)
+    custom_without_route_file = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if custom_without_route_file.returncode == 0 or "expected_waypoints_mismatch:1!=8" not in custom_without_route_file.stdout:
+        raise SystemExit("Goal audit accepted custom-route evidence without --route-file")
+    custom_wrong_target = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--route-file", str(custom_route),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if custom_wrong_target.returncode == 0 or "route_target_mismatch:waypoints0" not in custom_wrong_target.stdout:
+        raise SystemExit("Goal audit accepted custom route-file evidence with the wrong target")
+    write_active_evidence(active, payload_open=False, waypoint_count=1, corrupt_waypoint_index=0)
+    custom_ready = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--route-file", str(custom_route),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if custom_ready.returncode != 0 or "active_local_flight=READY" not in custom_ready.stdout:
+        raise SystemExit("Goal audit rejected matching custom route-file evidence:\n%s\n%s" %
+                         (custom_ready.stdout, custom_ready.stderr))
+    write_active_evidence(active, payload_open=False)
     write_active_evidence(active, payload_open=False, waypoint_count=1)
     short_route = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
