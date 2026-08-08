@@ -658,7 +658,9 @@ observed within the configured `waypoint_reach_tolerance` by
 seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and the
 analyzer rejects evidence that lacks a reached-and-dwelled record for any
 configured waypoint. The standalone active-evidence analyzer also checks that
-the manifest target route matches the observed active setpoint targets. It also
+the manifest target route matches the observed active setpoint targets and that
+the controller status `route_revision` / `route_fingerprint` matches the
+manifest, so stale manifests from an earlier run cannot satisfy a new flight. It also
 requires active-flight `/mavros/vision_pose/pose_cov` samples, a seen
 `fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision status by
 default. It then checks paired local-position / vision-pose relative

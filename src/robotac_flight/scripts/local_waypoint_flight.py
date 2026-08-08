@@ -1317,9 +1317,11 @@ class LocalWaypointFlight(object):
 
     def _publish_status(self):
         event_stamp = rospy.Time.now().to_sec()
-        self.status_pub.publish(String(data="state=%s waypoint=%d/%d connected=%s armed=%s mode=%s vision=%s estimator=%s timesync=%s payload=%s abort_action=%s tx=%s error=%s stamp=%.9f" %
-                                      (self.state, self.index, len(self.waypoints), self.fcu.connected,
-                                       self.fcu.armed, self.fcu.mode, self.vision_healthy,
+        route_fingerprint = self._route_fingerprint(self._manifest_waypoints())
+        self.status_pub.publish(String(data="state=%s waypoint=%d/%d route_revision=%d route_fingerprint=%s connected=%s armed=%s mode=%s vision=%s estimator=%s timesync=%s payload=%s abort_action=%s tx=%s error=%s stamp=%.9f" %
+                                      (self.state, self.index, len(self.waypoints),
+                                       self.route_revision, route_fingerprint,
+                                       self.fcu.connected, self.fcu.armed, self.fcu.mode, self.vision_healthy,
                                        self._estimator_ok(), self.timesync_issue, self.payload_state, self.abort_action,
                                        self.control_tx_enabled, self.last_error, event_stamp)))
         self.active_pub.publish(Bool(data=self.state not in (self.IDLE, self.COMPLETE, self.ABORT)))

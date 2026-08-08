@@ -615,6 +615,7 @@ for expected in (
     "require_route_manifest",
     "route_manifest_missing",
     "route_manifest_target_route_missing",
+    "route_status_fingerprint_mismatch",
     "active_local_flight_passed",
     "target_records",
     "target_records_unreached",
@@ -986,6 +987,7 @@ for expected in (
     "route_manifest_missing",
     "route_manifest_target_route_missing",
     "route_manifest_observed_target_mismatch",
+    "route_status_fingerprint_mismatch",
     "route-manifest-target-tolerance",
     "waypoints_incomplete",
     "final_disarmed",
@@ -1177,7 +1179,8 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    target_dwell_s=1.0, active_vision=True,
                    active_vision_local_error=0.05,
                    active_mavros_control=True, include_landing_state=True,
-                   omit_route_manifest=False, corrupt_route_manifest_target=False):
+                   omit_route_manifest=False, corrupt_route_manifest_target=False,
+                   corrupt_route_status_fingerprint=False):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
          "waypoint_total": 8, "min_distance_m": 0.08,
@@ -1232,12 +1235,14 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "origin_yaw": 0.0,
             "target_route": manifest_route,
         }
+    status_fingerprint = "wrong" if corrupt_route_status_fingerprint else "synthetic"
     path.write_text(json.dumps({
         "observer": "active_flight_observer",
         "success": success,
         "reason": reason,
         "summary": {
-            "last_status": {"state": state, "waypoint": "8/8"},
+            "last_status": {"state": state, "waypoint": "8/8",
+                            "route_revision": "0", "route_fingerprint": status_fingerprint},
             "state_history": (["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "LANDING", "COMPLETE"]
                               if include_landing_state else
                               ["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "COMPLETE"]),
@@ -1303,6 +1308,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
     if (bad_manifest_target.returncode == 0 or
             "route_manifest_observed_target_mismatch:waypoints2" not in bad_manifest_target.stdout):
         raise SystemExit("Active flight evidence analyzer accepted route manifest target mismatch")
+    write_evidence(evidence, corrupt_route_status_fingerprint=True)
+    bad_status_fingerprint = subprocess.run([sys.executable, script, str(root)], text=True,
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if bad_status_fingerprint.returncode == 0 or "route_status_fingerprint_mismatch" not in bad_status_fingerprint.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted status/manifest fingerprint mismatch")
     write_evidence(evidence)
     payload_missing = subprocess.run([sys.executable, script, str(root), "--require-phase", "payload_local_flight"],
                                      text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1477,7 +1487,10 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
             "reached": True,
         })
     summary = {
-        "last_status": {"state": "COMPLETE" if success else "ABORT", "waypoint": "%d/%d" % (waypoint_count, waypoint_count)},
+        "last_status": {"state": "COMPLETE" if success else "ABORT",
+                        "waypoint": "%d/%d" % (waypoint_count, waypoint_count),
+                        "route_revision": "1" if dynamic_manifest else "0",
+                        "route_fingerprint": "synthetic"},
         "state_history": ["IDLE", "PRESTREAM", "WAIT_OFFBOARD", "WAIT_ARMED", "TAKEOFF", "WAYPOINTS", "LANDING", "COMPLETE"],
         "abort_reason": None if success else "test",
         "max_waypoint_index": waypoint_count,

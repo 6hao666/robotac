@@ -284,6 +284,18 @@ def _route_manifest_phase(data, args):
         missing.append("route_manifest_source_invalid:%s" % route_source)
     if not manifest.get("route_fingerprint"):
         missing.append("route_manifest_fingerprint_missing")
+    last_status = summary.get("last_status") if isinstance(summary.get("last_status"), dict) else {}
+    status_revision = last_status.get("route_revision")
+    if status_revision is None:
+        missing.append("route_status_revision_missing")
+    elif str(status_revision) != str(manifest.get("route_revision")):
+        missing.append("route_status_revision_mismatch:%s!=%s" % (
+            status_revision, manifest.get("route_revision")))
+    status_fingerprint = last_status.get("route_fingerprint")
+    if not status_fingerprint:
+        missing.append("route_status_fingerprint_missing")
+    elif str(status_fingerprint) != str(manifest.get("route_fingerprint")):
+        missing.append("route_status_fingerprint_mismatch")
     if not isinstance(manifest.get("origin"), list) or len(manifest.get("origin")) < 3:
         missing.append("route_manifest_origin_missing")
     if _number(manifest.get("origin_yaw")) is None:

@@ -524,6 +524,16 @@ class ActiveFlightObserver(object):
             return "route_manifest_source_invalid"
         if not self.route_manifest.get("route_fingerprint"):
             return "route_manifest_fingerprint_missing"
+        status_revision = self.last_status.get("route_revision")
+        if status_revision is None:
+            return "route_status_revision_missing"
+        if str(status_revision) != str(self.route_manifest.get("route_revision")):
+            return "route_status_revision_mismatch"
+        status_fingerprint = self.last_status.get("route_fingerprint")
+        if not status_fingerprint:
+            return "route_status_fingerprint_missing"
+        if str(status_fingerprint) != str(self.route_manifest.get("route_fingerprint")):
+            return "route_status_fingerprint_mismatch"
         if not isinstance(self.route_manifest.get("origin"), list):
             return "route_manifest_origin_missing"
         if self.route_manifest.get("origin_yaw") is None:
