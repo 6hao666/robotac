@@ -86,6 +86,32 @@ for _ in $(seq 1 100); do
 done
 rosservice list | grep -qx '/robotac/flight/start'
 sleep 0.5
+
+python3 - <<'PY' >"${log_dir}/empty-waypoints.log" 2>&1
+import time
+
+import rospy
+from geometry_msgs.msg import PoseArray
+
+rospy.init_node("robotac_empty_waypoint_test", anonymous=True)
+publisher = rospy.Publisher("/robotac/flight/waypoints", PoseArray, queue_size=1, latch=True)
+deadline = time.monotonic() + 3.0
+while not rospy.is_shutdown() and publisher.get_num_connections() < 1:
+    if time.monotonic() >= deadline:
+        raise RuntimeError("no waypoint subscriber")
+    rospy.sleep(0.05)
+message = PoseArray()
+message.header.frame_id = "robotac_start_body"
+message.header.stamp = rospy.Time.now()
+publisher.publish(message)
+rospy.sleep(0.20)
+print("Published empty PoseArray waypoint list")
+PY
+cat "${log_dir}/empty-waypoints.log"
+empty_status=$(timeout 2 rostopic echo -n 1 /robotac/flight/status 2>/dev/null || true)
+printf '%s\n' "${empty_status}"
+[[ "${empty_status}" == *"error=waypoints_empty"* ]]
+
 python3 "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" \
   --file "${workspace_dir}/config/flight/posearray_waypoints_example.yaml" \
   >"${log_dir}/waypoints.log" 2>&1

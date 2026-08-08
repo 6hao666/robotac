@@ -486,6 +486,7 @@ if "from mavros_msgs.srv import CommandBool, SetMode" not in flight_source:
 for expected in (
     "scripts/publish_waypoints.py",
     "config/flight/posearray_waypoints_example.yaml",
+    "waypoints_empty",
     "waypoints_loaded=6",
 ):
     if expected not in dynamic_waypoint_test:

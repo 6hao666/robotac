@@ -554,6 +554,10 @@ class LocalWaypointFlight(object):
             self.last_error = "waypoint_frame_must_be_%s" % self.input_frame
             self._publish_status()
             return
+        if not msg.poses:
+            self.last_error = "waypoints_empty"
+            self._publish_status()
+            return
         converted = []
         for pose in msg.poses:
             values = [pose.position.x, pose.position.y, pose.position.z]
