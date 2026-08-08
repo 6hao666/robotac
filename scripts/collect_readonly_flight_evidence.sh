@@ -9,6 +9,7 @@ workspace_dir=${ROBOTAC_WS:-/home/yundrone/robotac_ws}
 duration=8
 bag_seconds=0
 output_root="${workspace_dir}/logs/read_only_evidence"
+output_dir=""
 
 usage() {
   cat <<'EOF'
@@ -22,6 +23,7 @@ Options:
   --duration SEC         Seconds for rostopic hz windows, default: 8
   --bag-seconds SEC      Optional rosbag record duration, default: 0/off
   --output-root PATH     Evidence directory root, default: WORKSPACE/logs/read_only_evidence
+  --output-dir PATH      Use/append to an explicit evidence directory
   -h, --help             Show this help
 EOF
 }
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --output-root)
       output_root=${2:?--output-root requires a value}
+      shift 2
+      ;;
+    --output-dir)
+      output_dir=${2:?--output-dir requires a value}
       shift 2
       ;;
     -h|--help)
@@ -74,7 +80,11 @@ if [[ -f "${workspace_dir}/devel/setup.bash" ]]; then
 fi
 
 stamp=$(date +%Y%m%d_%H%M%S)
-out_dir="${output_root}/${stamp}"
+if [[ -n "${output_dir}" ]]; then
+  out_dir="${output_dir}"
+else
+  out_dir="${output_root}/${stamp}"
+fi
 mkdir -p "${out_dir}"
 summary="${out_dir}/summary.txt"
 
@@ -156,6 +166,7 @@ fi
   echo "duration=${duration}"
   echo "bag_seconds=${bag_seconds}"
   echo "generated_at=${stamp}"
+  echo "output_dir=${out_dir}"
   echo "safety=no_roslaunch_no_rosservice_no_rostopic_pub_no_setpoints_no_arming_no_mode_change"
   echo
   echo "Key checks to inspect:"

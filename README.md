@@ -166,11 +166,14 @@ devices, sends setpoints, changes modes, arms, or calls MAVROS services. Active
 flight commands are hidden unless `--show-active` is supplied, and even then the
 script refuses to print them until both the active-flight deployment gates in
 `config/deployment.yaml`, the `active_local_flight` readiness report, and a
-passed read-only evidence bundle supplied via `--evidence-dir` all pass. The
-final payload mission block is hidden separately until `payload_local_flight`
-readiness passes. Use `--skip-verify` only when you are iterating on the printed
-route/command ladder and have just run the full workspace verification
-separately.
+passed read-only evidence bundle supplied via `--evidence-dir` all pass. That
+evidence bundle must include both subscriber-only topic evidence and the
+`ev_acceptance_observer.json` result proving PX4/MAVROS local position moved in
+the same direction and scale as the FAST-LIO vision-pose input while the vehicle
+was connected, disarmed, and on the ground. The final payload mission block is
+hidden separately until `payload_local_flight` readiness passes. Use
+`--skip-verify` only when you are iterating on the printed route/command ladder
+and have just run the full workspace verification separately.
 
 To inspect the same evidence matrix directly, run the offline readiness report:
 
@@ -468,8 +471,11 @@ configured `min_motion_m` so the script can compare PX4/MAVROS
 does not open the FCU serial device:
 
 ```bash
+evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${evidence_dir}"
 roslaunch robotac_flight ev_acceptance_observer.launch \
-  observe_seconds:=20 min_motion_m:=0.30
+  observe_seconds:=20 min_motion_m:=0.30 \
+  evidence_file:="${evidence_dir}/ev_acceptance_observer.json"
 ```
 
 This observer is an acceptance evidence step, not a flight controller. It
@@ -480,14 +486,18 @@ healthy output.
 To capture the read-only evidence bundle for later review, run:
 
 ```bash
-./scripts/collect_readonly_flight_evidence.sh --duration 8 --bag-seconds 0
-./scripts/analyze_readonly_flight_evidence.py logs/read_only_evidence/YYYYMMDD_HHMMSS
+./scripts/collect_readonly_flight_evidence.sh \
+  --duration 8 --bag-seconds 0 \
+  --output-dir "${evidence_dir}"
+./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
 ```
 
 The collector only subscribes and inspects the existing ROS graph. It records
 topic lists, topic info, one-message samples, short `rostopic hz` windows, and,
 only when requested with `--bag-seconds`, a rosbag of the relevant MAVROS,
-FAST-LIO, Livox, and vision topics. It never launches ROS nodes, publishes
+FAST-LIO, Livox, and vision topics. Use `--output-dir` to append this topic
+evidence to the same directory that contains `ev_acceptance_observer.json`. It
+never launches ROS nodes, publishes
 topics, calls services, changes PX4 mode, arms, or sends setpoints. The analyzer
 reads that bundle offline and reports whether `mavros_safe_state`,
 `vision_to_mavros`, and `active_preflight_evidence` are ready. Its default
@@ -495,8 +505,9 @@ required phase is `active_preflight_evidence`, so it exits non-zero until MAVROS
 is connected, disarmed, on ground, FAST-LIO vision is healthy, MAVROS consumes
 `/mavros/vision_pose/pose_cov`, MAVROS consumes `/mavros/setpoint_raw/local`,
 no node publishes `/mavros/setpoint_raw/local` during this read-only evidence
-window, and the required local-position, vision-pose, FAST-LIO odometry, and
-time-sync streams meet the configured rate thresholds.
+window, EV acceptance passed from the same directory, and the required
+local-position, vision-pose, FAST-LIO odometry, and time-sync streams meet the
+configured rate thresholds.
 
 For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
 `auto_land` are independent gates. Keep all automatic gates false for the first

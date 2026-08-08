@@ -8,7 +8,9 @@ known amount and verify that PX4/MAVROS local_position moves in the same ENU
 direction as the external-vision input.
 """
 
+import json
 import math
+import pathlib
 import sys
 import time
 
@@ -135,6 +137,7 @@ class EvAcceptanceObserver(object):
             rospy.get_param("~require_vision_output_enabled", True))
         self.require_vision_status_ok = _as_bool(
             rospy.get_param("~require_vision_status_ok", True))
+        self.evidence_file = str(rospy.get_param("~evidence_file", "")).strip()
         self.local_parent = str(rospy.get_param("~local_parent", "map")).strip()
         self.local_child = str(rospy.get_param("~local_child", "base_link")).strip()
         self.vision_parent = str(rospy.get_param("~vision_parent", "odom")).strip()
@@ -155,6 +158,7 @@ class EvAcceptanceObserver(object):
         self.vision_status = "waiting"
         self.vision_status_receive = None
         self.exit_code = 1
+        self.last_metrics = {}
         self.started = time.monotonic()
         self.ready_since = None
 
@@ -293,24 +297,36 @@ class EvAcceptanceObserver(object):
     def _evaluate(self):
         ready, reason = self._basic_ready()
         if not ready:
+            self.last_metrics = self._metric_snapshot()
             return False, reason
         local_delta = self.local.delta()
         vision_delta = self.vision.delta()
         if local_delta is None or vision_delta is None:
+            self.last_metrics = self._metric_snapshot()
             return False, "delta_unavailable"
         local_motion = self._norm3(local_delta)
         vision_motion = self._norm3(vision_delta)
+        self.last_metrics = self._metric_snapshot(
+            local_delta=local_delta,
+            vision_delta=vision_delta,
+            local_motion=local_motion,
+            vision_motion=vision_motion)
         if vision_motion < self.min_motion_m or local_motion < self.min_motion_m:
             return False, "motion_too_small local=%.3f vision=%.3f required=%.3f" % (
                 local_motion, vision_motion, self.min_motion_m)
         delta_direction_cos = self._direction_cosine(local_delta, vision_delta)
         min_cos = math.cos(math.radians(self.max_direction_error_deg))
+        self.last_metrics.update({
+            "delta_direction_cos": delta_direction_cos,
+            "min_direction_cos": min_cos,
+        })
         if delta_direction_cos < min_cos:
             return False, "delta_direction_mismatch cos=%.3f min=%.3f local_delta=(%.3f,%.3f,%.3f) vision_delta=(%.3f,%.3f,%.3f)" % (
                 delta_direction_cos, min_cos,
                 local_delta[0], local_delta[1], local_delta[2],
                 vision_delta[0], vision_delta[1], vision_delta[2])
         delta_scale = local_motion / vision_motion
+        self.last_metrics["delta_scale"] = delta_scale
         if delta_scale < self.min_delta_scale or delta_scale > self.max_delta_scale:
             return False, "delta_scale_mismatch scale=%.3f local_motion=%.3f vision_motion=%.3f" % (
                 delta_scale, local_motion, vision_motion)
@@ -331,7 +347,73 @@ class EvAcceptanceObserver(object):
                 self.local.count(), self.local.rate_hz(), self.local.last_issue,
                 self.vision.count(), self.vision.rate_hz(), self.vision.last_issue))
 
+    def _stream_snapshot(self, stream):
+        delta = stream.delta()
+        return {
+            "count": stream.count(),
+            "rate_hz": stream.rate_hz(),
+            "fresh": stream.fresh(self.stream_timeout),
+            "last_issue": stream.last_issue,
+            "rejects": stream.rejects,
+            "delta": None if delta is None else [delta[0], delta[1], delta[2], delta[3]],
+        }
+
+    def _metric_snapshot(self, local_delta=None, vision_delta=None,
+                         local_motion=None, vision_motion=None):
+        return {
+            "local": self._stream_snapshot(self.local),
+            "vision": self._stream_snapshot(self.vision),
+            "local_delta": None if local_delta is None else [local_delta[0], local_delta[1], local_delta[2], local_delta[3]],
+            "vision_delta": None if vision_delta is None else [vision_delta[0], vision_delta[1], vision_delta[2], vision_delta[3]],
+            "local_motion_m": local_motion,
+            "vision_motion_m": vision_motion,
+        }
+
+    def _write_evidence(self, success, reason):
+        if not self.evidence_file:
+            return
+        path = pathlib.Path(self.evidence_file).expanduser()
+        if path.parent:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "observer": "ev_acceptance_observer",
+            "success": bool(success),
+            "reason": reason,
+            "summary": self._summary(),
+            "generated_at_wall_time": time.time(),
+            "parameters": {
+                "observe_seconds": self.observe_seconds,
+                "startup_timeout": self.startup_timeout,
+                "stream_timeout": self.stream_timeout,
+                "age_limit": self.age_limit,
+                "future_tolerance": self.future_tolerance,
+                "min_samples": self.min_samples,
+                "min_rate_hz": self.min_rate_hz,
+                "min_motion_m": self.min_motion_m,
+                "max_direction_error_deg": self.max_direction_error_deg,
+                "min_delta_scale": self.min_delta_scale,
+                "max_delta_scale": self.max_delta_scale,
+                "require_connected": self.require_connected,
+                "require_disarmed": self.require_disarmed,
+                "require_on_ground": self.require_on_ground,
+                "require_vision_output_enabled": self.require_vision_output_enabled,
+                "require_vision_status_ok": self.require_vision_status_ok,
+                "local_parent": self.local_parent,
+                "local_child": self.local_child,
+                "vision_parent": self.vision_parent,
+            },
+            "metrics": self.last_metrics,
+        }
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
     def _finish(self, success, reason):
+        try:
+            self._write_evidence(success, reason)
+        except Exception as exc:
+            if success:
+                success = False
+                reason = "evidence_write_failed:%s" % exc
+            rospy.logerr("FAIL: failed to write EV acceptance evidence: %s", exc)
         self.exit_code = 0 if success else 2
         level = rospy.loginfo if success else rospy.logerr
         level("%s: %s\n%s", "PASS" if success else "FAIL", reason, self._summary())

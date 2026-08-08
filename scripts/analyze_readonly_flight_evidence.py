@@ -194,6 +194,47 @@ def _no_publishers_phase(directory, name, topic):
     return _phase(name, not missing, missing, notes)
 
 
+def _ev_acceptance_phase(directory, path):
+    evidence_path = pathlib.Path(path).expanduser() if path else pathlib.Path(directory) / "ev_acceptance_observer.json"
+    missing = []
+    notes = []
+    if not evidence_path.exists():
+        return _phase("ev_acceptance_observer", False,
+                      ["ev_acceptance_observer_json"],
+                      ["expected=%s" % evidence_path])
+    try:
+        data = json.loads(evidence_path.read_text(encoding="utf-8", errors="replace"))
+    except Exception as exc:
+        return _phase("ev_acceptance_observer", False,
+                      ["ev_acceptance_observer_json_invalid:%s" % exc],
+                      ["path=%s" % evidence_path])
+    if not isinstance(data, dict):
+        return _phase("ev_acceptance_observer", False,
+                      ["ev_acceptance_observer_json_not_mapping"],
+                      ["path=%s" % evidence_path])
+    if data.get("observer") != "ev_acceptance_observer":
+        missing.append("ev_acceptance_observer_identity")
+    reason = str(data.get("reason", ""))
+    if data.get("success") is not True:
+        missing.append("ev_acceptance_failed:%s" % (reason or "unknown"))
+    elif not reason.startswith("ev_acceptance_passed"):
+        missing.append("ev_acceptance_reason:%s" % (reason or "empty"))
+    parameters = data.get("parameters") if isinstance(data.get("parameters"), dict) else {}
+    for key in (
+            "require_connected",
+            "require_disarmed",
+            "require_on_ground",
+            "require_vision_output_enabled",
+            "require_vision_status_ok",
+    ):
+        if parameters.get(key) is not True:
+            missing.append("ev_acceptance_%s" % key)
+    if not missing:
+        notes.append("path=%s" % evidence_path)
+        notes.append(reason)
+    return _phase("ev_acceptance_observer", not missing, missing, notes)
+
+
 def build_report(args):
     directory = pathlib.Path(args.evidence_dir).expanduser().resolve()
     phases = [
@@ -212,6 +253,7 @@ def build_report(args):
         _consumer_phase(directory, "mavros_setpoint_raw_consumer", "/mavros/setpoint_raw/local",
                         args.mavros_node),
         _no_publishers_phase(directory, "read_only_no_setpoint_publishers", "/mavros/setpoint_raw/local"),
+        _ev_acceptance_phase(directory, args.ev_acceptance_file),
     ]
     phase_lookup = {phase["name"]: phase for phase in phases}
     phase_groups = {
@@ -237,6 +279,7 @@ def build_report(args):
             "mavros_vision_pose_consumer",
             "mavros_setpoint_raw_consumer",
             "read_only_no_setpoint_publishers",
+            "ev_acceptance_observer",
         ),
     }
     group_status = {}
@@ -272,6 +315,8 @@ def _build_parser():
     parser.add_argument("--min-fastlio-hz", type=float, default=5.0)
     parser.add_argument("--min-vision-hz", type=float, default=5.0)
     parser.add_argument("--min-timesync-hz", type=float, default=2.0)
+    parser.add_argument("--ev-acceptance-file", default="",
+                        help="EV acceptance JSON; default: EVIDENCE_DIR/ev_acceptance_observer.json")
     parser.add_argument("--require-phase", default="active_preflight_evidence",
                         choices=("topic_types", "mavros_safe_state", "vision_to_mavros",
                                  "active_preflight_evidence"))

@@ -495,6 +495,8 @@ for expected in (
     "min_motion_m",
     "require_disarmed",
     "require_on_ground",
+    "evidence_file",
+    "ev_acceptance_observer",
 ):
     if expected not in ev_acceptance_source:
         raise SystemExit(f"EV acceptance observer check failed: missing {expected}")
@@ -555,6 +557,7 @@ for expected in (
     "This script never starts ROS nodes",
     "--show-active",
     "--evidence-dir",
+    "ev_acceptance_observer.json",
     "Deployment gates are not all true",
     "Readiness report did not pass active_local_flight",
     "Read-only evidence did not pass active_preflight_evidence",
@@ -656,6 +659,20 @@ def write_valid_evidence(root):
           "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
     write(root / "topic_info_mavros_setpoint_raw_local.txt",
           "Type: mavros_msgs/PositionTarget\nPublishers: None\nSubscribers:\n * /mavros\n")
+    write(root / "ev_acceptance_observer.json", """{
+  "observer": "ev_acceptance_observer",
+  "success": true,
+  "reason": "ev_acceptance_passed local_delta=(0.400,0.000,0.000) vision_delta=(0.390,0.000,0.000) delta_direction_cos=1.000 delta_scale=1.026",
+  "parameters": {
+    "require_connected": true,
+    "require_disarmed": true,
+    "require_on_ground": true,
+    "require_vision_output_enabled": true,
+    "require_vision_status_ok": true
+  },
+  "metrics": {}
+}
+""")
 
 with tempfile.TemporaryDirectory(prefix="robotac-ladder-evidence.") as directory:
     root = pathlib.Path(directory)
@@ -704,6 +721,7 @@ for expected in (
     "rostopic hz",
     "rostopic echo -n 1",
     "rosbag record",
+    "--output-dir",
     "safety=no_roslaunch_no_rosservice_no_rostopic_pub_no_setpoints_no_arming_no_mode_change",
 ):
     if expected not in source:
@@ -733,6 +751,7 @@ for expected in (
     "mavros_vision_pose_consumer",
     "mavros_setpoint_raw_consumer",
     "read_only_no_setpoint_publishers",
+    "ev_acceptance_observer",
     "connected/disarmed/on-ground",
 ):
     if expected not in source:
@@ -794,6 +813,24 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
           "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
     write(root / "topic_info_mavros_setpoint_raw_local.txt",
           "Type: mavros_msgs/PositionTarget\nPublishers: None\nSubscribers:\n * /mavros\n")
+    missing_ev = subprocess.run([sys.executable, script, str(root)], text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_ev.returncode == 0 or "ev_acceptance_observer=BLOCKED" not in missing_ev.stdout:
+        raise SystemExit("Read-only evidence analyzer unexpectedly accepted missing EV acceptance evidence")
+    write(root / "ev_acceptance_observer.json", """{
+  "observer": "ev_acceptance_observer",
+  "success": true,
+  "reason": "ev_acceptance_passed local_delta=(0.400,0.000,0.000) vision_delta=(0.390,0.000,0.000) delta_direction_cos=1.000 delta_scale=1.026",
+  "parameters": {
+    "require_connected": true,
+    "require_disarmed": true,
+    "require_on_ground": true,
+    "require_vision_output_enabled": true,
+    "require_vision_status_ok": true
+  },
+  "metrics": {}
+}
+""")
     ok = subprocess.run([sys.executable, script, str(root)], text=True,
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if ok.returncode != 0 or "active_preflight_evidence=READY" not in ok.stdout:

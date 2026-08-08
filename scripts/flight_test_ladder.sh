@@ -33,7 +33,7 @@ Options:
   --origin-yaw-deg DEG            Preview captured start yaw, default: 0.0
   --expected-ev-delay-ms MS       Include require_ev_delay command argument
   --ev-delay-tolerance-ms MS      EV delay tolerance, default: 20.0
-  --evidence-dir PATH             Read-only evidence directory to analyze before --show-active
+  --evidence-dir PATH             Read-only topic + EV-acceptance evidence directory before --show-active
   --skip-verify                   Skip scripts/verify_workspace.sh
   --show-active                   Print active commands only after readiness gates pass
   -h, --help                      Show this help
@@ -221,14 +221,18 @@ fi
 cat <<'EOF'
 
 # 4) Read-only EV acceptance: keep vehicle disarmed/on-ground and move it slowly.
+evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${evidence_dir}"
 roslaunch robotac_flight ev_acceptance_observer.launch \
-  observe_seconds:=20 min_motion_m:=0.30
+  observe_seconds:=20 min_motion_m:=0.30 \
+  evidence_file:="${evidence_dir}/ev_acceptance_observer.json"
 
 # 5) Subscriber-only evidence capture after the read-only graph is running.
-./scripts/collect_readonly_flight_evidence.sh --duration 8 --bag-seconds 0
+./scripts/collect_readonly_flight_evidence.sh \
+  --duration 8 --bag-seconds 0 --output-dir "${evidence_dir}"
 
-# 6) Analyze the collected directory printed by the previous command.
-./scripts/analyze_readonly_flight_evidence.py logs/read_only_evidence/YYYYMMDD_HHMMSS
+# 6) Analyze the same directory. This now requires ev_acceptance_observer.json.
+./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
 EOF
 
 if [[ "${show_active}" == true ]]; then
@@ -252,7 +256,7 @@ if [[ "${show_active}" == true ]]; then
   rm -f /tmp/robotac-active-readiness.$$
   if [[ -z "${evidence_dir}" ]]; then
     print_section "active flight commands blocked"
-    echo "Evidence directory is required for --show-active; run collect_readonly_flight_evidence.sh and pass --evidence-dir." >&2
+    echo "Evidence directory is required for --show-active; run ev_acceptance_observer plus collect_readonly_flight_evidence.sh and pass --evidence-dir." >&2
     exit 2
   fi
   if [[ ! -d "${evidence_dir}" ]]; then

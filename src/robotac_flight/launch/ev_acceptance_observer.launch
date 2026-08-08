@@ -18,6 +18,7 @@
   <arg name="require_on_ground" default="true" />
   <arg name="require_vision_output_enabled" default="true" />
   <arg name="require_vision_status_ok" default="true" />
+  <arg name="evidence_file" default="" />
   <arg name="local_parent" default="map" />
   <arg name="local_child" default="base_link" />
   <arg name="vision_parent" default="odom" />
@@ -46,6 +47,7 @@
     <param name="require_on_ground" value="$(arg require_on_ground)" />
     <param name="require_vision_output_enabled" value="$(arg require_vision_output_enabled)" />
     <param name="require_vision_status_ok" value="$(arg require_vision_status_ok)" />
+    <param name="evidence_file" value="$(arg evidence_file)" />
     <param name="local_parent" value="$(arg local_parent)" />
     <param name="local_child" value="$(arg local_child)" />
     <param name="vision_parent" value="$(arg vision_parent)" />
