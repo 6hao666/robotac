@@ -154,7 +154,8 @@ python3 - "${workspace_dir}/config/flight/local_waypoints.yaml" \
   "${workspace_dir}/config/fastlio/vision_bridge.yaml" \
   "${workspace_dir}/src/robotac_flight/scripts/local_flight_preflight.py" \
   "${workspace_dir}/src/robotac_flight/scripts/local_waypoint_flight.py" \
-  "${workspace_dir}/src/robotac_flight/scripts/fastlio_vision_bridge.py" <<'PY'
+  "${workspace_dir}/src/robotac_flight/scripts/fastlio_vision_bridge.py" \
+  "${workspace_dir}/src/robotac_flight/test/run_dynamic_waypoints_sim.sh" <<'PY'
 import pathlib
 import sys
 
@@ -166,6 +167,7 @@ vision_config = pathlib.Path(sys.argv[5]).read_text()
 preflight_source = pathlib.Path(sys.argv[6]).read_text()
 flight_source = pathlib.Path(sys.argv[7]).read_text()
 bridge_source = pathlib.Path(sys.argv[8]).read_text()
+dynamic_waypoint_test = pathlib.Path(sys.argv[9]).read_text()
 for expected in (
     "waypoint_frame: robotac_start_body",
     "strict_local_frames: true",
@@ -241,6 +243,13 @@ for expected in (
 ):
     if expected not in flight_source:
         raise SystemExit(f"Flight vision-output gate check failed: missing {expected}")
+for expected in (
+    "scripts/publish_waypoints.py",
+    "config/flight/posearray_waypoints_example.yaml",
+    "waypoints_loaded=6",
+):
+    if expected not in dynamic_waypoint_test:
+        raise SystemExit(f"Dynamic waypoint regression check failed: missing {expected}")
 print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 

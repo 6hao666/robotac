@@ -294,10 +294,11 @@ deployment gates, opens no serial device, and never starts MAVROS:
 src/robotac_flight/test/run_closed_loop_sim.sh
 ```
 
-The runtime `PoseArray` API has its own loopback regression. It injects five
-non-symmetric `robotac_start_body` waypoints before mission start, then verifies
-their ENU and MAVLink NED routes after a non-zero start position and 90 degree
-heading. It likewise opens no serial device or MAVROS node:
+The runtime `PoseArray` API has its own loopback regression. It uses the public
+`publish_waypoints.py` helper to load the position-only YAML route before
+mission start, then verifies the resulting ENU and MAVLink NED routes after a
+non-zero start position and 90 degree heading. It likewise opens no serial
+device or MAVROS node:
 
 ```bash
 src/robotac_flight/test/run_dynamic_waypoints_sim.sh

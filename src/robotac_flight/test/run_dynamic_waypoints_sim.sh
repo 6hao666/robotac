@@ -85,12 +85,13 @@ for _ in $(seq 1 100); do
 done
 rosservice list | grep -qx '/robotac/flight/start'
 sleep 0.5
-python3 "${workspace_dir}/src/robotac_flight/test/publish_dynamic_waypoints.py" \
+python3 "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" \
+  --file "${workspace_dir}/config/flight/posearray_waypoints_example.yaml" \
   >"${log_dir}/waypoints.log" 2>&1
 cat "${log_dir}/waypoints.log"
 waypoint_status=$(timeout 2 rostopic echo -n 1 /robotac/flight/status 2>/dev/null || true)
 printf '%s\n' "${waypoint_status}"
-[[ "${waypoint_status}" == *"error=waypoints_loaded=5"* ]]
+[[ "${waypoint_status}" == *"error=waypoints_loaded=6"* ]]
 
 start_result=$(rosservice call /robotac/flight/start)
 printf '%s\n' "${start_result}"
@@ -108,8 +109,8 @@ done
 printf '%s\n' "${summary}"
 [[ "${summary}" == *"complete mode_requests=OFFBOARD,AUTO.LAND"* ]]
 [[ "${summary}" == *"arm_requests=True"* ]]
-[[ "${summary}" == *"route=(3.000,-2.000,1.000)->(3.000,-1.500,1.000)->(3.250,-1.500,1.000)->(3.000,-2.000,1.000)->(2.500,-2.750,1.000)->(3.000,-2.000,1.000)"* ]]
-[[ "${summary}" == *"mavlink_ned_route=(-2.000,3.000,-1.000,0.000)->(-1.500,3.000,-1.000,0.000)->(-1.500,3.250,-1.000,0.000)->(-2.000,3.000,-1.000,0.000)->(-2.750,2.500,-1.000,0.000)->(-2.000,3.000,-1.000,0.000)"* ]]
+[[ "${summary}" == *"route=(3.000,-2.000,1.000)->(3.000,-1.000,1.000)->(3.000,-2.000,1.000)->(2.000,-2.000,1.000)->(3.000,-2.000,1.000)->(4.000,-2.000,1.000)->(3.000,-2.000,1.000)"* ]]
+[[ "${summary}" == *"mavlink_ned_route=(-2.000,3.000,-1.000,0.000)->(-1.000,3.000,-1.000,0.000)->(-2.000,3.000,-1.000,0.000)->(-2.000,2.000,-1.000,0.000)->(-2.000,3.000,-1.000,0.000)->(-2.000,4.000,-1.000,0.000)->(-2.000,3.000,-1.000,0.000)"* ]]
 [[ "${summary}" == *"payload_commands= route="* ]]
 [[ "${summary}" == *"final=(3.000,-2.000,0.000,1.571)"* ]]
 echo "Dynamic PoseArray waypoint regression passed."
