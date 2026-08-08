@@ -7,6 +7,8 @@ MAVROS setpoint/service calls; the mission still requires an explicit
 default and should remain false during bench validation.
 """
 
+import hashlib
+import json
 import math
 import time
 
@@ -223,6 +225,8 @@ class LocalWaypointFlight(object):
         self.origin = None
         self.origin_yaw = 0.0
         self.waypoints = self._load_waypoints()
+        self.route_source = "configured"
+        self.route_revision = 0
         self.index = 0
         self.target = None
         self.state_started = time.monotonic()
@@ -268,6 +272,8 @@ class LocalWaypointFlight(object):
                             if self.enable_payload else None)
         self.status_pub = rospy.Publisher("/robotac/flight/status", String, queue_size=1, latch=True)
         self.active_pub = rospy.Publisher("/robotac/flight/active", Bool, queue_size=1, latch=True)
+        self.route_manifest_pub = rospy.Publisher("/robotac/flight/route_manifest", String,
+                                                 queue_size=1, latch=True)
         rospy.Subscriber("/mavros/state", State, self._state_cb, queue_size=10)
         rospy.Subscriber("/mavros/extended_state", ExtendedState, self._extended_cb, queue_size=10)
         rospy.Subscriber("/mavros/estimator_status", EstimatorStatus, self._estimator_cb, queue_size=10)
@@ -292,6 +298,7 @@ class LocalWaypointFlight(object):
         self.arm_srv = None
         self.mode_srv = None
         self.timer = rospy.Timer(rospy.Duration(1.0 / max(1.0, self.control_rate)), self._tick)
+        self._publish_route_manifest("startup")
         self._publish_status()
         if not self.enable_control:
             rospy.logwarn("robotac flight control disabled; only setpoint_preview is published")
@@ -561,7 +568,10 @@ class LocalWaypointFlight(object):
                               "yaw": yaw, "hold": self.hold_seconds,
                               "payload_action": "none", "payload_settle": 0.0})
         self.waypoints = converted
+        self.route_source = "posearray"
+        self.route_revision += 1
         self.last_error = "waypoints_loaded=%d" % len(converted)
+        self._publish_route_manifest("waypoints_loaded")
         self._publish_status()
 
     def _start_cb(self, _request):
@@ -633,6 +643,7 @@ class LocalWaypointFlight(object):
         self.control_tx_enabled = self.enable_control
         self.last_consumer_check_wall = 0.0
         self.last_consumer_issue = None
+        self._publish_route_manifest("mission_started")
         self._enter(self.PAYLOAD_PREPARE if
                     self.enable_payload and self.payload_preflight_close else self.PRESTREAM)
         return TriggerResponse(True, "mission_started_control_enabled=%s" % self.enable_control)
@@ -679,6 +690,7 @@ class LocalWaypointFlight(object):
         self.payload_ack_time = None
         self.payload_state = "disabled" if not self.enable_payload else "uncommanded"
         self._enter(self.IDLE)
+        self._publish_route_manifest("reset")
         return TriggerResponse(True, "reset")
 
     def _validate_waypoints(self):
@@ -962,6 +974,80 @@ class LocalWaypointFlight(object):
             issue = "mavros_setpoint_raw_consumer_lost"
         self.last_consumer_issue = issue
         return issue
+
+    @staticmethod
+    def _manifest_float(value):
+        return round(float(value), 6)
+
+    def _manifest_waypoints(self):
+        waypoints = []
+        for index, waypoint in enumerate(self.waypoints):
+            waypoints.append({
+                "index": index,
+                "x": self._manifest_float(waypoint["x"]),
+                "y": self._manifest_float(waypoint["y"]),
+                "z": self._manifest_float(waypoint["z"]),
+                "yaw": self._manifest_float(waypoint["yaw"]),
+                "hold": self._manifest_float(waypoint["hold"]),
+                "payload_action": waypoint["payload_action"],
+                "payload_settle": self._manifest_float(waypoint["payload_settle"]),
+            })
+        return waypoints
+
+    def _route_fingerprint(self, waypoints):
+        route = {
+            "frame": self.input_frame,
+            "takeoff_height": self._manifest_float(self.takeoff_height),
+            "waypoints": waypoints,
+        }
+        encoded = json.dumps(route, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _target_route_manifest(self):
+        if self.origin is None:
+            return []
+        targets = [{
+            "state": "TAKEOFF",
+            "waypoint_index": None,
+            "target": [
+                self._manifest_float(self.origin[0]),
+                self._manifest_float(self.origin[1]),
+                self._manifest_float(self.origin[2] + self.takeoff_height),
+                self._manifest_float(self.origin_yaw),
+            ],
+        }]
+        for index, waypoint in enumerate(self.waypoints):
+            target = self._absolute_target(waypoint)
+            targets.append({
+                "state": "WAYPOINTS",
+                "waypoint_index": index,
+                "target": [self._manifest_float(value) for value in target],
+            })
+        return targets
+
+    def _publish_route_manifest(self, event):
+        waypoints = self._manifest_waypoints()
+        origin = None
+        if self.origin is not None:
+            origin = [self._manifest_float(value) for value in self.origin]
+        manifest = {
+            "event": event,
+            "route_source": self.route_source,
+            "route_revision": self.route_revision,
+            "route_fingerprint": self._route_fingerprint(waypoints),
+            "waypoint_frame": self.input_frame,
+            "waypoint_count": len(waypoints),
+            "takeoff_height": self._manifest_float(self.takeoff_height),
+            "require_auto_land": bool(self.require_auto_land),
+            "auto_land": bool(self.auto_land),
+            "enable_control": bool(self.enable_control),
+            "origin": origin,
+            "origin_yaw": None if self.origin is None else self._manifest_float(self.origin_yaw),
+            "waypoints": waypoints,
+            "target_route": self._target_route_manifest(),
+            "stamp": rospy.Time.now().to_sec(),
+        }
+        self.route_manifest_pub.publish(String(data=json.dumps(manifest, sort_keys=True)))
 
     def _has_payload_actions(self):
         return any(waypoint["payload_action"] != "none" for waypoint in self.waypoints)

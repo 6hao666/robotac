@@ -314,11 +314,13 @@ def _check_evidence_surface(root):
     )))
     missing.extend("goal_audit_missing:%s" % token for token in _contains_all(goal_audit, (
         "active_route_matches_config",
-        "route_target_mismatch",
+        "%s_target_mismatch",
         "route_origin_mismatch",
         "initial_local_position",
-        "route_targets_match_config",
+        "%s_targets_match",
         "allow_dynamic_active_route",
+        "dynamic_route_manifest_missing",
+        "prefix=\"dynamic_route\"",
     )))
     missing.extend("ladder_missing:%s" % token for token in _contains_all(ladder, (
         "active flight commands hidden",

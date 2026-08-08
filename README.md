@@ -303,6 +303,7 @@ Runtime interfaces:
 /robotac/flight/reset              std_srvs/Trigger
 /robotac/flight/status             std_msgs/String
 /robotac/flight/setpoint_preview   mavros_msgs/PositionTarget
+/robotac/flight/route_manifest     std_msgs/String (JSON, latched)
 /mavros/setpoint_raw/local         mavros_msgs/PositionTarget (opt-in)
 /robotac/servo/open                std_msgs/Bool (payload opt-in only)
 /robotac/servo/status              std_msgs/String (serial-write feedback)
@@ -317,6 +318,10 @@ locks the accepted route once a mission starts; call reset before replacing it.
 `PoseArray` can carry only position and yaw, so it is for position-only routes.
 The checked-in payload mission with per-waypoint hold and `payload_action` must
 be loaded through `config/flight/local_waypoints.yaml` at launch.
+Every accepted route is also published on `/robotac/flight/route_manifest` as
+latched JSON. After `/robotac/flight/start`, that manifest includes the captured
+local origin, route source (`configured` or `posearray`), fingerprint, waypoint
+count, and absolute local ENU targets used for takeoff and each waypoint.
 
 To publish a position-only waypoint file without starting the mission or
 touching MAVROS, first dry-run the parser, then publish while the controller is
@@ -557,9 +562,10 @@ roslaunch robotac_flight active_flight_observer.launch \
 ```
 
 The observer subscribes only to `/robotac/flight/status`,
-`/robotac/flight/setpoint_preview`, `/mavros/local_position/odom`,
-`/mavros/state`, `/mavros/extended_state`, and servo status. It never publishes
-setpoints, calls services, arms, changes mode, or commands landing. A passing
+`/robotac/flight/setpoint_preview`, `/robotac/flight/route_manifest`,
+`/mavros/local_position/odom`, `/mavros/state`, `/mavros/extended_state`, and
+servo status. It never publishes setpoints, calls services, arms, changes mode,
+or commands landing. A passing
 `active_flight_observer.json` requires the controller to reach `COMPLETE`, all
 waypoints to be consumed, relative airborne altitude to have been observed, MAVROS to
 finish disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to
@@ -597,10 +603,12 @@ active local-flight evidence together. The default required phase is
 payload mission. By default it also requires the active-flight evidence waypoint
 count and target coordinates to match `config/flight/local_waypoints.yaml`; use
 `--allow-dynamic-active-route` only when the mission was intentionally replaced
-through `/robotac/flight/waypoints` before `/robotac/flight/start`. Start the
-active observer before `/robotac/flight/start`: its initial MAVROS local pose is
-used as independent evidence that the route targets were generated relative to
-the actual local takeoff pose.
+through `/robotac/flight/waypoints` before `/robotac/flight/start`. In that mode
+the audit still requires the observer's route manifest and matches every actual
+`TAKEOFF`/`WAYPOINTS` target against the manifest. Start the active observer
+before `/robotac/flight/start`: its initial MAVROS local pose is used as
+independent evidence that the route targets were generated relative to the
+actual local takeoff pose.
 
 The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
 rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG

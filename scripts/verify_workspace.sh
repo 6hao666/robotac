@@ -1146,7 +1146,8 @@ def write_readonly_evidence(root):
     }, indent=2))
 
 def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8,
-                          corrupt_waypoint_index=None, corrupt_initial_origin=False):
+                          corrupt_waypoint_index=None, corrupt_initial_origin=False,
+                          dynamic_manifest=False, corrupt_dynamic_manifest=False):
     root.mkdir(parents=True, exist_ok=True)
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
@@ -1154,14 +1155,14 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
          "max_continuous_reach_s": 1.0, "reached": True},
     ]
     route = (
-            [1, 0, 1, 0],
-            [0, 0, 1, 0],
-            [0, 1, 1, 0],
-            [0, 0, 1, 0],
-            [0, -1, 1, 0],
-            [0, 0, 1, 0],
-            [-1, 0, 1, 0],
-            [0, 0, 1, 0],
+        [1, 0, 1, 0],
+        [0, 0, 1, 0],
+        [0, 1, 1, 0],
+        [0, 0, 1, 0],
+        [0, -1, 1, 0],
+        [0, 0, 1, 0],
+        [-1, 0, 1, 0],
+        [0, 0, 1, 0],
     )[:waypoint_count]
     for index, target in enumerate(route):
         target = list(target)
@@ -1176,26 +1177,50 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
             "max_continuous_reach_s": 1.0,
             "reached": True,
         })
+    summary = {
+        "last_status": {"state": "COMPLETE" if success else "ABORT", "waypoint": "%d/%d" % (waypoint_count, waypoint_count)},
+        "abort_reason": None if success else "test",
+        "max_waypoint_index": waypoint_count,
+        "total_waypoints": waypoint_count,
+        "setpoint_count": 120,
+        "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
+        "target_records": target_records,
+        "local_count": 240,
+        "initial_local_position": [0.50 if corrupt_initial_origin else 0.0, 0.0, 0.0],
+        "initial_local_yaw": 0.0,
+        "max_relative_local_z": 1.02,
+        "final_armed": False,
+        "final_landed_state": 1,
+        "payload_open_seen": payload_open,
+    }
+    if dynamic_manifest:
+        manifest_route = []
+        for record in target_records:
+            item = {
+                "state": record["state"],
+                "waypoint_index": record["waypoint_index"] if record["state"] == "WAYPOINTS" else None,
+                "target": list(record["target"]),
+            }
+            manifest_route.append(item)
+        if corrupt_dynamic_manifest and len(manifest_route) > 1:
+            manifest_route[1]["target"][0] += 0.50
+        summary["route_manifest"] = {
+            "event": "mission_started",
+            "route_source": "posearray",
+            "route_revision": 1,
+            "route_fingerprint": "synthetic",
+            "waypoint_frame": "robotac_start_body",
+            "waypoint_count": waypoint_count,
+            "takeoff_height": 1.0,
+            "origin": [0.0, 0.0, 0.0],
+            "origin_yaw": 0.0,
+            "target_route": manifest_route,
+        }
     write(root / "active_flight_observer.json", json.dumps({
         "observer": "active_flight_observer",
         "success": success,
         "reason": "active_local_flight_passed" if success else "flight_aborted:test",
-        "summary": {
-            "last_status": {"state": "COMPLETE" if success else "ABORT", "waypoint": "%d/%d" % (waypoint_count, waypoint_count)},
-            "abort_reason": None if success else "test",
-            "max_waypoint_index": waypoint_count,
-            "total_waypoints": waypoint_count,
-            "setpoint_count": 120,
-            "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
-            "target_records": target_records,
-            "local_count": 240,
-            "initial_local_position": [0.50 if corrupt_initial_origin else 0.0, 0.0, 0.0],
-            "initial_local_yaw": 0.0,
-            "max_relative_local_z": 1.02,
-            "final_armed": False,
-            "final_landed_state": 1,
-            "payload_open_seen": payload_open,
-        },
+        "summary": summary,
     }, indent=2))
 
 with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
@@ -1245,6 +1270,31 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if wrong_origin.returncode == 0 or "route_origin_mismatch" not in wrong_origin.stdout:
         raise SystemExit("Goal audit accepted active-flight evidence with the wrong local route origin")
+    write_active_evidence(active, payload_open=False, waypoint_count=2)
+    dynamic_missing_manifest = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--allow-dynamic-active-route"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if dynamic_missing_manifest.returncode == 0 or "dynamic_route_manifest_missing" not in dynamic_missing_manifest.stdout:
+        raise SystemExit("Goal audit accepted dynamic active route evidence without a route manifest")
+    write_active_evidence(active, payload_open=False, waypoint_count=2, dynamic_manifest=True)
+    dynamic_ready = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--allow-dynamic-active-route"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if dynamic_ready.returncode != 0 or "active_local_flight=READY" not in dynamic_ready.stdout:
+        raise SystemExit("Goal audit rejected valid dynamic route manifest evidence:\n%s\n%s" % (dynamic_ready.stdout, dynamic_ready.stderr))
+    write_active_evidence(active, payload_open=False, waypoint_count=2, dynamic_manifest=True,
+                          corrupt_dynamic_manifest=True)
+    dynamic_wrong_target = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--allow-dynamic-active-route"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if dynamic_wrong_target.returncode == 0 or "dynamic_route_target_mismatch:waypoints0" not in dynamic_wrong_target.stdout:
+        raise SystemExit("Goal audit accepted dynamic active route evidence with a wrong manifest target")
     write_active_evidence(active, payload_open=False)
     payload_missing = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),

@@ -19,6 +19,7 @@
   <arg name="mavros_state_topic" default="/mavros/state" />
   <arg name="extended_state_topic" default="/mavros/extended_state" />
   <arg name="payload_status_topic" default="/robotac/servo/status" />
+  <arg name="route_manifest_topic" default="/robotac/flight/route_manifest" />
 
   <node pkg="robotac_flight" type="active_flight_observer.py"
         name="active_flight_observer" output="screen" required="true">
@@ -39,5 +40,6 @@
     <param name="mavros_state_topic" value="$(arg mavros_state_topic)" />
     <param name="extended_state_topic" value="$(arg extended_state_topic)" />
     <param name="payload_status_topic" value="$(arg payload_status_topic)" />
+    <param name="route_manifest_topic" value="$(arg route_manifest_topic)" />
   </node>
 </launch>

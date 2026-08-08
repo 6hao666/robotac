@@ -86,6 +86,9 @@ class ActiveFlightObserver(object):
         self.setpoint_receive = None
         self.unique_setpoints = []
         self.target_records = []
+        self.route_manifest = None
+        self.route_manifest_history = []
+        self.route_manifest_receive = None
 
         self.local_count = 0
         self.local_receive = None
@@ -117,6 +120,8 @@ class ActiveFlightObserver(object):
                          ExtendedState, self._extended_state_cb, queue_size=20)
         rospy.Subscriber(rospy.get_param("~payload_status_topic", "/robotac/servo/status"),
                          String, self._payload_status_cb, queue_size=10)
+        rospy.Subscriber(rospy.get_param("~route_manifest_topic", "/robotac/flight/route_manifest"),
+                         String, self._route_manifest_cb, queue_size=10)
         self.timer = rospy.Timer(rospy.Duration(0.20), self._tick)
 
     def _validate_parameters(self):
@@ -288,6 +293,19 @@ class ActiveFlightObserver(object):
             self.payload_open_seen = True
             self.payload_status_receive = time.monotonic()
 
+    def _route_manifest_cb(self, msg):
+        try:
+            manifest = json.loads(msg.data)
+        except (TypeError, ValueError):
+            return
+        if not isinstance(manifest, dict):
+            return
+        self.route_manifest = manifest
+        self.route_manifest_receive = time.monotonic()
+        self.route_manifest_history.append(manifest)
+        if len(self.route_manifest_history) > 20:
+            self.route_manifest_history = self.route_manifest_history[-20:]
+
     def _target_reach_issue(self):
         flight_targets = [record for record in self.target_records
                           if record.get("state") in ("TAKEOFF", "WAYPOINTS")]
@@ -373,6 +391,8 @@ class ActiveFlightObserver(object):
             "setpoint_count": self.setpoint_count,
             "unique_setpoints": self.unique_setpoints,
             "target_records": self._public_target_records(),
+            "route_manifest": self.route_manifest,
+            "route_manifest_history": self.route_manifest_history,
             "local_count": self.local_count,
             "initial_local_position": self.initial_local_position,
             "initial_local_yaw": self.initial_local_yaw,

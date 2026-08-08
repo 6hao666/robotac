@@ -126,18 +126,140 @@ def _position_tuple(values):
     return result if all(value is not None for value in result) else None
 
 
+def _active_targets_by_key(records):
+    actual_by_key = {}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        state = record.get("state")
+        if state == "TAKEOFF":
+            key = ("TAKEOFF", 0)
+        elif state == "WAYPOINTS":
+            try:
+                key = ("WAYPOINTS", int(record.get("waypoint_index")))
+            except (TypeError, ValueError):
+                continue
+        else:
+            continue
+        target = _target_tuple(record)
+        if target is not None:
+            actual_by_key[key] = target
+    return actual_by_key
+
+
+def _match_route_targets(records, expected_targets, args, prefix="route"):
+    actual_by_key = _active_targets_by_key(records)
+    missing = []
+    notes = []
+    max_position_delta = 0.0
+    max_yaw_delta = 0.0
+    position_tolerance = args.route_target_tolerance
+    yaw_tolerance = math.radians(args.route_yaw_tolerance_deg)
+    for index, expected in enumerate(expected_targets):
+        if not isinstance(expected, dict):
+            missing.append("%s_target_invalid:%d" % (prefix, index))
+            continue
+        if expected.get("state") == "TAKEOFF":
+            key = ("TAKEOFF", 0)
+        elif expected.get("state") == "WAYPOINTS":
+            try:
+                key = ("WAYPOINTS", int(expected.get("waypoint_index")))
+            except (TypeError, ValueError):
+                missing.append("%s_target_invalid:%d" % (prefix, index))
+                continue
+        else:
+            missing.append("%s_target_invalid:%d" % (prefix, index))
+            continue
+        actual = actual_by_key.get(key)
+        if actual is None:
+            missing.append("%s_target_missing:%s%d" % (prefix, key[0].lower(), key[1]))
+            continue
+        expected_target = _target_tuple(expected)
+        if expected_target is None:
+            missing.append("%s_target_invalid:%s%d" % (prefix, key[0].lower(), key[1]))
+            continue
+        position_delta = math.sqrt(sum((actual[i] - expected_target[i]) ** 2 for i in range(3)))
+        yaw_delta = abs(_angle_error(actual[3], expected_target[3]))
+        max_position_delta = max(max_position_delta, position_delta)
+        max_yaw_delta = max(max_yaw_delta, yaw_delta)
+        if position_delta > position_tolerance or yaw_delta > yaw_tolerance:
+            missing.append("%s_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
+                prefix, key[0].lower(), key[1], position_delta, math.degrees(yaw_delta)))
+    if not missing:
+        notes.append("%s_targets_match=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f" % (
+            prefix, len(expected_targets), max_position_delta, math.degrees(max_yaw_delta)))
+    return missing, notes
+
+
+def _dynamic_route_match_report(args, summary, records):
+    manifest = summary.get("route_manifest") if isinstance(summary.get("route_manifest"), dict) else None
+    if manifest is None:
+        return _phase("active_route_matches_config", False,
+                      ["dynamic_route_manifest_missing"],
+                      ["active_flight_observer must record /robotac/flight/route_manifest"])
+    target_route = manifest.get("target_route")
+    if not isinstance(target_route, list) or len(target_route) < 2:
+        return _phase("active_route_matches_config", False,
+                      ["dynamic_route_target_manifest_missing"])
+    if manifest.get("event") != "mission_started":
+        return _phase("active_route_matches_config", False,
+                      ["dynamic_route_manifest_not_started"])
+    if manifest.get("route_source") != "posearray":
+        return _phase("active_route_matches_config", False,
+                      ["dynamic_route_source_not_posearray"])
+    waypoint_count = _number(manifest.get("waypoint_count"))
+    waypoint_count_int = None if waypoint_count is None else int(waypoint_count)
+    if (waypoint_count is None or abs(waypoint_count - waypoint_count_int) > 1.0e-9 or
+            waypoint_count_int != len([item for item in target_route
+                                       if isinstance(item, dict) and item.get("state") == "WAYPOINTS"])):
+        return _phase("active_route_matches_config", False,
+                      ["dynamic_route_waypoint_count_mismatch"])
+
+    missing = []
+    notes = []
+    initial_position = _position_tuple(summary.get("initial_local_position"))
+    initial_yaw = _number(summary.get("initial_local_yaw"))
+    origin = _position_tuple(manifest.get("origin"))
+    origin_yaw = _number(manifest.get("origin_yaw"))
+    if origin is None:
+        missing.append("dynamic_route_origin_missing")
+    elif initial_position is None:
+        missing.append("route_origin_position_missing")
+    else:
+        origin_delta = math.sqrt(sum((origin[i] - initial_position[i]) ** 2 for i in range(3)))
+        if origin_delta > args.route_origin_tolerance:
+            missing.append("route_origin_mismatch:pos=%.3f" % origin_delta)
+    if origin_yaw is None:
+        missing.append("dynamic_route_origin_yaw_missing")
+    elif initial_yaw is None:
+        missing.append("route_origin_yaw_missing")
+    else:
+        origin_yaw_delta = abs(_angle_error(origin_yaw, initial_yaw))
+        if origin_yaw_delta > math.radians(args.route_yaw_tolerance_deg):
+            missing.append("route_origin_yaw_mismatch:deg=%.2f" % math.degrees(origin_yaw_delta))
+
+    target_missing, target_notes = _match_route_targets(records, target_route, args, prefix="dynamic_route")
+    missing.extend(target_missing)
+    notes.extend(target_notes)
+    if not missing:
+        notes.append("dynamic_route_source=%s revision=%s fingerprint=%s" % (
+            manifest.get("route_source", "unknown"),
+            manifest.get("route_revision", "unknown"),
+            str(manifest.get("route_fingerprint", ""))[:12]))
+    return _phase("active_route_matches_config", not missing, missing, notes)
+
+
 def _active_route_match_report(args):
     if not args.active_evidence:
         return _phase("active_route_matches_config", False,
                       ["active_flight_evidence_missing"],
                       ["pass --active-evidence after active_flight_observer exits"])
-    if args.allow_dynamic_active_route:
-        return _phase("active_route_matches_config", True, [],
-                      ["dynamic active route explicitly allowed; config route target match skipped"])
-
     _path, data = analyze_active_flight_evidence._load(args.active_evidence)
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     records = summary.get("target_records") if isinstance(summary.get("target_records"), list) else []
+    if args.allow_dynamic_active_route:
+        return _dynamic_route_match_report(args, summary, records)
+
     takeoff_records = [record for record in records
                        if isinstance(record, dict) and record.get("state") == "TAKEOFF"]
     if not takeoff_records:
@@ -177,40 +299,19 @@ def _active_route_match_report(args):
         if origin_yaw_delta > math.radians(args.route_yaw_tolerance_deg):
             missing.append("route_origin_yaw_mismatch:deg=%.2f" % math.degrees(origin_yaw_delta))
 
-    actual_by_key = {("TAKEOFF", 0): takeoff_target}
-    for record in records:
-        if not isinstance(record, dict) or record.get("state") != "WAYPOINTS":
-            continue
-        try:
-            waypoint_index = int(record.get("waypoint_index"))
-        except (TypeError, ValueError):
-            continue
-        target = _target_tuple(record)
-        if target is not None:
-            actual_by_key[("WAYPOINTS", waypoint_index)] = target
-
-    max_position_delta = 0.0
-    max_yaw_delta = 0.0
-    position_tolerance = args.route_target_tolerance
-    yaw_tolerance = math.radians(args.route_yaw_tolerance_deg)
+    expected_records = []
     for index, expected in enumerate(expected_targets):
-        key = ("TAKEOFF", 0) if index == 0 else ("WAYPOINTS", index - 1)
-        actual = actual_by_key.get(key)
-        if actual is None:
-            missing.append("route_target_missing:%s%d" % (key[0].lower(), key[1]))
-            continue
-        expected_target = expected["target"]
-        position_delta = math.sqrt(sum((actual[i] - expected_target[i]) ** 2 for i in range(3)))
-        yaw_delta = abs(_angle_error(actual[3], expected_target[3]))
-        max_position_delta = max(max_position_delta, position_delta)
-        max_yaw_delta = max(max_yaw_delta, yaw_delta)
-        if position_delta > position_tolerance or yaw_delta > yaw_tolerance:
-            missing.append("route_target_mismatch:%s%d:pos=%.3f:yaw_deg=%.2f" % (
-                key[0].lower(), key[1], position_delta, math.degrees(yaw_delta)))
+        expected_records.append({
+            "state": "TAKEOFF" if index == 0 else "WAYPOINTS",
+            "waypoint_index": None if index == 0 else index - 1,
+            "target": list(expected["target"]),
+        })
+    target_missing, target_notes = _match_route_targets(records, expected_records, args, prefix="route")
+    missing.extend(target_missing)
+    notes.extend(target_notes)
 
     if not missing:
-        notes.append("route_targets_match_config=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f origin_delta=%.3f origin_yaw_delta_deg=%.2f" % (
-            len(expected_targets), max_position_delta, math.degrees(max_yaw_delta),
+        notes.append("route_origin_delta=%.3f origin_yaw_delta_deg=%.2f" % (
             max_origin_delta, math.degrees(max_origin_yaw_delta)))
     return _phase("active_route_matches_config", not missing, missing, notes)
 
