@@ -7,6 +7,8 @@
   <arg name="min_setpoints" default="20" />
   <arg name="require_raw_setpoints" default="true" />
   <arg name="min_raw_setpoints" default="20" />
+  <arg name="min_active_raw_setpoints" default="20" />
+  <arg name="min_active_unique_raw_setpoints" default="2" />
   <arg name="require_raw_setpoint_publisher" default="true" />
   <arg name="raw_setpoint_expected_publisher_node" default="/local_waypoint_flight" />
   <arg name="raw_setpoint_publisher_check_interval" default="0.50" />
@@ -49,6 +51,8 @@
     <param name="min_setpoints" value="$(arg min_setpoints)" />
     <param name="require_raw_setpoints" value="$(arg require_raw_setpoints)" />
     <param name="min_raw_setpoints" value="$(arg min_raw_setpoints)" />
+    <param name="min_active_raw_setpoints" value="$(arg min_active_raw_setpoints)" />
+    <param name="min_active_unique_raw_setpoints" value="$(arg min_active_unique_raw_setpoints)" />
     <param name="require_raw_setpoint_publisher" value="$(arg require_raw_setpoint_publisher)" />
     <param name="raw_setpoint_expected_publisher_node" value="$(arg raw_setpoint_expected_publisher_node)" />
     <param name="raw_setpoint_publisher_check_interval" value="$(arg raw_setpoint_publisher_check_interval)" />

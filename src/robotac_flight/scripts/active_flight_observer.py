@@ -60,6 +60,8 @@ class ActiveFlightObserver(object):
         self.min_setpoints = int(rospy.get_param("~min_setpoints", 20))
         self.require_raw_setpoints = _as_bool(rospy.get_param("~require_raw_setpoints", True))
         self.min_raw_setpoints = int(rospy.get_param("~min_raw_setpoints", 20))
+        self.min_active_raw_setpoints = int(rospy.get_param("~min_active_raw_setpoints", 20))
+        self.min_active_unique_raw_setpoints = int(rospy.get_param("~min_active_unique_raw_setpoints", 2))
         self.raw_setpoint_topic = rospy.get_param("~raw_setpoint_topic", "/mavros/setpoint_raw/local")
         self.require_raw_setpoint_publisher = _as_bool(
             rospy.get_param("~require_raw_setpoint_publisher", True))
@@ -118,6 +120,9 @@ class ActiveFlightObserver(object):
         self.raw_setpoint_count = 0
         self.raw_setpoint_receive = None
         self.unique_raw_setpoints = []
+        self.active_raw_setpoint_count = 0
+        self.active_raw_setpoint_receive = None
+        self.active_unique_raw_setpoints = []
         self.raw_setpoint_frame_mismatch_count = 0
         self.raw_setpoint_expected_publisher_seen = False
         self.raw_setpoint_publishers_seen = []
@@ -211,6 +216,10 @@ class ActiveFlightObserver(object):
             raise ValueError("min_setpoints must be positive")
         if self.require_raw_setpoints and self.min_raw_setpoints < 1:
             raise ValueError("min_raw_setpoints must be positive when raw setpoints are required")
+        if self.require_raw_setpoints and self.min_active_raw_setpoints < 1:
+            raise ValueError("min_active_raw_setpoints must be positive when raw setpoints are required")
+        if self.require_raw_setpoints and self.min_active_unique_raw_setpoints < 1:
+            raise ValueError("min_active_unique_raw_setpoints must be positive when raw setpoints are required")
         if self.require_raw_setpoint_publisher:
             if not self.raw_setpoint_topic:
                 raise ValueError("raw_setpoint_topic must be non-empty when raw setpoint publisher is required")
@@ -315,8 +324,9 @@ class ActiveFlightObserver(object):
                 targets[key] = target
         return targets
 
-    def _target_present_in_raw_setpoints(self, expected):
-        for raw_target in self.unique_raw_setpoints:
+    def _target_present_in_raw_setpoints(self, expected, raw_setpoints=None):
+        source = self.unique_raw_setpoints if raw_setpoints is None else raw_setpoints
+        for raw_target in source:
             actual = self._target_values(raw_target)
             if actual is None:
                 continue
@@ -333,9 +343,10 @@ class ActiveFlightObserver(object):
         return (position_delta <= self.route_manifest_target_tolerance and
                 yaw_delta <= self.route_manifest_yaw_tolerance)
 
-    def _raw_setpoints_follow_manifest_route(self, manifest_route):
+    def _raw_setpoints_follow_manifest_route(self, manifest_route, raw_setpoints=None):
+        source = self.unique_raw_setpoints if raw_setpoints is None else raw_setpoints
         raw_targets = []
-        for raw_target in self.unique_raw_setpoints:
+        for raw_target in source:
             actual = self._target_values(raw_target)
             if actual is not None:
                 raw_targets.append(actual)
@@ -405,6 +416,12 @@ class ActiveFlightObserver(object):
     def _mission_active(self):
         return self.last_status.get("state") not in (None, "", "IDLE", "COMPLETE", "ABORT")
 
+    def _active_control_window(self):
+        if not self._mission_active() or self.mavros_state is None:
+            return False
+        return (bool(self.mavros_state.connected) and bool(self.mavros_state.armed) and
+                str(self.mavros_state.mode).strip() == "OFFBOARD")
+
     def _append_target_record_if_needed(self, target):
         state = self.last_status.get("state", "unknown")
         if state not in ("TAKEOFF", "WAYPOINTS"):
@@ -451,6 +468,10 @@ class ActiveFlightObserver(object):
         self.raw_setpoint_receive = time.monotonic()
         target = tuple(float(value) for value in values)
         self._append_unique(self.unique_raw_setpoints, target)
+        if self._active_control_window():
+            self.active_raw_setpoint_count += 1
+            self.active_raw_setpoint_receive = self.raw_setpoint_receive
+            self._append_unique(self.active_unique_raw_setpoints, target)
         if msg.coordinate_frame != PositionTarget.FRAME_LOCAL_NED:
             self.raw_setpoint_frame_mismatch_count += 1
 
@@ -719,6 +740,9 @@ class ActiveFlightObserver(object):
         if (self.require_raw_setpoints and
                 not self._raw_setpoints_follow_manifest_route(target_route)):
             return "route_manifest_raw_setpoint_order_mismatch"
+        if (self.require_raw_setpoints and
+                not self._raw_setpoints_follow_manifest_route(target_route, self.active_unique_raw_setpoints)):
+            return "route_manifest_active_raw_setpoint_order_mismatch"
         for key, expected in manifest_targets.items():
             actual = observed_targets.get(key)
             if actual is None:
@@ -731,6 +755,9 @@ class ActiveFlightObserver(object):
                     key[0].lower(), key[1], position_delta, math.degrees(yaw_delta))
             if self.require_raw_setpoints and not self._target_present_in_raw_setpoints(expected):
                 return "route_manifest_raw_setpoint_missing:%s%d" % (key[0].lower(), key[1])
+            if (self.require_raw_setpoints and
+                    not self._target_present_in_raw_setpoints(expected, self.active_unique_raw_setpoints)):
+                return "route_manifest_active_raw_setpoint_missing:%s%d" % (key[0].lower(), key[1])
         return None
 
     def _failure_reason(self, final=False):
@@ -745,6 +772,10 @@ class ActiveFlightObserver(object):
         if self.require_raw_setpoints:
             if self.raw_setpoint_count < self.min_raw_setpoints:
                 return "raw_setpoint_count_below_%d" % self.min_raw_setpoints
+            if self.active_raw_setpoint_count < self.min_active_raw_setpoints:
+                return "active_raw_setpoint_count_below_%d" % self.min_active_raw_setpoints
+            if len(self.active_unique_raw_setpoints) < self.min_active_unique_raw_setpoints:
+                return "active_unique_raw_setpoints_below_%d" % self.min_active_unique_raw_setpoints
             if self.raw_setpoint_frame_mismatch_count > 0:
                 return "raw_setpoint_frame_mismatch"
             if (self.require_raw_setpoint_publisher and
@@ -829,6 +860,8 @@ class ActiveFlightObserver(object):
             "unique_setpoints": self.unique_setpoints,
             "raw_setpoint_count": self.raw_setpoint_count,
             "unique_raw_setpoints": self.unique_raw_setpoints,
+            "active_raw_setpoint_count": self.active_raw_setpoint_count,
+            "active_unique_raw_setpoints": self.active_unique_raw_setpoints,
             "raw_setpoint_frame_mismatch_count": self.raw_setpoint_frame_mismatch_count,
             "raw_setpoint_expected_publisher_seen": self.raw_setpoint_expected_publisher_seen,
             "raw_setpoint_publishers_seen": self.raw_setpoint_publishers_seen,
@@ -878,6 +911,8 @@ class ActiveFlightObserver(object):
                 "min_setpoints": self.min_setpoints,
                 "require_raw_setpoints": self.require_raw_setpoints,
                 "min_raw_setpoints": self.min_raw_setpoints,
+                "min_active_raw_setpoints": self.min_active_raw_setpoints,
+                "min_active_unique_raw_setpoints": self.min_active_unique_raw_setpoints,
                 "require_raw_setpoint_publisher": self.require_raw_setpoint_publisher,
                 "raw_setpoint_expected_publisher_node": self.raw_setpoint_expected_publisher_node,
                 "raw_setpoint_publisher_check_interval": self.raw_setpoint_publisher_check_interval,

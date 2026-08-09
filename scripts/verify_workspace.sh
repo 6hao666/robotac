@@ -612,6 +612,10 @@ for expected in (
     "raw_setpoint_topic",
     "raw_setpoint_count",
     "unique_raw_setpoints",
+    "active_raw_setpoint_count",
+    "active_unique_raw_setpoints",
+    "min_active_raw_setpoints",
+    "min_active_unique_raw_setpoints",
     "raw_setpoint_frame_mismatch_count",
     "raw_setpoint_expected_publisher_seen",
     "raw_setpoint_expected_publisher_missing",
@@ -627,6 +631,8 @@ for expected in (
     "route_manifest_observed_target_mismatch",
     "route_manifest_raw_setpoint_missing",
     "route_manifest_raw_setpoint_order_mismatch",
+    "route_manifest_active_raw_setpoint_missing",
+    "route_manifest_active_raw_setpoint_order_mismatch",
     "route_status_fingerprint_mismatch",
     "active_local_flight_passed",
     "target_records",
@@ -1003,8 +1009,12 @@ for expected in (
     "route_status_fingerprint_mismatch",
     "raw_setpoint_count_below",
     "unique_raw_setpoints_below",
+    "active_raw_setpoint_count_below",
+    "active_unique_raw_setpoints_below",
     "raw_setpoint_frame_mismatch_count",
     "raw_setpoint_expected_publisher_missing",
+    "min-active-raw-setpoints",
+    "min-active-unique-raw-setpoints",
     "route-manifest-target-tolerance",
     "waypoints_incomplete",
     "final_disarmed",
@@ -1196,8 +1206,11 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    active_mavros_control=True, include_landing_state=True,
                    raw_setpoints=True, raw_frame_mismatch=False,
                    raw_expected_publisher=True,
+                   active_raw_setpoints=True,
                    raw_setpoint_order_mismatch=False,
                    corrupt_raw_setpoint_target=False,
+                   active_raw_setpoint_order_mismatch=False,
+                   corrupt_active_raw_setpoint_target=False,
                    omit_route_manifest=False, corrupt_route_manifest_target=False,
                    corrupt_route_status_fingerprint=False):
     target_records = [
@@ -1259,6 +1272,11 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
         raw_targets[4][0] += 0.50
     if raw_setpoint_order_mismatch and len(raw_targets) > 4:
         raw_targets[2], raw_targets[3] = raw_targets[3], raw_targets[2]
+    active_raw_targets = [list(record["target"]) for record in target_records]
+    if corrupt_active_raw_setpoint_target and len(active_raw_targets) > 3:
+        active_raw_targets[3][0] += 0.50
+    if active_raw_setpoint_order_mismatch and len(active_raw_targets) > 3:
+        active_raw_targets[2], active_raw_targets[3] = active_raw_targets[3], active_raw_targets[2]
     status_fingerprint = "wrong" if corrupt_route_status_fingerprint else "synthetic"
     path.write_text(json.dumps({
         "observer": "active_flight_observer",
@@ -1277,6 +1295,8 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0], [0, 0, 1, 0]],
             "raw_setpoint_count": 120 if raw_setpoints else 0,
             "unique_raw_setpoints": raw_targets if raw_setpoints else [],
+            "active_raw_setpoint_count": 120 if raw_setpoints and active_raw_setpoints else 0,
+            "active_unique_raw_setpoints": active_raw_targets if raw_setpoints and active_raw_setpoints else [],
             "raw_setpoint_frame_mismatch_count": 1 if raw_frame_mismatch else 0,
             "raw_setpoint_expected_publisher_seen": bool(raw_expected_publisher),
             "raw_setpoint_publishers_seen": (["/local_waypoint_flight"] if raw_expected_publisher else ["/other_controller"]),
@@ -1347,6 +1367,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if missing_raw.returncode == 0 or "raw_setpoint_count_below_20" not in missing_raw.stdout:
         raise SystemExit("Active flight evidence analyzer accepted missing actual MAVROS raw setpoint evidence")
+    write_evidence(evidence, active_raw_setpoints=False)
+    missing_active_raw = subprocess.run([sys.executable, script, str(root)], text=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_active_raw.returncode == 0 or "active_raw_setpoint_count_below_20" not in missing_active_raw.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted missing active-window MAVROS raw setpoint evidence")
     write_evidence(evidence, raw_frame_mismatch=True)
     bad_raw_frame = subprocess.run([sys.executable, script, str(root)], text=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1362,11 +1387,23 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if bad_raw_target.returncode == 0 or "route_manifest_raw_setpoint_missing:waypoints2" not in bad_raw_target.stdout:
         raise SystemExit("Active flight evidence analyzer accepted a raw setpoint route/manifest mismatch")
+    write_evidence(evidence, corrupt_active_raw_setpoint_target=True)
+    bad_active_raw_target = subprocess.run([sys.executable, script, str(root)], text=True,
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if (bad_active_raw_target.returncode == 0 or
+            "route_manifest_active_raw_setpoint_missing:waypoints2" not in bad_active_raw_target.stdout):
+        raise SystemExit("Active flight evidence analyzer accepted an active raw setpoint route/manifest mismatch")
     write_evidence(evidence, raw_setpoint_order_mismatch=True)
     bad_raw_order = subprocess.run([sys.executable, script, str(root)], text=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if bad_raw_order.returncode == 0 or "route_manifest_raw_setpoint_order_mismatch" not in bad_raw_order.stdout:
         raise SystemExit("Active flight evidence analyzer accepted out-of-order MAVROS raw setpoints")
+    write_evidence(evidence, active_raw_setpoint_order_mismatch=True)
+    bad_active_raw_order = subprocess.run([sys.executable, script, str(root)], text=True,
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if (bad_active_raw_order.returncode == 0 or
+            "route_manifest_active_raw_setpoint_order_mismatch" not in bad_active_raw_order.stdout):
+        raise SystemExit("Active flight evidence analyzer accepted out-of-order active MAVROS raw setpoints")
     write_evidence(evidence)
     payload_missing = subprocess.run([sys.executable, script, str(root), "--require-phase", "payload_local_flight"],
                                      text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1554,6 +1591,8 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "unique_setpoints": [[0, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 0]],
         "raw_setpoint_count": 120,
         "unique_raw_setpoints": raw_targets,
+        "active_raw_setpoint_count": 120,
+        "active_unique_raw_setpoints": raw_targets,
         "raw_setpoint_frame_mismatch_count": 0,
         "raw_setpoint_expected_publisher_seen": True,
         "raw_setpoint_publishers_seen": ["/local_waypoint_flight"],

@@ -96,6 +96,8 @@ def _active_report(args, configured_waypoints):
         require_raw_setpoints=args.require_raw_setpoints,
         min_raw_setpoints=args.min_raw_setpoints,
         min_unique_raw_setpoints=args.min_unique_raw_setpoints,
+        min_active_raw_setpoints=args.min_active_raw_setpoints,
+        min_active_unique_raw_setpoints=args.min_active_unique_raw_setpoints,
         require_raw_setpoint_publisher=args.require_raw_setpoint_publisher,
         min_airborne_altitude=args.min_airborne_altitude,
         waypoint_reach_tolerance=args.waypoint_reach_tolerance,
@@ -530,6 +532,8 @@ def _build_parser():
                         help="Do not require active evidence from /mavros/setpoint_raw/local")
     parser.add_argument("--min-raw-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-raw-setpoints", type=int, default=2)
+    parser.add_argument("--min-active-raw-setpoints", type=int, default=20)
+    parser.add_argument("--min-active-unique-raw-setpoints", type=int, default=2)
     parser.add_argument("--no-require-raw-setpoint-publisher", dest="require_raw_setpoint_publisher",
                         action="store_false", default=True,
                         help="Do not require active evidence to show the expected raw setpoint publisher")
@@ -567,6 +571,9 @@ def main():
         raise ValueError("min-target-dwell-s must be non-negative")
     if args.require_raw_setpoints and (args.min_raw_setpoints < 1 or args.min_unique_raw_setpoints < 1):
         raise ValueError("minimum raw setpoint counts must be positive when raw setpoints are required")
+    if args.require_raw_setpoints and (args.min_active_raw_setpoints < 1 or
+                                       args.min_active_unique_raw_setpoints < 1):
+        raise ValueError("minimum active raw setpoint counts must be positive when raw setpoints are required")
     if args.min_active_vision_pose_count < 0:
         raise ValueError("min-active-vision-pose-count must be non-negative")
     if args.min_active_vision_local_pairs < 0:

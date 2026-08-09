@@ -207,6 +207,18 @@ def _base_phase(data, args):
             missing.append("unique_raw_setpoints_below_%d" % args.min_unique_raw_setpoints)
         else:
             notes.append("unique_raw_setpoints=%d" % unique_raw_count)
+        active_raw_setpoint_count = _int(summary.get("active_raw_setpoint_count"))
+        if active_raw_setpoint_count is None or active_raw_setpoint_count < args.min_active_raw_setpoints:
+            missing.append("active_raw_setpoint_count_below_%d" % args.min_active_raw_setpoints)
+        else:
+            notes.append("active_raw_setpoints=%d" % active_raw_setpoint_count)
+        active_unique_raw_setpoints = summary.get("active_unique_raw_setpoints")
+        active_unique_raw_count = (len(active_unique_raw_setpoints)
+                                   if isinstance(active_unique_raw_setpoints, list) else 0)
+        if active_unique_raw_count < args.min_active_unique_raw_setpoints:
+            missing.append("active_unique_raw_setpoints_below_%d" % args.min_active_unique_raw_setpoints)
+        else:
+            notes.append("active_unique_raw_setpoints=%d" % active_unique_raw_count)
         raw_frame_mismatches = _int(summary.get("raw_setpoint_frame_mismatch_count"))
         if raw_frame_mismatches is None:
             missing.append("raw_setpoint_frame_mismatch_count_missing")
@@ -399,6 +411,10 @@ def _route_manifest_phase(data, args):
                 not _targets_follow_route(summary.get("unique_raw_setpoints"), manifest_route,
                                           tolerance, yaw_tolerance)):
             missing.append("route_manifest_raw_setpoint_order_mismatch")
+        if (args.require_raw_setpoints and
+                not _targets_follow_route(summary.get("active_unique_raw_setpoints"), manifest_route,
+                                          tolerance, yaw_tolerance)):
+            missing.append("route_manifest_active_raw_setpoint_order_mismatch")
         for key, expected in manifest_targets.items():
             actual = observed_targets.get(key)
             if actual is None:
@@ -417,6 +433,11 @@ def _route_manifest_phase(data, args):
                     not _target_present(summary.get("unique_raw_setpoints"), expected,
                                         tolerance, yaw_tolerance)):
                 missing.append("route_manifest_raw_setpoint_missing:%s%d" % (
+                    key[0].lower(), key[1]))
+            if (args.require_raw_setpoints and
+                    not _target_present(summary.get("active_unique_raw_setpoints"), expected,
+                                        tolerance, yaw_tolerance)):
+                missing.append("route_manifest_active_raw_setpoint_missing:%s%d" % (
                     key[0].lower(), key[1]))
         if not missing:
             notes.append("route_manifest_targets=%d max_pos_delta=%.3f max_yaw_delta_deg=%.2f" % (
@@ -478,6 +499,10 @@ def _build_parser():
                         help="Require at least this many actual /mavros/setpoint_raw/local samples")
     parser.add_argument("--min-unique-raw-setpoints", type=int, default=2,
                         help="Require at least this many unique actual MAVROS raw setpoint targets")
+    parser.add_argument("--min-active-raw-setpoints", type=int, default=20,
+                        help="Require this many raw setpoints while MAVROS is connected, armed, and OFFBOARD")
+    parser.add_argument("--min-active-unique-raw-setpoints", type=int, default=2,
+                        help="Require this many unique raw targets during the connected/armed/OFFBOARD window")
     parser.add_argument("--no-require-raw-setpoint-publisher", dest="require_raw_setpoint_publisher",
                         action="store_false", default=True,
                         help="Do not require the active observer to see the expected raw setpoint publisher")
@@ -514,6 +539,9 @@ def main():
         raise ValueError("minimum waypoint/setpoint counts must be positive")
     if args.require_raw_setpoints and (args.min_raw_setpoints < 1 or args.min_unique_raw_setpoints < 1):
         raise ValueError("minimum raw setpoint counts must be positive when raw setpoints are required")
+    if args.require_raw_setpoints and (args.min_active_raw_setpoints < 1 or
+                                       args.min_active_unique_raw_setpoints < 1):
+        raise ValueError("minimum active raw setpoint counts must be positive when raw setpoints are required")
     if args.min_active_vision_pose_count < 0:
         raise ValueError("min-active-vision-pose-count must be non-negative")
     if args.min_active_vision_local_pairs < 0:
