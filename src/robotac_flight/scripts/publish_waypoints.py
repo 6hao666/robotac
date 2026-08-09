@@ -15,6 +15,23 @@ import yaml
 
 
 ALLOWED_WAYPOINT_KEYS = {"x", "y", "z", "yaw", "yaw_deg"}
+FORBIDDEN_GLOBAL_KEYS = {
+    "lat",
+    "lon",
+    "latitude",
+    "longitude",
+    "altitude_amsl",
+    "altitude_wgs84",
+    "global_frame",
+    "global_position",
+    "gps",
+    "gps_fix",
+    "frame_global",
+    "command_tol",
+    "commandtol",
+    "mission_item",
+    "mission_items",
+}
 
 
 def _finite_float(value, name):
@@ -47,8 +64,28 @@ def _route_section(data):
     return section
 
 
+def _global_key_violations(value, prefix=""):
+    violations = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key)
+            key_path = "%s.%s" % (prefix, key_text) if prefix else key_text
+            if key_text.strip().lower() in FORBIDDEN_GLOBAL_KEYS:
+                violations.append(key_path)
+            violations.extend(_global_key_violations(child, key_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            key_path = "%s[%d]" % (prefix, index) if prefix else "[%d]" % index
+            violations.extend(_global_key_violations(child, key_path))
+    return violations
+
+
 def parse_waypoint_file(path, frame_override=None, allow_metadata_drop=False):
-    section = _route_section(_load_yaml(path))
+    data = _load_yaml(path)
+    violations = _global_key_violations(data)
+    if violations:
+        raise ValueError("global/GPS waypoint keys are not allowed: %s" % ",".join(violations))
+    section = _route_section(data)
     frame_id = frame_override or str(section.get("waypoint_frame", "robotac_start_body"))
     frame_id = frame_id.strip()
     if not frame_id:

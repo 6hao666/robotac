@@ -420,9 +420,11 @@ rosrun robotac_flight publish_waypoints.py \
 
 The helper intentionally refuses YAML containing fields `PoseArray` cannot
 carry, such as `hold` or `payload_action`, unless `--allow-metadata-drop` is
-explicitly supplied. It publishes only `/robotac/flight/waypoints`; it never
-calls `/robotac/flight/start`, never requests OFFBOARD, never arms, and never
-sends MAVROS setpoints.
+explicitly supplied. GPS/global keys such as `latitude`, `longitude`, or
+`global_position` are always rejected even with `--allow-metadata-drop`; the
+runtime waypoint API is local-only. It publishes only
+`/robotac/flight/waypoints`; it never calls `/robotac/flight/start`, never
+requests OFFBOARD, never arms, and never sends MAVROS setpoints.
 
 `audit_local_mission.py` is the first check for a new route file. It is fully
 offline and fails if the mission contains GPS/global keys, lacks

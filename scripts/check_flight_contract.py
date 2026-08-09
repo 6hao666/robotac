@@ -26,6 +26,7 @@ if str(FLIGHT_SCRIPT_DIR) not in sys.path:
 
 import audit_local_mission  # noqa: E402
 import create_route_file  # noqa: E402
+import publish_waypoints  # noqa: E402
 
 
 MAVROS_REQUIRED_WHITELIST = {
@@ -313,6 +314,14 @@ def _check_route_generator(root):
         "--append-return-home",
         "starts no ROS node",
     )))
+    waypoint_publisher_source = _read(
+        root / "src" / "robotac_flight" / "scripts" / "publish_waypoints.py")
+    missing.extend("posearray_publisher_missing:%s" % token for token in _contains_all(
+        waypoint_publisher_source, (
+            "FORBIDDEN_GLOBAL_KEYS",
+            "global/GPS waypoint keys are not allowed",
+            "allow_metadata_drop",
+        )))
     for forbidden in (
             "import rospy",
             "rospy.Publisher",
@@ -385,6 +394,24 @@ def _check_route_generator(root):
             missing.append("generated_route_payload_audit")
     except Exception as exc:  # pragma: no cover - surfaced in script output
         missing.append("route_generator_execution:%s" % exc)
+
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", encoding="utf-8") as stream:
+            stream.write(
+                "waypoint_frame: robotac_start_body\n"
+                "waypoints:\n"
+                "  - {x: 0.0, y: 0.0, z: 1.0, latitude: 30.0}\n")
+            stream.flush()
+            try:
+                publish_waypoints.parse_waypoint_file(
+                    stream.name, allow_metadata_drop=True)
+            except ValueError as exc:
+                if "global/GPS waypoint keys are not allowed" not in str(exc):
+                    missing.append("posearray_global_reject_reason:%s" % exc)
+            else:
+                missing.append("posearray_global_key_accepted")
+    except Exception as exc:  # pragma: no cover - surfaced in script output
+        missing.append("posearray_publisher_execution:%s" % exc)
 
     if not missing:
         notes.append("offline generator expands simple local points into audited full route files")

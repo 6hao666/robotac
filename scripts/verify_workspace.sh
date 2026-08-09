@@ -211,6 +211,27 @@ if python3 "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" \
   exit 1
 fi
 echo "Validated PoseArray publisher rejects payload/hold mission metadata by default."
+python3 - "${workspace_dir}/src/robotac_flight/scripts/publish_waypoints.py" <<'PY'
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+with tempfile.TemporaryDirectory(prefix="robotac-posearray-bad.") as directory:
+    route = pathlib.Path(directory) / "bad_posearray.yaml"
+    route.write_text("""waypoint_frame: robotac_start_body
+waypoints:
+  - {x: 0.0, y: 0.0, z: 1.0, latitude: 30.0}
+""", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, sys.argv[1], "--file", str(route),
+         "--allow-metadata-drop", "--dry-run"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if result.returncode == 0 or "global/GPS waypoint keys are not allowed" not in result.stderr:
+        raise SystemExit("PoseArray waypoint publisher accepted global/GPS metadata drop:\n%s\n%s" %
+                         (result.stdout, result.stderr))
+PY
+echo "Validated PoseArray publisher rejects global/GPS keys even with metadata drop."
 
 generated_route_dir=$(mktemp -d "${TMPDIR:-/tmp}/robotac-route-generator.XXXXXX")
 generated_route="${generated_route_dir}/generated_payload_route.yaml"
