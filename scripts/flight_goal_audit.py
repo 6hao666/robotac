@@ -96,6 +96,7 @@ def _active_report(args, configured_waypoints):
         require_raw_setpoints=args.require_raw_setpoints,
         min_raw_setpoints=args.min_raw_setpoints,
         min_unique_raw_setpoints=args.min_unique_raw_setpoints,
+        require_raw_setpoint_publisher=args.require_raw_setpoint_publisher,
         min_airborne_altitude=args.min_airborne_altitude,
         waypoint_reach_tolerance=args.waypoint_reach_tolerance,
         min_target_dwell_s=args.min_target_dwell_s,
@@ -529,6 +530,9 @@ def _build_parser():
                         help="Do not require active evidence from /mavros/setpoint_raw/local")
     parser.add_argument("--min-raw-setpoints", type=int, default=20)
     parser.add_argument("--min-unique-raw-setpoints", type=int, default=2)
+    parser.add_argument("--no-require-raw-setpoint-publisher", dest="require_raw_setpoint_publisher",
+                        action="store_false", default=True,
+                        help="Do not require active evidence to show the expected raw setpoint publisher")
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
     parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--min-target-dwell-s", type=float, default=0.25,

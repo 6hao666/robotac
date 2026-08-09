@@ -479,6 +479,7 @@ def _check_evidence_surface(root):
         "raw_setpoint_count_below",
         "unique_raw_setpoints_below",
         "raw_setpoint_frame_mismatch_count",
+        "raw_setpoint_expected_publisher_missing",
         "--min-raw-setpoints",
         "max_continuous_reach_s",
         "min_target_dwell_s",

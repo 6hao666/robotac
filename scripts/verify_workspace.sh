@@ -613,6 +613,9 @@ for expected in (
     "raw_setpoint_count",
     "unique_raw_setpoints",
     "raw_setpoint_frame_mismatch_count",
+    "raw_setpoint_expected_publisher_seen",
+    "raw_setpoint_expected_publisher_missing",
+    "raw_setpoint_publishers_seen",
     "local_position_topic",
     "active_vision_local_pair_count",
     "active_vision_local_max_delta_error_m",
@@ -999,6 +1002,7 @@ for expected in (
     "raw_setpoint_count_below",
     "unique_raw_setpoints_below",
     "raw_setpoint_frame_mismatch_count",
+    "raw_setpoint_expected_publisher_missing",
     "route-manifest-target-tolerance",
     "waypoints_incomplete",
     "final_disarmed",
@@ -1189,6 +1193,7 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    active_vision_local_error=0.05,
                    active_mavros_control=True, include_landing_state=True,
                    raw_setpoints=True, raw_frame_mismatch=False,
+                   raw_expected_publisher=True,
                    corrupt_raw_setpoint_target=False,
                    omit_route_manifest=False, corrupt_route_manifest_target=False,
                    corrupt_route_status_fingerprint=False):
@@ -1268,6 +1273,8 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "raw_setpoint_count": 120 if raw_setpoints else 0,
             "unique_raw_setpoints": raw_targets if raw_setpoints else [],
             "raw_setpoint_frame_mismatch_count": 1 if raw_frame_mismatch else 0,
+            "raw_setpoint_expected_publisher_seen": bool(raw_expected_publisher),
+            "raw_setpoint_publishers_seen": (["/local_waypoint_flight"] if raw_expected_publisher else ["/other_controller"]),
             "target_records": target_records,
             "route_manifest": route_manifest,
             "active_vision_pose_count": 24 if active_vision else 0,
@@ -1340,6 +1347,11 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if bad_raw_frame.returncode == 0 or "raw_setpoint_frame_mismatch_count" not in bad_raw_frame.stdout:
         raise SystemExit("Active flight evidence analyzer accepted a MAVROS raw setpoint frame mismatch")
+    write_evidence(evidence, raw_expected_publisher=False)
+    missing_raw_publisher = subprocess.run([sys.executable, script, str(root)], text=True,
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_raw_publisher.returncode == 0 or "raw_setpoint_expected_publisher_missing" not in missing_raw_publisher.stdout:
+        raise SystemExit("Active flight evidence analyzer accepted a missing local_waypoint_flight raw setpoint publisher")
     write_evidence(evidence, corrupt_raw_setpoint_target=True)
     bad_raw_target = subprocess.run([sys.executable, script, str(root)], text=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1533,6 +1545,8 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         "raw_setpoint_count": 120,
         "unique_raw_setpoints": raw_targets,
         "raw_setpoint_frame_mismatch_count": 0,
+        "raw_setpoint_expected_publisher_seen": True,
+        "raw_setpoint_publishers_seen": ["/local_waypoint_flight"],
         "target_records": target_records,
         "active_vision_pose_count": 24,
         "active_vision_pose_parent": "odom",

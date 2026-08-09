@@ -180,6 +180,12 @@ def _base_phase(data, args):
             missing.append("raw_setpoint_frame_mismatch_count_missing")
         elif raw_frame_mismatches > 0:
             missing.append("raw_setpoint_frame_mismatch_count:%d" % raw_frame_mismatches)
+        if args.require_raw_setpoint_publisher:
+            if summary.get("raw_setpoint_expected_publisher_seen") is not True:
+                missing.append("raw_setpoint_expected_publisher_missing")
+            publishers = summary.get("raw_setpoint_publishers_seen")
+            if isinstance(publishers, list) and publishers:
+                notes.append("raw_setpoint_publishers=%s" % "/".join(str(node) for node in publishers))
 
     target_records = summary.get("target_records")
     flight_targets = []
@@ -436,6 +442,9 @@ def _build_parser():
                         help="Require at least this many actual /mavros/setpoint_raw/local samples")
     parser.add_argument("--min-unique-raw-setpoints", type=int, default=2,
                         help="Require at least this many unique actual MAVROS raw setpoint targets")
+    parser.add_argument("--no-require-raw-setpoint-publisher", dest="require_raw_setpoint_publisher",
+                        action="store_false", default=True,
+                        help="Do not require the active observer to see the expected raw setpoint publisher")
     parser.add_argument("--min-airborne-altitude", type=float, default=0.50)
     parser.add_argument("--waypoint-reach-tolerance", type=float, default=0.35)
     parser.add_argument("--min-target-dwell-s", type=float, default=0.25,

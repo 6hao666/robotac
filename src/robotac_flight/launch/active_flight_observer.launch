@@ -7,6 +7,9 @@
   <arg name="min_setpoints" default="20" />
   <arg name="require_raw_setpoints" default="true" />
   <arg name="min_raw_setpoints" default="20" />
+  <arg name="require_raw_setpoint_publisher" default="true" />
+  <arg name="raw_setpoint_expected_publisher_node" default="/local_waypoint_flight" />
+  <arg name="raw_setpoint_publisher_check_interval" default="0.50" />
   <arg name="min_airborne_altitude" default="0.50" />
   <arg name="waypoint_reach_tolerance" default="0.35" />
   <arg name="min_target_dwell_s" default="0.25" />
@@ -46,6 +49,9 @@
     <param name="min_setpoints" value="$(arg min_setpoints)" />
     <param name="require_raw_setpoints" value="$(arg require_raw_setpoints)" />
     <param name="min_raw_setpoints" value="$(arg min_raw_setpoints)" />
+    <param name="require_raw_setpoint_publisher" value="$(arg require_raw_setpoint_publisher)" />
+    <param name="raw_setpoint_expected_publisher_node" value="$(arg raw_setpoint_expected_publisher_node)" />
+    <param name="raw_setpoint_publisher_check_interval" value="$(arg raw_setpoint_publisher_check_interval)" />
     <param name="min_airborne_altitude" value="$(arg min_airborne_altitude)" />
     <param name="waypoint_reach_tolerance" value="$(arg waypoint_reach_tolerance)" />
     <param name="min_target_dwell_s" value="$(arg min_target_dwell_s)" />

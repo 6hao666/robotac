@@ -662,7 +662,8 @@ configured waypoint. The standalone active-evidence analyzer also requires
 actual `/mavros/setpoint_raw/local` samples and at least two unique raw
 setpoint targets, so a preview-only dry run cannot satisfy active-flight
 evidence. Those raw setpoints must cover every `target_route` item in the
-mission manifest. It also checks that
+mission manifest, and the observer must see `/local_waypoint_flight` as the
+raw setpoint publisher. It also checks that
 the manifest target route matches the observed active setpoint targets and that
 the controller status `route_revision` / `route_fingerprint` matches the
 manifest, so stale manifests from an earlier run cannot satisfy a new flight. It also

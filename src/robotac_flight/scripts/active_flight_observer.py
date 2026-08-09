@@ -60,6 +60,13 @@ class ActiveFlightObserver(object):
         self.min_setpoints = int(rospy.get_param("~min_setpoints", 20))
         self.require_raw_setpoints = _as_bool(rospy.get_param("~require_raw_setpoints", True))
         self.min_raw_setpoints = int(rospy.get_param("~min_raw_setpoints", 20))
+        self.raw_setpoint_topic = rospy.get_param("~raw_setpoint_topic", "/mavros/setpoint_raw/local")
+        self.require_raw_setpoint_publisher = _as_bool(
+            rospy.get_param("~require_raw_setpoint_publisher", True))
+        self.raw_setpoint_expected_publisher_node = str(rospy.get_param(
+            "~raw_setpoint_expected_publisher_node", "/local_waypoint_flight")).strip()
+        self.raw_setpoint_publisher_check_interval = float(rospy.get_param(
+            "~raw_setpoint_publisher_check_interval", 0.50))
         self.min_airborne_altitude = float(rospy.get_param("~min_airborne_altitude", 0.50))
         self.waypoint_reach_tolerance = float(rospy.get_param("~waypoint_reach_tolerance", 0.35))
         self.min_target_dwell_s = float(rospy.get_param("~min_target_dwell_s", 0.25))
@@ -112,6 +119,9 @@ class ActiveFlightObserver(object):
         self.raw_setpoint_receive = None
         self.unique_raw_setpoints = []
         self.raw_setpoint_frame_mismatch_count = 0
+        self.raw_setpoint_expected_publisher_seen = False
+        self.raw_setpoint_publishers_seen = []
+        self.raw_setpoint_last_publisher_check_wall = 0.0
         self.target_records = []
         self.route_manifest = None
         self.route_manifest_history = []
@@ -173,8 +183,7 @@ class ActiveFlightObserver(object):
                          String, self._flight_status_cb, queue_size=20)
         rospy.Subscriber(rospy.get_param("~setpoint_preview_topic", "/robotac/flight/setpoint_preview"),
                          PositionTarget, self._setpoint_preview_cb, queue_size=50)
-        rospy.Subscriber(rospy.get_param("~raw_setpoint_topic", "/mavros/setpoint_raw/local"),
-                         PositionTarget, self._raw_setpoint_cb, queue_size=50)
+        rospy.Subscriber(self.raw_setpoint_topic, PositionTarget, self._raw_setpoint_cb, queue_size=50)
         rospy.Subscriber(rospy.get_param("~local_position_topic", "/mavros/local_position/odom"),
                          Odometry, self._local_position_cb, queue_size=50)
         rospy.Subscriber(rospy.get_param("~mavros_state_topic", "/mavros/state"),
@@ -202,6 +211,14 @@ class ActiveFlightObserver(object):
             raise ValueError("min_setpoints must be positive")
         if self.require_raw_setpoints and self.min_raw_setpoints < 1:
             raise ValueError("min_raw_setpoints must be positive when raw setpoints are required")
+        if self.require_raw_setpoint_publisher:
+            if not self.raw_setpoint_topic:
+                raise ValueError("raw_setpoint_topic must be non-empty when raw setpoint publisher is required")
+            if not self.raw_setpoint_expected_publisher_node:
+                raise ValueError("raw_setpoint_expected_publisher_node must be non-empty when required")
+            if (not math.isfinite(self.raw_setpoint_publisher_check_interval) or
+                    self.raw_setpoint_publisher_check_interval <= 0.0):
+                raise ValueError("raw_setpoint_publisher_check_interval must be finite and positive")
         if not math.isfinite(self.min_airborne_altitude) or self.min_airborne_altitude < 0.0:
             raise ValueError("min_airborne_altitude must be finite and non-negative")
         if not math.isfinite(self.waypoint_reach_tolerance) or self.waypoint_reach_tolerance <= 0.0:
@@ -310,6 +327,30 @@ class ActiveFlightObserver(object):
                 return True
         return False
 
+    def _update_raw_setpoint_publishers(self):
+        if not self.require_raw_setpoint_publisher:
+            return
+        now = time.monotonic()
+        if now - self.raw_setpoint_last_publisher_check_wall < self.raw_setpoint_publisher_check_interval:
+            return
+        self.raw_setpoint_last_publisher_check_wall = now
+        try:
+            code, _message, state = rospy.get_master().getSystemState()
+        except Exception as exc:
+            rospy.logwarn_throttle(5.0, "unable to inspect ROS graph for raw setpoint publisher: %s", exc)
+            return
+        if code != 1:
+            return
+        for topic, nodes in state[0]:
+            if topic != self.raw_setpoint_topic:
+                continue
+            for node in sorted(nodes):
+                if node not in self.raw_setpoint_publishers_seen:
+                    self.raw_setpoint_publishers_seen.append(node)
+            if self.raw_setpoint_expected_publisher_node in nodes:
+                self.raw_setpoint_expected_publisher_seen = True
+            return
+
     def _flight_status_cb(self, msg):
         fields = _parse_fields(msg.data)
         if not fields:
@@ -377,6 +418,7 @@ class ActiveFlightObserver(object):
         values = (msg.position.x, msg.position.y, msg.position.z, msg.yaw)
         if not _finite(values):
             return
+        self._update_raw_setpoint_publishers()
         self.raw_setpoint_count += 1
         self.raw_setpoint_receive = time.monotonic()
         target = tuple(float(value) for value in values)
@@ -674,6 +716,9 @@ class ActiveFlightObserver(object):
                 return "raw_setpoint_count_below_%d" % self.min_raw_setpoints
             if self.raw_setpoint_frame_mismatch_count > 0:
                 return "raw_setpoint_frame_mismatch"
+            if (self.require_raw_setpoint_publisher and
+                    not self.raw_setpoint_expected_publisher_seen):
+                return "raw_setpoint_expected_publisher_missing"
             if not final and not self._fresh(self.raw_setpoint_receive, self.stream_timeout):
                 return "raw_setpoint_missing_or_stale"
         if self.local_count < 1:
@@ -754,6 +799,8 @@ class ActiveFlightObserver(object):
             "raw_setpoint_count": self.raw_setpoint_count,
             "unique_raw_setpoints": self.unique_raw_setpoints,
             "raw_setpoint_frame_mismatch_count": self.raw_setpoint_frame_mismatch_count,
+            "raw_setpoint_expected_publisher_seen": self.raw_setpoint_expected_publisher_seen,
+            "raw_setpoint_publishers_seen": self.raw_setpoint_publishers_seen,
             "target_records": self._public_target_records(),
             "route_manifest": self.route_manifest,
             "route_manifest_history": self.route_manifest_history,
@@ -800,6 +847,9 @@ class ActiveFlightObserver(object):
                 "min_setpoints": self.min_setpoints,
                 "require_raw_setpoints": self.require_raw_setpoints,
                 "min_raw_setpoints": self.min_raw_setpoints,
+                "require_raw_setpoint_publisher": self.require_raw_setpoint_publisher,
+                "raw_setpoint_expected_publisher_node": self.raw_setpoint_expected_publisher_node,
+                "raw_setpoint_publisher_check_interval": self.raw_setpoint_publisher_check_interval,
                 "min_airborne_altitude": self.min_airborne_altitude,
                 "waypoint_reach_tolerance": self.waypoint_reach_tolerance,
                 "min_target_dwell_s": self.min_target_dwell_s,
