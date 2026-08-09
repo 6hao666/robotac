@@ -24,6 +24,21 @@ def as_bool(value):
     return bool(value)
 
 
+def parse_int_list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        raw_items = value
+    else:
+        raw_items = str(value).replace(";", ",").split(",")
+    result = []
+    for item in raw_items:
+        text = str(item).strip()
+        if text:
+            result.append(int(text, 0))
+    return result
+
+
 def get_param(proxy, name):
     response = proxy(param_id=name)
     if not response.success:
@@ -42,12 +57,31 @@ def main():
     require_ev_delay = as_bool(rospy.get_param("~require_ev_delay", False))
     expected_ev_delay_ms = float(rospy.get_param("~expected_ev_delay_ms", 0.0))
     ev_delay_tolerance_ms = float(rospy.get_param("~ev_delay_tolerance_ms", 20.0))
+    check_offboard_failsafe = as_bool(
+        rospy.get_param("~check_px4_offboard_failsafe_params", False))
+    min_offboard_loss_timeout_s = float(
+        rospy.get_param("~min_offboard_loss_timeout_s", 0.30))
+    max_offboard_loss_timeout_s = float(
+        rospy.get_param("~max_offboard_loss_timeout_s", 5.00))
+    require_offboard_loss_action_param = as_bool(
+        rospy.get_param("~require_offboard_loss_action_param", True))
+    allowed_offboard_loss_actions = parse_int_list(
+        rospy.get_param("~allowed_offboard_loss_actions", ""))
     if not math.isfinite(ev_offset_tolerance_m) or ev_offset_tolerance_m < 0.0:
         print("FAIL: ev_offset_tolerance_m must be finite and non-negative")
         return 3
     if (not math.isfinite(expected_ev_delay_ms) or
             not math.isfinite(ev_delay_tolerance_ms) or ev_delay_tolerance_ms < 0.0):
         print("FAIL: expected_ev_delay_ms and ev_delay_tolerance_ms must be finite; tolerance must be non-negative")
+        return 3
+    if (not math.isfinite(min_offboard_loss_timeout_s) or
+            not math.isfinite(max_offboard_loss_timeout_s) or
+            min_offboard_loss_timeout_s < 0.0 or
+            max_offboard_loss_timeout_s < min_offboard_loss_timeout_s):
+        print("FAIL: offboard loss timeout bounds must be finite, non-negative, and ordered")
+        return 3
+    if any(action < 0 for action in allowed_offboard_loss_actions):
+        print("FAIL: allowed_offboard_loss_actions must contain non-negative integers")
         return 3
     try:
         rospy.wait_for_service(service_name, timeout=5.0)
@@ -108,7 +142,41 @@ def main():
                 print("FAIL: PX4 EV_POS offsets must be zero when Robotac bridge outputs base_link pose; offsets=%s tolerance=%.3f" %
                       (",".join("%.4f" % value for value in offsets), ev_offset_tolerance_m))
                 return 2
-        print("PASS: PX4 external-vision fusion parameters are enabled (read-only check)")
+        if check_offboard_failsafe:
+            loss_timeout = get_param(get, "COM_OF_LOSS_T")
+            print("COM_OF_LOSS_T=%s" % ("unavailable" if loss_timeout is None else loss_timeout))
+            if loss_timeout is None:
+                print("FAIL: COM_OF_LOSS_T is unavailable; cannot verify OFFBOARD loss timeout")
+                return 2
+            actual_timeout = float(loss_timeout)
+            if not math.isfinite(actual_timeout):
+                print("FAIL: COM_OF_LOSS_T must be finite")
+                return 2
+            if actual_timeout < min_offboard_loss_timeout_s or actual_timeout > max_offboard_loss_timeout_s:
+                print("FAIL: COM_OF_LOSS_T %.3f s outside %.3f..%.3f s" %
+                      (actual_timeout, min_offboard_loss_timeout_s, max_offboard_loss_timeout_s))
+                return 2
+            action_name = None
+            action_value = None
+            for name in ("COM_OBL_RC_ACT", "COM_OBL_ACT"):
+                value = get_param(get, name)
+                print("%s=%s" % (name, "unavailable" if value is None else value))
+                if value is not None and action_value is None:
+                    action_name = name
+                    action_value = int(value)
+            if action_value is None and require_offboard_loss_action_param:
+                print("FAIL: neither COM_OBL_RC_ACT nor COM_OBL_ACT is available")
+                return 2
+            if action_value is not None and action_value < 0:
+                print("FAIL: %s invalid value %d" % (action_name, action_value))
+                return 2
+            if (action_value is not None and allowed_offboard_loss_actions and
+                    action_value not in allowed_offboard_loss_actions):
+                print("FAIL: %s value %d is not in allowed set %s" %
+                      (action_name, action_value, allowed_offboard_loss_actions))
+                return 2
+        print("PASS: PX4 external-vision%s parameters are enabled (read-only check)" %
+              (" and OFFBOARD failsafe" if check_offboard_failsafe else " fusion"))
         return 0
     except (rospy.ROSException, rospy.ServiceException) as exc:
         print("FAIL: %s" % exc)

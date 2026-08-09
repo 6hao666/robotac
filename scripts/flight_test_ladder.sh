@@ -257,7 +257,8 @@ if [[ -n "${expected_ev_delay_ms}" ]]; then
   cat <<EOF
 roslaunch robotac_flight local_flight_preflight.launch \\
   observe_seconds:=30 require_vision_output:=true require_timesync:=true \\
-  check_px4_vision_params:=true require_setpoint_consumer:=true \\
+  check_px4_vision_params:=true check_px4_offboard_failsafe_params:=true \\
+  require_setpoint_consumer:=true \\
   require_ev_delay:=true expected_ev_delay_ms:=${expected_ev_delay_ms} \\
   ev_delay_tolerance_ms:=${ev_delay_tolerance_ms} \\
   evidence_file:="\${evidence_dir}/local_flight_preflight.json"
@@ -266,7 +267,8 @@ else
   cat <<'EOF'
 roslaunch robotac_flight local_flight_preflight.launch \
   observe_seconds:=30 require_vision_output:=true require_timesync:=true \
-  check_px4_vision_params:=true require_setpoint_consumer:=true \
+  check_px4_vision_params:=true check_px4_offboard_failsafe_params:=true \
+  require_setpoint_consumer:=true \
   evidence_file:="${evidence_dir}/local_flight_preflight.json"
 # Add require_ev_delay:=true expected_ev_delay_ms:=... after measuring FAST-LIO->FCU delay.
 EOF

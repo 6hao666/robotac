@@ -269,6 +269,7 @@ def _local_preflight_phase(directory, path):
             "require_disarmed",
             "require_on_ground",
             "check_px4_vision_params",
+            "check_px4_offboard_failsafe_params",
             "require_vision_output_consumer",
             "require_setpoint_consumer",
     ):
@@ -280,6 +281,12 @@ def _local_preflight_phase(directory, path):
         missing.append("px4_vision_params_not_checked")
     if summary.get("px4_params_issue") != "ok":
         missing.append("px4_vision_params:%s" % summary.get("px4_params_issue", "unknown"))
+    values = summary.get("px4_param_values") if isinstance(summary.get("px4_param_values"), dict) else {}
+    if parameters.get("check_px4_offboard_failsafe_params") is True:
+        if "COM_OF_LOSS_T" not in values:
+            missing.append("px4_offboard_failsafe:COM_OF_LOSS_T")
+        if "COM_OBL_RC_ACT" not in values and "COM_OBL_ACT" not in values:
+            missing.append("px4_offboard_failsafe:COM_OBL_RC_ACT_or_COM_OBL_ACT")
     if summary.get("vision_output_consumer_issue") != "ok":
         missing.append("local_preflight_vision_output_consumer:%s" % summary.get("vision_output_consumer_issue", "unknown"))
     if summary.get("setpoint_consumer_issue") != "ok":
@@ -288,6 +295,8 @@ def _local_preflight_phase(directory, path):
     if not missing:
         notes.append("path=%s" % evidence_path)
         notes.append("px4_params=ok")
+        if "COM_OF_LOSS_T" in values:
+            notes.append("COM_OF_LOSS_T=%s" % values.get("COM_OF_LOSS_T"))
     return _phase("local_flight_preflight", not missing, missing, notes)
 
 

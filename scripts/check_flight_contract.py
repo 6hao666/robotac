@@ -465,6 +465,8 @@ def _check_evidence_surface(root):
         "local_flight_preflight",
         "px4_vision_params_not_checked",
         "check_px4_vision_params",
+        "check_px4_offboard_failsafe_params",
+        "px4_offboard_failsafe:COM_OF_LOSS_T",
         "read_only_no_setpoint_publishers",
     )))
     missing.extend("active_analyzer_missing:%s" % token for token in _contains_all(active, (
@@ -534,6 +536,7 @@ def _check_evidence_surface(root):
         "flight_route_file",
         "active flight commands hidden",
         "Read-only evidence did not pass active_preflight_evidence",
+        "check_px4_offboard_failsafe_params:=true",
         "rosservice call /robotac/flight/start",
         "flight_auto_arm:=false",
         "flight_auto_mode:=false",

@@ -2,9 +2,10 @@
 """Read-only readiness check for local MAVROS flight with FAST-LIO vision.
 
 This node only subscribes to existing ROS topics by default. When
-``check_px4_vision_params`` is enabled, it also calls MAVROS' read-only
-``/mavros/param/get`` service. It never creates publishers, calls
-flight-control services, changes PX4 parameters, or emits MAVROS setpoints.
+``check_px4_vision_params`` or ``check_px4_offboard_failsafe_params`` is
+enabled, it also calls MAVROS' read-only ``/mavros/param/get`` service. It
+never creates publishers, calls flight-control services, changes PX4
+parameters, or emits MAVROS setpoints.
 """
 
 import json
@@ -24,6 +25,22 @@ from std_msgs.msg import Bool, String
 # PX4 v1.10/v1.11 EKF2_AID_MASK: bit 3 is vision position, bit 4 is vision yaw.
 LEGACY_AID_MASK_VISION_POSITION = 1 << 3
 LEGACY_AID_MASK_VISION_YAW = 1 << 4
+
+
+def _parse_int_list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        raw_items = value
+    else:
+        raw_items = str(value).replace(";", ",").split(",")
+    result = []
+    for item in raw_items:
+        text = str(item).strip()
+        if not text:
+            continue
+        result.append(int(text, 0))
+    return result
 
 
 def _as_bool(value):
@@ -136,6 +153,16 @@ class LocalFlightPreflight(object):
         self.require_ev_delay = _as_bool(rospy.get_param("~require_ev_delay", False))
         self.expected_ev_delay_ms = float(rospy.get_param("~expected_ev_delay_ms", 0.0))
         self.ev_delay_tolerance_ms = float(rospy.get_param("~ev_delay_tolerance_ms", 20.0))
+        self.check_px4_offboard_failsafe_params = _as_bool(
+            rospy.get_param("~check_px4_offboard_failsafe_params", False))
+        self.min_offboard_loss_timeout_s = float(
+            rospy.get_param("~min_offboard_loss_timeout_s", 0.30))
+        self.max_offboard_loss_timeout_s = float(
+            rospy.get_param("~max_offboard_loss_timeout_s", 5.00))
+        self.require_offboard_loss_action_param = _as_bool(
+            rospy.get_param("~require_offboard_loss_action_param", True))
+        self.allowed_offboard_loss_actions = _parse_int_list(
+            rospy.get_param("~allowed_offboard_loss_actions", ""))
         self.require_vision_output_consumer = _as_bool(
             rospy.get_param("~require_vision_output_consumer", self.require_vision_output))
         self.vision_output_consumer_node = str(rospy.get_param(
@@ -196,7 +223,8 @@ class LocalFlightPreflight(object):
         self.timesync = None
         self.timesync_receive = None
         self.timesync_issue = "waiting"
-        self.px4_params_checked = not self.check_px4_vision_params
+        self.px4_params_checked = not (self.check_px4_vision_params or
+                                       self.check_px4_offboard_failsafe_params)
         self.px4_params_issue = "not_requested"
         self.px4_param_values = {}
         self.exit_code = 1
@@ -259,6 +287,13 @@ class LocalFlightPreflight(object):
                 not math.isfinite(self.ev_delay_tolerance_ms) or
                 self.ev_delay_tolerance_ms < 0.0):
             raise ValueError("expected_ev_delay_ms and ev_delay_tolerance_ms must be finite; tolerance must be non-negative")
+        if (not math.isfinite(self.min_offboard_loss_timeout_s) or
+                not math.isfinite(self.max_offboard_loss_timeout_s) or
+                self.min_offboard_loss_timeout_s < 0.0 or
+                self.max_offboard_loss_timeout_s < self.min_offboard_loss_timeout_s):
+            raise ValueError("offboard loss timeout bounds must be finite, non-negative, and ordered")
+        if any(action < 0 for action in self.allowed_offboard_loss_actions):
+            raise ValueError("allowed_offboard_loss_actions must contain non-negative integers")
 
     def _stamp_is_current(self, stamp, age_limit):
         if stamp == rospy.Time(0):
@@ -480,24 +515,22 @@ class LocalFlightPreflight(object):
         try:
             rospy.wait_for_service(self.param_get_service, timeout=2.0)
             get = rospy.ServiceProxy(self.param_get_service, ParamGet)
-            ev_ctrl = self._get_px4_param(get, "EKF2_EV_CTRL")
-            if ev_ctrl is not None:
-                required = 0x03 | (0x08 if self.require_yaw_fusion else 0x00)
-                if int(ev_ctrl) & required != required:
-                    self.px4_params_issue = "EKF2_EV_CTRL_missing_mask:0x%02x" % required
+            self.px4_params_issue = "ok"
+            if self.check_px4_vision_params:
+                ev_ctrl = self._get_px4_param(get, "EKF2_EV_CTRL")
+                if ev_ctrl is not None:
+                    required = 0x03 | (0x08 if self.require_yaw_fusion else 0x00)
+                    if int(ev_ctrl) & required != required:
+                        self.px4_params_issue = "EKF2_EV_CTRL_missing_mask:0x%02x" % required
                 else:
-                    self.px4_params_issue = "ok"
-            else:
-                aid_mask = self._get_px4_param(get, "EKF2_AID_MASK")
-                required = (LEGACY_AID_MASK_VISION_POSITION |
-                            (LEGACY_AID_MASK_VISION_YAW if self.require_yaw_fusion else 0))
-                if aid_mask is None:
-                    self.px4_params_issue = "vision_fusion_parameter_unavailable"
-                elif int(aid_mask) & required != required:
-                    self.px4_params_issue = "EKF2_AID_MASK_missing_mask:0x%02x" % required
-                else:
-                    self.px4_params_issue = "ok"
-            if self.px4_params_issue == "ok" and self.require_ev_offsets_zero:
+                    aid_mask = self._get_px4_param(get, "EKF2_AID_MASK")
+                    required = (LEGACY_AID_MASK_VISION_POSITION |
+                                (LEGACY_AID_MASK_VISION_YAW if self.require_yaw_fusion else 0))
+                    if aid_mask is None:
+                        self.px4_params_issue = "vision_fusion_parameter_unavailable"
+                    elif int(aid_mask) & required != required:
+                        self.px4_params_issue = "EKF2_AID_MASK_missing_mask:0x%02x" % required
+            if self.px4_params_issue == "ok" and self.check_px4_vision_params and self.require_ev_offsets_zero:
                 offsets = []
                 for name in ("EKF2_EV_POS_X", "EKF2_EV_POS_Y", "EKF2_EV_POS_Z"):
                     value = self._get_px4_param(get, name)
@@ -513,7 +546,7 @@ class LocalFlightPreflight(object):
                         abs(value) > self.ev_offset_tolerance_m for value in offsets):
                     self.px4_params_issue = "EV_POS_nonzero:%s" % ",".join(
                         "%.4f" % value for value in offsets)
-            if self.px4_params_issue == "ok" and self.require_ev_delay:
+            if self.px4_params_issue == "ok" and self.check_px4_vision_params and self.require_ev_delay:
                 value = self._get_px4_param(get, "EKF2_EV_DELAY")
                 if value is None:
                     self.px4_params_issue = "EKF2_EV_DELAY_unavailable"
@@ -522,6 +555,34 @@ class LocalFlightPreflight(object):
                 elif abs(float(value) - self.expected_ev_delay_ms) > self.ev_delay_tolerance_ms:
                     self.px4_params_issue = "EKF2_EV_DELAY_mismatch:%.3f_expected_%.3f_tol_%.3f" % (
                         float(value), self.expected_ev_delay_ms, self.ev_delay_tolerance_ms)
+            if self.px4_params_issue == "ok" and self.check_px4_offboard_failsafe_params:
+                loss_timeout = self._get_px4_param(get, "COM_OF_LOSS_T")
+                if loss_timeout is None:
+                    self.px4_params_issue = "COM_OF_LOSS_T_unavailable"
+                elif not math.isfinite(float(loss_timeout)):
+                    self.px4_params_issue = "COM_OF_LOSS_T_nonfinite"
+                elif float(loss_timeout) < self.min_offboard_loss_timeout_s:
+                    self.px4_params_issue = "COM_OF_LOSS_T_below_min:%.3f<%.3f" % (
+                        float(loss_timeout), self.min_offboard_loss_timeout_s)
+                elif float(loss_timeout) > self.max_offboard_loss_timeout_s:
+                    self.px4_params_issue = "COM_OF_LOSS_T_above_max:%.3f>%.3f" % (
+                        float(loss_timeout), self.max_offboard_loss_timeout_s)
+                action_value = None
+                action_name = None
+                if self.px4_params_issue == "ok":
+                    for name in ("COM_OBL_RC_ACT", "COM_OBL_ACT"):
+                        value = self._get_px4_param(get, name)
+                        if value is not None:
+                            action_name = name
+                            action_value = int(value)
+                            break
+                    if action_value is None and self.require_offboard_loss_action_param:
+                        self.px4_params_issue = "offboard_loss_action_param_unavailable"
+                    elif action_value is not None and action_value < 0:
+                        self.px4_params_issue = "%s_invalid:%d" % (action_name, action_value)
+                    elif (action_value is not None and self.allowed_offboard_loss_actions and
+                          action_value not in self.allowed_offboard_loss_actions):
+                        self.px4_params_issue = "%s_disallowed:%d" % (action_name, action_value)
         except (rospy.ROSException, rospy.ServiceException) as exc:
             self.px4_params_issue = "param_get_failed:%s" % exc
         self.px4_params_checked = True
@@ -567,8 +628,8 @@ class LocalFlightPreflight(object):
                 "preview_output_stamp_match=%s" % (
                     self._matching_stamp(self.preview_stream, self.output_stream)),
             ))
-        if self.check_px4_vision_params:
-            parts.append("px4_vision_params=%s" % self.px4_params_issue)
+        if self.check_px4_vision_params or self.check_px4_offboard_failsafe_params:
+            parts.append("px4_params=%s" % self.px4_params_issue)
         if self.require_timesync:
             parts.append("timesync=%s fresh=%s" % (
                 self.timesync_issue,
@@ -622,6 +683,11 @@ class LocalFlightPreflight(object):
                 "require_ev_delay": self.require_ev_delay,
                 "expected_ev_delay_ms": self.expected_ev_delay_ms,
                 "ev_delay_tolerance_ms": self.ev_delay_tolerance_ms,
+                "check_px4_offboard_failsafe_params": self.check_px4_offboard_failsafe_params,
+                "min_offboard_loss_timeout_s": self.min_offboard_loss_timeout_s,
+                "max_offboard_loss_timeout_s": self.max_offboard_loss_timeout_s,
+                "require_offboard_loss_action_param": self.require_offboard_loss_action_param,
+                "allowed_offboard_loss_actions": self.allowed_offboard_loss_actions,
                 "require_vision_output_consumer": self.require_vision_output_consumer,
                 "require_setpoint_consumer": self.require_setpoint_consumer,
                 "setpoint_consumer_node": self.setpoint_consumer_node,
@@ -650,7 +716,7 @@ class LocalFlightPreflight(object):
         mavros_ready = self._mavros_ready()
         vision_ready = self._vision_ready()
         core_ready = mavros_ready and vision_ready
-        if core_ready and self.check_px4_vision_params:
+        if core_ready and (self.check_px4_vision_params or self.check_px4_offboard_failsafe_params):
             core_ready = self._check_px4_params()
         if core_ready:
             if self.observation_ready_since is None:

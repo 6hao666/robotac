@@ -35,6 +35,11 @@
   <arg name="require_ev_delay" default="false" />
   <arg name="expected_ev_delay_ms" default="0.0" />
   <arg name="ev_delay_tolerance_ms" default="20.0" />
+  <arg name="check_px4_offboard_failsafe_params" default="false" />
+  <arg name="min_offboard_loss_timeout_s" default="0.30" />
+  <arg name="max_offboard_loss_timeout_s" default="5.00" />
+  <arg name="require_offboard_loss_action_param" default="true" />
+  <arg name="allowed_offboard_loss_actions" default="" />
   <arg name="require_setpoint_consumer" default="false" />
   <arg name="setpoint_consumer_node" default="/mavros" />
   <arg name="require_vision_output_consumer" default="$(eval arg('require_vision_output'))" />
@@ -94,6 +99,11 @@
     <param name="require_ev_delay" value="$(arg require_ev_delay)" />
     <param name="expected_ev_delay_ms" value="$(arg expected_ev_delay_ms)" />
     <param name="ev_delay_tolerance_ms" value="$(arg ev_delay_tolerance_ms)" />
+    <param name="check_px4_offboard_failsafe_params" value="$(arg check_px4_offboard_failsafe_params)" />
+    <param name="min_offboard_loss_timeout_s" value="$(arg min_offboard_loss_timeout_s)" />
+    <param name="max_offboard_loss_timeout_s" value="$(arg max_offboard_loss_timeout_s)" />
+    <param name="require_offboard_loss_action_param" value="$(arg require_offboard_loss_action_param)" />
+    <param name="allowed_offboard_loss_actions" value="$(arg allowed_offboard_loss_actions)" />
     <param name="require_setpoint_consumer" value="$(arg require_setpoint_consumer)" />
     <param name="setpoint_consumer_node" value="$(arg setpoint_consumer_node)" />
     <param name="require_vision_output_consumer" value="$(arg require_vision_output_consumer)" />

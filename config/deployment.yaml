@@ -9,7 +9,8 @@ deployment:
   fastlio_airframe_extrinsics_validated: false
   fastlio_axes_validated: false
   px4_external_vision_configured: false
-  # PX4 COM_OF_LOSS_T / COM_OBL_ACT behavior must be checked on the aircraft.
+  # PX4 COM_OF_LOSS_T / COM_OBL_RC_ACT or legacy COM_OBL_ACT behavior must be
+  # checked on the aircraft with read-only MAVROS parameter queries.
   px4_offboard_failsafe_configured: false
   local_flight_ground_tested: false
   stable_servo_device_configured: false

@@ -252,14 +252,18 @@ configuration are confirmed, set `frame_alignment_approved: true` in
 `config/fastlio/vision_bridge.yaml`:
 
 ```bash
-rosrun robotac_flight check_px4_vision_config.py
+rosrun robotac_flight check_px4_vision_config.py _check_px4_offboard_failsafe_params:=true
 roslaunch robotac_flight fastlio_vision_bridge.launch enable_mavros_output:=true
 rostopic hz /mavros/vision_pose/pose_cov
 ```
 
 The PX4 checker only reads parameters. Newer PX4 uses `EKF2_EV_CTRL`; older
-firmware may use `EKF2_AID_MASK`. Parameter changes must be made deliberately
-for the installed firmware and are never written by this workspace.
+firmware may use `EKF2_AID_MASK`. With
+`_check_px4_offboard_failsafe_params:=true`, it also verifies that PX4 exposes
+`COM_OF_LOSS_T` and an OFFBOARD-loss action parameter (`COM_OBL_RC_ACT` or
+legacy `COM_OBL_ACT`) without changing either value. Parameter changes must be
+made deliberately for the installed firmware and are never written by this
+workspace.
 
 ## Local relative flight
 
@@ -535,13 +539,17 @@ roslaunch robotac_flight local_flight_preflight.launch \
 
 After the measured transforms, PX4 external-vision parameters, and deployment
 gates have been approved, repeat it with
-`require_vision_output:=true require_timesync:=true check_px4_vision_params:=true require_setpoint_consumer:=true`.
+`require_vision_output:=true require_timesync:=true check_px4_vision_params:=true check_px4_offboard_failsafe_params:=true require_setpoint_consumer:=true`.
 This also checks that `/mavros` is subscribed to the exact vision-pose and
 setpoint_raw topics. The PX4 parameter query is read-only and, by default, also
 requires `EKF2_EV_POS_X/Y/Z` to be zero within 0.01 m; Robotac's bridge already
 outputs the airframe `base_link` pose, so non-zero PX4 EV offsets would apply
-the external-vision lever arm twice. After measuring the FAST-LIO to FCU timing
-chain, add `require_ev_delay:=true expected_ev_delay_ms:=...` with a suitable
+the external-vision lever arm twice. The OFFBOARD failsafe check verifies
+`COM_OF_LOSS_T` is within the configured bounds and that PX4 exposes an
+OFFBOARD-loss action parameter; if you want to restrict the action value for a
+specific PX4 version, pass `allowed_offboard_loss_actions:=...`. After measuring
+the FAST-LIO to FCU timing chain, add
+`require_ev_delay:=true expected_ev_delay_ms:=...` with a suitable
 `ev_delay_tolerance_ms:=...` so `EKF2_EV_DELAY` is checked instead of merely
 printed. The following regression exercises that preflight against a loopback
 ROS graph; it opens no serial device and starts no MAVROS:
@@ -554,7 +562,8 @@ evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
 mkdir -p "${evidence_dir}"
 roslaunch robotac_flight local_flight_preflight.launch \
   observe_seconds:=30 require_vision_output:=true require_timesync:=true \
-  check_px4_vision_params:=true require_setpoint_consumer:=true \
+  check_px4_vision_params:=true check_px4_offboard_failsafe_params:=true \
+  require_setpoint_consumer:=true \
   evidence_file:="${evidence_dir}/local_flight_preflight.json"
 ```
 

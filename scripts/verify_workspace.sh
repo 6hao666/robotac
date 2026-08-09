@@ -456,6 +456,11 @@ for expected in (
     "expected_ev_delay_ms",
     "ev_delay_tolerance_ms",
     "require_ev_delay requires check_px4_vision_params=true",
+    "check_px4_offboard_failsafe_params",
+    "COM_OF_LOSS_T",
+    "COM_OBL_RC_ACT",
+    "COM_OBL_ACT",
+    "allowed_offboard_loss_actions",
     "EKF2_EV_POS_X",
     "EKF2_EV_DELAY",
     "EV_POS_nonfinite",
@@ -571,6 +576,11 @@ for expected in (
     "require_ev_delay",
     "expected_ev_delay_ms",
     "ev_delay_tolerance_ms",
+    "check_px4_offboard_failsafe_params",
+    "COM_OF_LOSS_T",
+    "COM_OBL_RC_ACT",
+    "COM_OBL_ACT",
+    "allowed_offboard_loss_actions",
     "EKF2_EV_POS_X",
     "EKF2_EV_DELAY",
     "EV_POS offsets must be finite",
@@ -716,6 +726,7 @@ for expected in (
     "deploy_route_file",
     "flight_route_file",
     "ev_acceptance_observer.json",
+    "check_px4_offboard_failsafe_params:=true",
     "Deployment gates are not all true",
     "Readiness report did not pass active_local_flight",
     "Read-only evidence did not pass active_preflight_evidence",
@@ -864,7 +875,9 @@ def write_valid_evidence(root):
       "EKF2_EV_CTRL": 3,
       "EKF2_EV_POS_X": 0.0,
       "EKF2_EV_POS_Y": 0.0,
-      "EKF2_EV_POS_Z": 0.0
+      "EKF2_EV_POS_Z": 0.0,
+      "COM_OF_LOSS_T": 1.0,
+      "COM_OBL_RC_ACT": 4
     }
   },
   "parameters": {
@@ -874,6 +887,7 @@ def write_valid_evidence(root):
     "require_disarmed": true,
     "require_on_ground": true,
     "check_px4_vision_params": true,
+    "check_px4_offboard_failsafe_params": true,
     "require_vision_output_consumer": true,
     "require_setpoint_consumer": true
   }
@@ -960,6 +974,8 @@ for expected in (
     "local_flight_preflight",
     "px4_vision_params_not_checked",
     "check_px4_vision_params",
+    "check_px4_offboard_failsafe_params",
+    "px4_offboard_failsafe:COM_OF_LOSS_T",
     "ev_acceptance_observer",
     "connected/disarmed/on-ground",
 ):
@@ -1153,7 +1169,9 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
       "EKF2_EV_CTRL": 3,
       "EKF2_EV_POS_X": 0.0,
       "EKF2_EV_POS_Y": 0.0,
-      "EKF2_EV_POS_Z": 0.0
+      "EKF2_EV_POS_Z": 0.0,
+      "COM_OF_LOSS_T": 1.0,
+      "COM_OBL_RC_ACT": 4
     }
   },
   "parameters": {
@@ -1163,6 +1181,7 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
     "require_disarmed": true,
     "require_on_ground": true,
     "check_px4_vision_params": true,
+    "check_px4_offboard_failsafe_params": true,
     "require_vision_output_consumer": true,
     "require_setpoint_consumer": true
   }
@@ -1530,6 +1549,8 @@ def write_readonly_evidence(root):
                 "EKF2_EV_POS_X": 0.0,
                 "EKF2_EV_POS_Y": 0.0,
                 "EKF2_EV_POS_Z": 0.0,
+                "COM_OF_LOSS_T": 1.0,
+                "COM_OBL_RC_ACT": 4,
             },
         },
         "parameters": {
@@ -1539,6 +1560,7 @@ def write_readonly_evidence(root):
             "require_disarmed": True,
             "require_on_ground": True,
             "check_px4_vision_params": True,
+            "check_px4_offboard_failsafe_params": True,
             "require_vision_output_consumer": True,
             "require_setpoint_consumer": True,
         },
