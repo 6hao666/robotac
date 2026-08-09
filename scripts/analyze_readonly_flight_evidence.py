@@ -26,6 +26,8 @@ TOPIC_FILES = {
     "/robotac/fastlio_vision/output_enabled": "robotac_fastlio_vision_output_enabled",
     "/robotac/fastlio_vision/pose_preview": "robotac_fastlio_vision_pose_preview",
     "/Odometry": "Odometry",
+    "/livox/lidar": "livox_lidar",
+    "/livox/imu": "livox_imu",
 }
 
 EXPECTED_TYPES = {
@@ -41,6 +43,8 @@ EXPECTED_TYPES = {
     "/robotac/fastlio_vision/output_enabled": "std_msgs/Bool",
     "/robotac/fastlio_vision/pose_preview": "geometry_msgs/PoseWithCovarianceStamped",
     "/Odometry": "nav_msgs/Odometry",
+    "/livox/lidar": "livox_ros_driver2/CustomMsg",
+    "/livox/imu": "sensor_msgs/Imu",
 }
 
 
@@ -154,7 +158,8 @@ def _stream_phase(directory, name, topic, min_hz):
     return _phase(name, not missing, missing, notes)
 
 
-def _fastlio_health_phase(directory):
+def _fastlio_health_phase(directory, output_enabled_expected=True,
+                          phase_name="fastlio_vision_health"):
     health = _read(directory, _topic_file("echo", "/robotac/fastlio_vision/healthy"))
     status = _string_data(_read(directory, _topic_file("echo", "/robotac/fastlio_vision/status")))
     output = _read(directory, _topic_file("echo", "/robotac/fastlio_vision/output_enabled"))
@@ -166,9 +171,12 @@ def _fastlio_health_phase(directory):
         missing.append("fastlio_vision_status_ok")
     else:
         notes.append("status=%s" % status)
-    if not _contains_bool(output, "data", True):
-        missing.append("fastlio_vision_output_enabled")
-    return _phase("fastlio_vision_health", not missing, missing, notes)
+    if not _contains_bool(output, "data", output_enabled_expected):
+        missing.append("fastlio_vision_output_%s" %
+                       ("enabled" if output_enabled_expected else "disabled"))
+    else:
+        notes.append("mavros_output=%s" % output_enabled_expected)
+    return _phase(phase_name, not missing, missing, notes)
 
 
 def _consumer_phase(directory, name, topic, consumer):
@@ -191,6 +199,18 @@ def _no_publishers_phase(directory, name, topic):
         missing.append("%s_publishers_present:%s" % (topic, ",".join(publishers)))
     else:
         notes.append("no publishers on %s" % topic)
+    return _phase(name, not missing, missing, notes)
+
+
+def _no_stream_phase(directory, name, topic):
+    text = _read(directory, _topic_file("hz", topic))
+    hz = _extract_average_hz(text)
+    missing = []
+    notes = []
+    if hz is not None:
+        missing.append("%s_stream_present:%.3f_hz" % (topic, hz))
+    else:
+        notes.append("no message stream on %s" % topic)
     return _phase(name, not missing, missing, notes)
 
 
@@ -307,16 +327,26 @@ def build_report(args):
         _mavros_safe_state_phase(directory),
         _stream_phase(directory, "mavros_local_position_stream", "/mavros/local_position/odom",
                       args.min_local_hz),
+        _stream_phase(directory, "livox_lidar_stream", "/livox/lidar",
+                      args.min_lidar_hz),
+        _stream_phase(directory, "livox_imu_stream", "/livox/imu",
+                      args.min_lidar_imu_hz),
         _stream_phase(directory, "fastlio_odometry_stream", "/Odometry", args.min_fastlio_hz),
+        _stream_phase(directory, "fastlio_pose_preview_stream", "/robotac/fastlio_vision/pose_preview",
+                      args.min_preview_hz),
         _stream_phase(directory, "mavros_vision_pose_stream", "/mavros/vision_pose/pose_cov",
                       args.min_vision_hz),
         _stream_phase(directory, "mavros_timesync_stream", "/mavros/timesync_status",
                       args.min_timesync_hz),
-        _fastlio_health_phase(directory),
+        _fastlio_health_phase(directory, output_enabled_expected=False,
+                              phase_name="fastlio_preview_health"),
+        _fastlio_health_phase(directory, output_enabled_expected=True,
+                              phase_name="fastlio_vision_health"),
         _consumer_phase(directory, "mavros_vision_pose_consumer", "/mavros/vision_pose/pose_cov",
                         args.mavros_node),
         _consumer_phase(directory, "mavros_setpoint_raw_consumer", "/mavros/setpoint_raw/local",
                         args.mavros_node),
+        _no_stream_phase(directory, "read_only_no_vision_pose_stream", "/mavros/vision_pose/pose_cov"),
         _no_publishers_phase(directory, "read_only_no_setpoint_publishers", "/mavros/setpoint_raw/local"),
         _local_preflight_phase(directory, args.preflight_evidence_file),
         _ev_acceptance_phase(directory, args.ev_acceptance_file),
@@ -325,10 +355,27 @@ def build_report(args):
     phase_groups = {
         "topic_types": ("topic_types",),
         "mavros_safe_state": ("topic_types", "mavros_safe_state"),
+        "read_only_sensor_preview": (
+            "topic_types",
+            "mavros_safe_state",
+            "livox_lidar_stream",
+            "livox_imu_stream",
+            "fastlio_odometry_stream",
+            "fastlio_pose_preview_stream",
+            "mavros_timesync_stream",
+            "fastlio_preview_health",
+            "mavros_vision_pose_consumer",
+            "mavros_setpoint_raw_consumer",
+            "read_only_no_vision_pose_stream",
+            "read_only_no_setpoint_publishers",
+        ),
         "vision_to_mavros": (
             "topic_types",
             "mavros_safe_state",
+            "livox_lidar_stream",
+            "livox_imu_stream",
             "fastlio_odometry_stream",
+            "fastlio_pose_preview_stream",
             "mavros_vision_pose_stream",
             "mavros_timesync_stream",
             "fastlio_vision_health",
@@ -338,7 +385,10 @@ def build_report(args):
             "topic_types",
             "mavros_safe_state",
             "mavros_local_position_stream",
+            "livox_lidar_stream",
+            "livox_imu_stream",
             "fastlio_odometry_stream",
+            "fastlio_pose_preview_stream",
             "mavros_vision_pose_stream",
             "mavros_timesync_stream",
             "fastlio_vision_health",
@@ -379,7 +429,10 @@ def _build_parser():
     parser.add_argument("evidence_dir", help="Directory produced by collect_readonly_flight_evidence.sh")
     parser.add_argument("--mavros-node", default="/mavros")
     parser.add_argument("--min-local-hz", type=float, default=5.0)
+    parser.add_argument("--min-lidar-hz", type=float, default=5.0)
+    parser.add_argument("--min-lidar-imu-hz", type=float, default=100.0)
     parser.add_argument("--min-fastlio-hz", type=float, default=5.0)
+    parser.add_argument("--min-preview-hz", type=float, default=5.0)
     parser.add_argument("--min-vision-hz", type=float, default=5.0)
     parser.add_argument("--min-timesync-hz", type=float, default=2.0)
     parser.add_argument("--ev-acceptance-file", default="",
@@ -387,7 +440,8 @@ def _build_parser():
     parser.add_argument("--preflight-evidence-file", default="",
                         help="Local preflight JSON; default: EVIDENCE_DIR/local_flight_preflight.json")
     parser.add_argument("--require-phase", default="active_preflight_evidence",
-                        choices=("topic_types", "mavros_safe_state", "vision_to_mavros",
+                        choices=("topic_types", "mavros_safe_state", "read_only_sensor_preview",
+                                 "vision_to_mavros",
                                  "active_preflight_evidence"))
     parser.add_argument("--json", action="store_true")
     return parser

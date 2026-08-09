@@ -967,6 +967,8 @@ expected_types = {
     "robotac_fastlio_vision_output_enabled": "std_msgs/Bool",
     "robotac_fastlio_vision_pose_preview": "geometry_msgs/PoseWithCovarianceStamped",
     "Odometry": "nav_msgs/Odometry",
+    "livox_lidar": "livox_ros_driver2/CustomMsg",
+    "livox_imu": "sensor_msgs/Imu",
 }
 
 def write(path, text):
@@ -975,7 +977,8 @@ def write(path, text):
 def write_valid_evidence(root):
     for safe, message_type in expected_types.items():
         write(root / f"topic_type_{safe}.txt", f"### type\n{message_type}\n")
-        write(root / f"topic_hz_{safe}.txt", "average rate: 10.000\n")
+        hz = "200.000" if safe == "livox_imu" else "10.000"
+        write(root / f"topic_hz_{safe}.txt", f"average rate: {hz}\n")
         write(root / f"topic_info_{safe}.txt",
               "Type: %s\nPublishers:\n * /producer\nSubscribers:\n * /listener\n" % message_type)
         write(root / f"topic_echo_{safe}.txt", "---\n")
@@ -1109,8 +1112,14 @@ source = pathlib.Path(sys.argv[1]).read_text()
 for expected in (
     "READ_ONLY_EVIDENCE_ANALYSIS",
     "active_preflight_evidence",
+    "read_only_sensor_preview",
+    "livox_lidar_stream",
+    "livox_imu_stream",
+    "fastlio_pose_preview_stream",
+    "fastlio_preview_health",
     "mavros_vision_pose_consumer",
     "mavros_setpoint_raw_consumer",
+    "read_only_no_vision_pose_stream",
     "read_only_no_setpoint_publishers",
     "local_flight_preflight",
     "px4_vision_params_not_checked",
@@ -1257,6 +1266,8 @@ expected_types = {
     "robotac_fastlio_vision_output_enabled": "std_msgs/Bool",
     "robotac_fastlio_vision_pose_preview": "geometry_msgs/PoseWithCovarianceStamped",
     "Odometry": "nav_msgs/Odometry",
+    "livox_lidar": "livox_ros_driver2/CustomMsg",
+    "livox_imu": "sensor_msgs/Imu",
 }
 
 def write(path, text):
@@ -1266,7 +1277,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
     root = pathlib.Path(directory)
     for safe, message_type in expected_types.items():
         write(root / f"topic_type_{safe}.txt", f"### type\n{message_type}\n")
-        write(root / f"topic_hz_{safe}.txt", "average rate: 10.000\n")
+        hz = "200.000" if safe == "livox_imu" else "10.000"
+        write(root / f"topic_hz_{safe}.txt", f"average rate: {hz}\n")
         write(root / f"topic_info_{safe}.txt", "Type: %s\nPublishers:\n * /producer\nSubscribers:\n * /listener\n" % message_type)
         write(root / f"topic_echo_{safe}.txt", "---\n")
     write(root / "topic_echo_mavros_state.txt", "connected: True\narmed: False\nmode: MANUAL\n")
@@ -1278,6 +1290,23 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
           "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
     write(root / "topic_info_mavros_setpoint_raw_local.txt",
           "Type: mavros_msgs/PositionTarget\nPublishers: None\nSubscribers:\n * /mavros\n")
+    write(root / "topic_echo_robotac_fastlio_vision_output_enabled.txt", "data: False\n")
+    write(root / "topic_info_mavros_vision_pose_pose_cov.txt",
+          "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
+    write(root / "topic_hz_mavros_vision_pose_pose_cov.txt", "no new messages\n")
+    preview = subprocess.run([sys.executable, script, str(root), "--require-phase", "read_only_sensor_preview"],
+                             text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if preview.returncode != 0 or "read_only_sensor_preview=READY" not in preview.stdout:
+        raise SystemExit("Read-only evidence analyzer rejected valid preview-only evidence:\n%s\n%s" %
+                         (preview.stdout, preview.stderr))
+    preview_not_active = subprocess.run([sys.executable, script, str(root)], text=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if preview_not_active.returncode == 0 or "active_preflight_evidence=READY" in preview_not_active.stdout:
+        raise SystemExit("Preview-only evidence must not satisfy active preflight evidence")
+    write(root / "topic_echo_robotac_fastlio_vision_output_enabled.txt", "data: True\n")
+    write(root / "topic_hz_mavros_vision_pose_pose_cov.txt", "average rate: 10.000\n")
+    write(root / "topic_info_mavros_vision_pose_pose_cov.txt",
+          "Type: geometry_msgs/PoseWithCovarianceStamped\nPublishers:\n * /fastlio_vision_bridge\nSubscribers:\n * /mavros\n")
     missing_ev = subprocess.run([sys.executable, script, str(root)], text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if missing_ev.returncode == 0 or "ev_acceptance_observer=BLOCKED" not in missing_ev.stdout:
@@ -1679,6 +1708,8 @@ expected_types = {
     "robotac_fastlio_vision_output_enabled": "std_msgs/Bool",
     "robotac_fastlio_vision_pose_preview": "geometry_msgs/PoseWithCovarianceStamped",
     "Odometry": "nav_msgs/Odometry",
+    "livox_lidar": "livox_ros_driver2/CustomMsg",
+    "livox_imu": "sensor_msgs/Imu",
 }
 
 def write(path, text):
@@ -1688,7 +1719,8 @@ def write_readonly_evidence(root):
     root.mkdir(parents=True, exist_ok=True)
     for safe, message_type in expected_types.items():
         write(root / f"topic_type_{safe}.txt", f"### type\n{message_type}\n")
-        write(root / f"topic_hz_{safe}.txt", "average rate: 10.000\n")
+        hz = "200.000" if safe == "livox_imu" else "10.000"
+        write(root / f"topic_hz_{safe}.txt", f"average rate: {hz}\n")
         write(root / f"topic_info_{safe}.txt",
               "Type: %s\nPublishers:\n * /producer\nSubscribers:\n * /listener\n" % message_type)
         write(root / f"topic_echo_{safe}.txt", "---\n")

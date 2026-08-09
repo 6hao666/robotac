@@ -68,7 +68,10 @@ def _readonly_report(args):
         evidence_dir=args.readonly_evidence,
         mavros_node=args.mavros_node,
         min_local_hz=args.min_local_hz,
+        min_lidar_hz=args.min_lidar_hz,
+        min_lidar_imu_hz=args.min_lidar_imu_hz,
         min_fastlio_hz=args.min_fastlio_hz,
+        min_preview_hz=args.min_preview_hz,
         min_vision_hz=args.min_vision_hz,
         min_timesync_hz=args.min_timesync_hz,
         preflight_evidence_file=args.preflight_evidence_file,
@@ -510,7 +513,10 @@ def _build_parser():
     parser.add_argument("--origin-z", type=float, default=0.0)
     parser.add_argument("--origin-yaw-deg", type=float, default=0.0)
     parser.add_argument("--min-local-hz", type=float, default=5.0)
+    parser.add_argument("--min-lidar-hz", type=float, default=5.0)
+    parser.add_argument("--min-lidar-imu-hz", type=float, default=100.0)
     parser.add_argument("--min-fastlio-hz", type=float, default=5.0)
+    parser.add_argument("--min-preview-hz", type=float, default=5.0)
     parser.add_argument("--min-vision-hz", type=float, default=5.0)
     parser.add_argument("--min-timesync-hz", type=float, default=2.0)
     parser.add_argument("--min-waypoints", type=int, default=0,
