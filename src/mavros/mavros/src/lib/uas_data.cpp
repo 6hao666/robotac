@@ -48,10 +48,14 @@ UAS::UAS() :
 		egm96_5 = std::make_shared<GeographicLib::Geoid>("egm96-5", "", true, true);
 	}
 	catch (const std::exception &e) {
-		// catch exception and shutdown node
-		ROS_FATAL_STREAM("UAS: GeographicLib exception: " << e.what() <<
-				" | Run install_geographiclib_dataset.sh script in order to install Geoid Model dataset!");
-		ros::shutdown();
+		// Robotac uses MAVROS for local PX4 communication by default and keeps
+		// global-position plugins disabled.  Some aircraft images do not ship the
+		// GeographicLib egm96-5 dataset, so do not prevent local-only MAVROS usage.
+		// Altitude conversion helpers already return 0.0 when the geoid is absent.
+		ROS_WARN_STREAM("UAS: GeographicLib geoid unavailable: " << e.what() <<
+				" | Global-position altitude conversion is disabled; install the "
+				"egm96-5 dataset before enabling global-position MAVROS plugins.");
+		egm96_5.reset();
 	}
 }
 
