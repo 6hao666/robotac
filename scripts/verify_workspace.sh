@@ -894,15 +894,21 @@ for expected in (
     "--deploy-workspace",
     "--deploy-route-file",
     "--evidence-dir",
+    "--frame-alignment-evidence-dir",
     "deploy_workspace",
     "deploy_route_file",
     "flight_route_file",
+    "fastlio_frame_alignment_observer.launch",
+    "analyze_frame_alignment_evidence.py",
+    "frame_alignment_evidence_dir",
     "ev_acceptance_observer.json",
     "check_px4_offboard_failsafe_params:=true",
     "Deployment gates are not all true",
     "Readiness report did not pass active_local_flight",
     "Read-only evidence did not pass active_preflight_evidence",
     "Evidence directory is required for --show-active",
+    "Frame-alignment evidence directory is required for --show-active",
+    "Frame-alignment evidence did not pass +X/+Y/+Z preview checks",
     "Payload readiness did not pass payload_local_flight",
     "rosservice call /robotac/flight/start",
     "enable_flight_controller:=false",
@@ -945,6 +951,7 @@ if result.returncode != 0:
 for expected in (
         'deploy_workspace="${HOME}/robotac_ws"',
         'route_file="${HOME}/robotac_ws/config/flight/local_waypoints.yaml"',
+        'frame_alignment_evidence_dir="${deploy_workspace}/logs/frame_alignment/$(date +%Y%m%d_%H%M%S)"',
         'evidence_dir="${deploy_workspace}/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)"'):
     if expected not in result.stdout:
         raise SystemExit("Flight ladder deploy-path print check failed: missing %s" % expected)
@@ -1069,10 +1076,54 @@ def write_valid_evidence(root):
 }
 """)
 
+def write_frame_alignment_evidence(root):
+    root.mkdir(parents=True, exist_ok=True)
+    for name, expected in {
+            "preview_positive_x": [1.0, 0.0, 0.0],
+            "preview_positive_y": [0.0, 1.0, 0.0],
+            "preview_positive_z": [0.0, 0.0, 1.0],
+    }.items():
+        write(root / f"{name}.json", """{
+  "observer": "fastlio_frame_alignment_observer",
+  "success": true,
+  "reason": "frame_alignment_preview_passed motion=%s",
+  "missing": [],
+  "notes": [],
+  "parameters": {
+    "pose_topic": "/robotac/fastlio_vision/pose_preview",
+    "expected_parent": "odom",
+    "motion_type": "translation",
+    "motion_name": "%s",
+    "expected_x": %.1f,
+    "expected_y": %.1f,
+    "expected_z": %.1f,
+    "expected_distance_m": 0.0,
+    "require_mavros_output_disabled": true,
+    "require_vision_status_ok": true
+  },
+  "metrics": {
+    "motion_type": "translation",
+    "motion_name": "%s",
+    "observed_delta": [%.1f, %.1f, %.1f],
+    "observed_yaw_delta_deg": 0.0,
+    "translation_distance_m": 1.0,
+    "projection_m": 1.0,
+    "direction_cos": 1.0,
+    "direction_error_deg": 0.0,
+    "expected_unit": [%.1f, %.1f, %.1f],
+    "expected_distance_m": 0.0,
+    "sample_count": 100,
+    "pose_rate_hz": 10.0
+  }
+}
+""" % (name, name, expected[0], expected[1], expected[2], name,
+       expected[0], expected[1], expected[2], expected[0], expected[1], expected[2]))
+
 with tempfile.TemporaryDirectory(prefix="robotac-ladder-evidence.") as directory:
     root = pathlib.Path(directory)
     config_root = root / "config"
     evidence = root / "evidence"
+    frame = root / "frame"
     evidence.mkdir()
     shutil.copytree(str(workspace / "config"), str(config_root))
     shutil.copyfile(str(workspace / "config" / "deployment_sim.yaml"),
@@ -1089,10 +1140,20 @@ with tempfile.TemporaryDirectory(prefix="robotac-ladder-evidence.") as directory
         raise SystemExit("Flight ladder did not report missing evidence directory")
 
     write_valid_evidence(evidence)
-    ready = subprocess.run(
+    write_frame_alignment_evidence(frame)
+    missing_frame = subprocess.run(
         [str(workspace / "scripts" / "flight_test_ladder.sh"),
          "--config-root", str(config_root), "--skip-verify", "--show-active",
          "--evidence-dir", str(evidence)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_frame.returncode != 2:
+        raise SystemExit("Flight ladder should require --frame-alignment-evidence-dir when active readiness passes")
+    if "Frame-alignment evidence directory is required for --show-active" not in missing_frame.stderr:
+        raise SystemExit("Flight ladder did not report missing frame-alignment evidence directory")
+    ready = subprocess.run(
+        [str(workspace / "scripts" / "flight_test_ladder.sh"),
+         "--config-root", str(config_root), "--skip-verify", "--show-active",
+         "--frame-alignment-evidence-dir", str(frame), "--evidence-dir", str(evidence)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if ready.returncode != 0:
         raise SystemExit("Flight ladder rejected valid synthetic readiness/evidence:\n%s\n%s" %
@@ -1101,7 +1162,7 @@ with tempfile.TemporaryDirectory(prefix="robotac-ladder-evidence.") as directory
         raise SystemExit("Flight ladder did not print active command block after valid evidence")
     if "payload flight commands (not executed by this script)" not in ready.stdout:
         raise SystemExit("Flight ladder did not print payload command block after valid payload readiness")
-print("Validated flight ladder requires and accepts read-only evidence before active command printing.")
+print("Validated flight ladder requires frame-alignment and read-only evidence before active command printing.")
 PY
 
 python3 - "${workspace_dir}/scripts/collect_readonly_flight_evidence.sh" <<'PY'

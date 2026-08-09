@@ -165,14 +165,16 @@ configured local route, prints the deployment-gate status, and then prints the
 next read-only aircraft commands. It never starts ROS nodes, opens serial
 devices, sends setpoints, changes modes, arms, or calls MAVROS services. Active
 flight commands are hidden unless `--show-active` is supplied, and even then the
-script refuses to print them until both the active-flight deployment gates in
-`config/deployment.yaml`, the `active_local_flight` readiness report, and a
-passed read-only evidence bundle supplied via `--evidence-dir` all pass. That
-evidence bundle must include both subscriber-only topic evidence and the
-`ev_acceptance_observer.json` result proving PX4/MAVROS local position moved in
-the same direction and scale as the FAST-LIO vision-pose input while the vehicle
-was connected, disarmed, and on the ground. The final payload mission block is
-hidden separately until `payload_local_flight` readiness passes. Use
+script refuses to print them until all of the following pass: the active-flight
+deployment gates in `config/deployment.yaml`, the `active_local_flight`
+readiness report, preview-only FAST-LIO frame-alignment evidence supplied via
+`--frame-alignment-evidence-dir`, and the read-only MAVROS/PX4 evidence bundle
+supplied via `--evidence-dir`. That read-only bundle must include both
+subscriber-only topic evidence and the `ev_acceptance_observer.json` result
+proving PX4/MAVROS local position moved in the same direction and scale as the
+FAST-LIO vision-pose input while the vehicle was connected, disarmed, and on the
+ground. The final payload mission block is hidden separately until
+`payload_local_flight` readiness passes. Use
 `--skip-verify` only when you are iterating on the printed route/command ladder
 and have just run the full workspace verification separately.
 When this script is run from the Mac source checkout, its validation still reads
@@ -734,6 +736,7 @@ To roll up the whole objective after a test, use the top-level audit:
 ```bash
 ./scripts/flight_goal_audit.py \
   --route-file ~/robotac_ws/config/flight/local_waypoints.yaml \
+  --frame-alignment-evidence ~/robotac_ws/logs/frame_alignment/YYYYMMDD_HHMMSS \
   --readonly-evidence ~/robotac_ws/logs/read_only_evidence/YYYYMMDD_HHMMSS \
   --active-evidence ~/robotac_ws/logs/active_flight_evidence/YYYYMMDD_HHMMSS
 ```

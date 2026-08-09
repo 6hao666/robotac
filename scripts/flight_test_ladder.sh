@@ -17,6 +17,7 @@ origin_yaw_deg=0.0
 expected_ev_delay_ms=""
 ev_delay_tolerance_ms=20.0
 evidence_dir=""
+frame_alignment_evidence_dir=""
 show_active=false
 skip_verify=false
 
@@ -39,6 +40,8 @@ Options:
   --origin-yaw-deg DEG            Preview captured start yaw, default: 0.0
   --expected-ev-delay-ms MS       Include require_ev_delay command argument
   --ev-delay-tolerance-ms MS      EV delay tolerance, default: 20.0
+  --frame-alignment-evidence-dir PATH
+                                  FAST-LIO preview +X/+Y/+Z evidence before --show-active
   --evidence-dir PATH             Read-only topic + EV-acceptance evidence directory before --show-active
   --skip-verify                   Skip scripts/verify_workspace.sh
   --show-active                   Print active commands only after readiness gates pass
@@ -90,6 +93,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --evidence-dir)
       evidence_dir=${2:?--evidence-dir requires a value}
+      shift 2
+      ;;
+    --frame-alignment-evidence-dir)
+      frame_alignment_evidence_dir=${2:?--frame-alignment-evidence-dir requires a value}
       shift 2
       ;;
     --skip-verify)
@@ -236,6 +243,23 @@ roslaunch robotac_bringup full_system.launch \
 roslaunch robotac_flight local_flight_preflight.launch \
   observe_seconds:=30 require_vision_output:=false
 
+# 2b) Preview-only FAST-LIO frame alignment. Keep MAVROS vision output disabled.
+frame_alignment_evidence_dir="${deploy_workspace}/logs/frame_alignment/$(date +%Y%m%d_%H%M%S)"
+mkdir -p "${frame_alignment_evidence_dir}"
+roslaunch robotac_flight fastlio_frame_alignment_observer.launch \
+  motion_name:=preview_positive_x expected_x:=1 expected_y:=0 expected_z:=0 \
+  min_translation_m:=0.30 \
+  evidence_file:="${frame_alignment_evidence_dir}/preview_positive_x.json"
+roslaunch robotac_flight fastlio_frame_alignment_observer.launch \
+  motion_name:=preview_positive_y expected_x:=0 expected_y:=1 expected_z:=0 \
+  min_translation_m:=0.30 \
+  evidence_file:="${frame_alignment_evidence_dir}/preview_positive_y.json"
+roslaunch robotac_flight fastlio_frame_alignment_observer.launch \
+  motion_name:=preview_positive_z expected_x:=0 expected_y:=0 expected_z:=1 \
+  min_translation_m:=0.30 \
+  evidence_file:="${frame_alignment_evidence_dir}/preview_positive_z.json"
+./scripts/analyze_frame_alignment_evidence.py "${frame_alignment_evidence_dir}"
+
 # 3) After transforms/PX4 EV parameters/deployment gates are approved, enable
 #    MAVROS vision input and run the strict read-only preflight.
 roslaunch robotac_bringup full_system.launch \
@@ -291,6 +315,7 @@ roslaunch robotac_flight ev_acceptance_observer.launch \
 # 7) Top-level goal audit stays BLOCKED until active-flight evidence is added.
 ./scripts/flight_goal_audit.py \
   --route-file "${route_file}" \
+  --frame-alignment-evidence "${frame_alignment_evidence_dir}" \
   --readonly-evidence "${evidence_dir}"
 EOF
 
@@ -319,6 +344,26 @@ if [[ "${show_active}" == true ]]; then
     echo "Evidence directory is required for --show-active; run ev_acceptance_observer plus collect_readonly_flight_evidence.sh and pass --evidence-dir." >&2
     exit 2
   fi
+  if [[ -z "${frame_alignment_evidence_dir}" ]]; then
+    print_section "active flight commands blocked"
+    echo "Frame-alignment evidence directory is required for --show-active; run fastlio_frame_alignment_observer for +X/+Y/+Z and pass --frame-alignment-evidence-dir." >&2
+    exit 2
+  fi
+  if [[ ! -d "${frame_alignment_evidence_dir}" ]]; then
+    print_section "active flight commands blocked"
+    echo "Frame-alignment evidence directory does not exist: ${frame_alignment_evidence_dir}" >&2
+    exit 2
+  fi
+  if ! python3 "${workspace_dir}/scripts/analyze_frame_alignment_evidence.py" \
+      "${frame_alignment_evidence_dir}" \
+      >/tmp/robotac-frame-alignment-evidence.$$ 2>&1; then
+    print_section "active flight commands blocked"
+    echo "Frame-alignment evidence did not pass +X/+Y/+Z preview checks; refusing to print active commands." >&2
+    cat /tmp/robotac-frame-alignment-evidence.$$ >&2
+    rm -f /tmp/robotac-frame-alignment-evidence.$$
+    exit 2
+  fi
+  rm -f /tmp/robotac-frame-alignment-evidence.$$
   if [[ ! -d "${evidence_dir}" ]]; then
     print_section "active flight commands blocked"
     echo "Evidence directory does not exist: ${evidence_dir}" >&2
@@ -335,6 +380,7 @@ if [[ "${show_active}" == true ]]; then
   fi
   rm -f /tmp/robotac-active-evidence.$$
   print_section "active flight commands (not executed by this script)"
+  printf 'readonly_frame_alignment_evidence_dir=%q\n' "${frame_alignment_evidence_dir}"
   printf 'readonly_evidence_dir=%q\n' "${evidence_dir}"
   print_shell_assignment flight_route_file "${deploy_route_file}"
   cat <<'EOF'
@@ -361,6 +407,7 @@ rosservice call /robotac/flight/start
 ./scripts/analyze_active_flight_evidence.py "${flight_evidence_dir}"
 ./scripts/flight_goal_audit.py \
   --route-file "${flight_route_file}" \
+  --frame-alignment-evidence "${readonly_frame_alignment_evidence_dir}" \
   --readonly-evidence "${readonly_evidence_dir}" \
   --active-evidence "${flight_evidence_dir}"
 EOF
@@ -400,6 +447,7 @@ rosservice call /robotac/flight/start
   "${payload_flight_evidence_dir}" --require-phase payload_local_flight
 ./scripts/flight_goal_audit.py \
   --route-file "${flight_route_file}" \
+  --frame-alignment-evidence "${readonly_frame_alignment_evidence_dir}" \
   --readonly-evidence "${readonly_evidence_dir}" \
   --active-evidence "${payload_flight_evidence_dir}" \
   --require-phase payload_local_flight
