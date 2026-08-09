@@ -1,6 +1,6 @@
 <launch>
   <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
-  <arg name="fcu_url" default="serial:///dev/px4_fcu:921600" />
+  <arg name="fcu_url" default="serial:///dev/ttyACM0:921600" />
   <arg name="video_device" default="/dev/robotac_rgb_camera" />
   <arg name="tags_config" default="$(arg config_root)/apriltag/tags.yaml" />
   <arg name="use_config_tags" default="true" />
@@ -35,7 +35,7 @@
   <arg name="require_sensor_calibration" default="$(eval (arg('enable_vision_bridge') == 'true' and arg('vision_enable_output') == 'true') or (arg('enable_flight_controller') == 'true' and arg('flight_enable_control') == 'true'))" />
 
   <node pkg="robotac_bringup" type="check_hardware_config.sh"
-        name="check_hardware_config" args="$(arg config_root) $(arg require_fcu) $(arg require_flight) $(arg require_vision_output) $(arg require_payload) $(arg enable_mavros) $(arg require_sensor_calibration)"
+        name="check_hardware_config" args="--hold $(arg config_root) $(arg require_fcu) $(arg require_flight) $(arg require_vision_output) $(arg require_payload) $(arg enable_mavros) $(arg require_sensor_calibration)"
         output="screen" required="true" />
 
   <group if="$(arg enable_mavros)">

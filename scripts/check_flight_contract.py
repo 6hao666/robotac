@@ -135,7 +135,7 @@ def _check_mavros_local_only(root):
     launch = _read(launch_path)
     if '<arg name="check_geographiclib" default="false" />' not in launch:
         missing.append("mavros_geographiclib_optional_for_local_only")
-    if "serial:///dev/px4_fcu:921600" not in launch:
+    if "serial:///dev/ttyACM0:921600" not in launch:
         missing.append("mavros_stable_fcu_default")
     if not missing:
         notes.append("MAVROS surface is local-only: setpoint_raw + vision_pose_estimate, no GPS/global mission")
@@ -451,6 +451,10 @@ def _check_fastlio_vision_bridge(root):
             missing.append("vision_bridge_%s" % key)
     if config.get("strict_input_frames") is not True:
         missing.append("vision_bridge_strict_input_frames")
+    if config.get("zero_origin_on_start") is not True:
+        missing.append("vision_bridge_zero_origin_on_start")
+    if float(config.get("max_output_radius", 0.0) or 0.0) <= 0.0:
+        missing.append("vision_bridge_max_output_radius")
     if config.get("frame_alignment_approved") is True:
         missing.append("real_config_frame_alignment_should_not_be_preapproved")
 
@@ -466,6 +470,9 @@ def _check_fastlio_vision_bridge(root):
         "self.enable_mavros_output = requested_output and self.frame_alignment_approved",
         "self.pose_pub = rospy.Publisher(self.output_topic, PoseWithCovarianceStamped, queue_size=10)",
         "self.preview_pub = rospy.Publisher(self.preview_topic, PoseWithCovarianceStamped, queue_size=10)",
+        "self.zero_origin_on_start = _as_bool(rospy.get_param(\"~zero_origin_on_start\", True))",
+        "self.origin_position = output_position.copy()",
+        "output_radius_exceeded",
         "if self.enable_mavros_output and self.healthy:",
         "self.pose_pub.publish(output)",
         "self.status_pub.publish(String(data=reason))",

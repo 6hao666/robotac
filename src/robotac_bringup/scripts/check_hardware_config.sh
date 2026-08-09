@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-config_root=${1:?usage: check_hardware_config.sh CONFIG_ROOT [REQUIRE_FCU] [REQUIRE_FLIGHT] [REQUIRE_VISION_OUTPUT] [REQUIRE_PAYLOAD] [ENABLE_MAVROS] [REQUIRE_SENSOR_CALIBRATION]}
+hold=false
+if [[ "${1:-}" == "--hold" ]]; then
+  hold=true
+  shift
+fi
+
+config_root=${1:?usage: check_hardware_config.sh [--hold] CONFIG_ROOT [REQUIRE_FCU] [REQUIRE_FLIGHT] [REQUIRE_VISION_OUTPUT] [REQUIRE_PAYLOAD] [ENABLE_MAVROS] [REQUIRE_SENSOR_CALIBRATION]}
 require_fcu=${2:-true}
 require_flight=${3:-false}
 require_vision_output=${4:-false}
@@ -148,3 +154,10 @@ if host_ip == "192.168.1.5":
 else:
     print(f"MID360s network configuration accepted: host={host_ip}, lidar={lidar_ip}")
 PY
+
+if [[ "${hold}" == true ]]; then
+  echo "Hardware configuration check passed; holding required roslaunch guard alive."
+  while true; do
+    sleep 3600
+  done
+fi

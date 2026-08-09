@@ -13,6 +13,10 @@ fastlio_vision_bridge:
   min_samples: 5
   max_position_speed: 8.0
   max_yaw_rate: 6.0
+  # MAVROS/PX4 external vision should be local. Capture the first valid
+  # FAST-LIO pose as the local origin so arbitrary map offsets are not sent to PX4.
+  zero_origin_on_start: true
+  max_output_radius: 50.0
   # Transform points from FAST-LIO's startup world into the local ENU world:
   # p_output = R * p_input + t.  Keep identity only after axis alignment has
   # been checked on the aircraft.

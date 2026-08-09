@@ -69,7 +69,7 @@ udev.
 
 Install a corresponding PX4 rule from
 `config/udev/99-robotac-px4.rules.template`, and ensure the runtime user is in
-the `dialout` group. MAVROS defaults to `serial:///dev/px4_fcu:921600`.
+the `dialout` group. MAVROS defaults to `serial:///dev/ttyACM0:921600`.
 The default `config/mavros/px4_pluginlists.yaml` is intentionally local-only:
 it loads MAVROS command, IMU, local-position, parameter, system-status/time,
 setpoint_raw, and vision-pose plugins, while `global_position`, `gps_status`,
@@ -135,7 +135,7 @@ roslaunch robotac_bringup camera_rgb.launch
 roslaunch robotac_bringup lidar_mid360s.launch
 roslaunch robotac_bringup fastlio_mid360s.launch
 roslaunch robotac_bringup mapping_demo.launch rviz:=true
-roslaunch robotac_bringup mavros_px4.launch fcu_url:=serial:///dev/px4_fcu:921600
+roslaunch robotac_bringup mavros_px4.launch fcu_url:=serial:///dev/ttyACM0:921600
 roslaunch robotac_bringup apriltag_rgb.launch
 roslaunch robotac_servo servo.launch
 roslaunch robotac_bringup full_system.launch enable_mavros:=false
@@ -219,9 +219,11 @@ parent frame, so `input_child_to_output_child_*` is the sole place to describe
 the measured `body -> base_link` transform. MAVROS then performs the ENU-to-NED
 and FLU-to-FRD conversion and sends `VISION_POSITION_ESTIMATE`; do not perform
 that conversion again in project code. The bridge preserves the LiDAR timestamp, rejects stale,
-backward, non-finite, low-rate, or jumping poses, repairs invalid covariance
-with conservative configured values, and reports unhealthy on timeout. The
-flight controller requires all three live signals before active control: an
+backward, non-finite, low-rate, or jumping poses, captures the first valid
+FAST-LIO pose as the local origin by default (`zero_origin_on_start: true`),
+rejects output that exceeds the configured local radius, repairs invalid
+covariance with conservative configured values, and reports unhealthy on
+timeout. The flight controller requires all three live signals before active control: an
 `ok ...` bridge status, a fresh healthy signal, and a fresh valid message on
 `/mavros/vision_pose/pose_cov` with frame `odom`. A latched
 `output_enabled` value alone is never treated as proof that MAVROS is still

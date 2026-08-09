@@ -93,6 +93,8 @@ class FastlioVisionBridge(object):
         self.max_future = float(rospy.get_param("~max_future", 0.10))
         self.max_speed = float(rospy.get_param("~max_position_speed", 8.0))
         self.max_yaw_rate = float(rospy.get_param("~max_yaw_rate", 6.0))
+        self.zero_origin_on_start = _as_bool(rospy.get_param("~zero_origin_on_start", True))
+        self.max_output_radius = float(rospy.get_param("~max_output_radius", 100.0))
         self.min_rate = float(rospy.get_param("~min_rate_hz", 5.0))
         self.min_samples = int(rospy.get_param("~min_samples", 5))
         self.health_timeout = float(rospy.get_param("~health_timeout", 0.50))
@@ -125,6 +127,7 @@ class FastlioVisionBridge(object):
         self.last_stamp = None
         self.last_position = None
         self.last_quaternion = None
+        self.origin_position = None
         self.last_receive = None
         self.last_rate_stamp = None
         self.rate_hz = 0.0
@@ -260,6 +263,15 @@ class FastlioVisionBridge(object):
         child_position = self.world_rotation.dot(
             tft.quaternion_matrix(quaternion)[:3, :3].dot(self.child_translation))
         output_position = parent_position + child_position
+        if self.zero_origin_on_start:
+            if self.origin_position is None:
+                self.origin_position = output_position.copy()
+                rospy.loginfo("FAST-LIO vision local origin captured at [%.3f, %.3f, %.3f]",
+                              self.origin_position[0], self.origin_position[1], self.origin_position[2])
+            output_position = output_position - self.origin_position
+        if self.max_output_radius > 0.0 and float(np.linalg.norm(output_position)) > self.max_output_radius:
+            self._reject("output_radius_exceeded:%.2f" % float(np.linalg.norm(output_position)))
+            return
         output_quaternion = tft.quaternion_multiply(
             tft.quaternion_from_matrix(np.vstack((np.hstack((self.world_rotation, np.zeros((3, 1)))),
                                                    [0.0, 0.0, 0.0, 1.0]))),
@@ -300,9 +312,9 @@ class FastlioVisionBridge(object):
         if self.enable_mavros_output and self.healthy:
             self.pose_pub.publish(output)
         state = "ok" if self.healthy else "warming_up"
-        self._set_status("%s rate_hz=%.2f valid=%d dropped=%d mavros_output=%s" %
+        self._set_status("%s rate_hz=%.2f valid=%d dropped=%d mavros_output=%s zero_origin=%s" %
                          (state, self.rate_hz, self.valid_count, self.drop_count,
-                          self.enable_mavros_output))
+                          self.enable_mavros_output, self.zero_origin_on_start))
 
     def _health_cb(self, _event):
         # This latched topic is also a live bridge heartbeat.  Re-publishing it

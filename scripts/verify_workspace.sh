@@ -47,6 +47,7 @@ required_paths=(
   scripts/analyze_frame_alignment_evidence.py
   scripts/analyze_readonly_flight_evidence.py
   scripts/check_flight_contract.py
+  scripts/collect_frame_alignment_evidence.sh
   scripts/collect_readonly_flight_evidence.sh
   scripts/flight_goal_audit.py
   scripts/flight_test_ladder.sh

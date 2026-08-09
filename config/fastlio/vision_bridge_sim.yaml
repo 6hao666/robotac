@@ -13,6 +13,8 @@ fastlio_vision_bridge:
   min_samples: 3
   max_position_speed: 8.0
   max_yaw_rate: 6.0
+  zero_origin_on_start: false
+  max_output_radius: 100.0
   # Deliberately non-identity bench transforms. The integration test verifies
   # world/airframe rotation, translation, lever-arm covariance, and quaternion
   # composition; these values must never be copied into deployment.yaml.
