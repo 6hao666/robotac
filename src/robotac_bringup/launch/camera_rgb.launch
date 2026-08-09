@@ -6,10 +6,13 @@
   <arg name="framerate" default="30" />
   <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
   <arg name="camera_info_url" default="file://$(arg config_root)/camera/rgb.yaml" />
+  <arg name="enable_rectify" default="false" />
 
-  <!-- Keep the RGB stream raw even when compressed_image_transport is installed. -->
+  <!-- Keep the RGB stream raw even when optional image_transport plugins are installed. -->
   <rosparam param="/camera/rgb/image_raw/disable_pub_plugins">
     - image_transport/compressed
+    - image_transport/compressedDepth
+    - image_transport/theora
   </rosparam>
 
   <group ns="camera">
@@ -26,7 +29,7 @@
   </group>
 
   <group ns="camera/rgb">
-    <node pkg="image_proc" type="image_proc" name="rectify" output="screen"
+    <node if="$(arg enable_rectify)" pkg="image_proc" type="image_proc" name="rectify" output="screen"
           respawn="true" respawn_delay="2" />
   </group>
 

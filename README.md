@@ -763,18 +763,32 @@ targets instead of the configured route file. Start the active observer before
 evidence that the route targets were generated relative to the actual local
 takeoff pose.
 
-The camera publishes `/camera/rgb/image_raw`, `/camera/rgb/camera_info`, and
-rectified `/camera/rgb/image_rect`. The default tested profile is MJPEG
-1920x1080 at 30 Hz; YUYV at this resolution is only 5 Hz on the tested camera.
-This camera's MJPEG stream decodes as YUV422, so the driver profile uses
-`color_format: yuv422p`. JPEG compressed image transport is disabled for this
-camera. AprilTag consumes the rectified topic by default. The checked-in
-1920x1080 calibration has 30 valid samples and 0.1000 px RMS reprojection error.
-The original calibration is retained as `config/camera/rgb_640x480.yaml`.
-AprilTag defaults to `tag36h11` and loads standalone IDs `0` and `1` from
-`config/apriltag/tags.yaml`. Each tag uses `0.15 m` for pose estimation; the
-print's total outer size is recorded as `0.25 m`. To temporarily test one
-different tag without editing the config, use
+The default camera launch is intentionally minimal: it publishes only
+`/camera/rgb/image_raw` and `/camera/rgb/camera_info`. The tested profile is
+MJPEG 1920x1080 at 30 Hz; YUYV at this resolution is only 5 Hz on the tested
+camera. This camera's MJPEG stream decodes as YUV422, so the driver profile uses
+`color_format: yuv422p`. Optional image transports (`compressed`,
+`compressedDepth`, `theora`) are disabled for the raw RGB topic to keep the ROS
+graph clean. Rectified image topics are opt-in:
+
+```bash
+roslaunch robotac_bringup camera_rgb.launch enable_rectify:=true
+```
+
+AprilTag consumes `/camera/rgb/image_raw` plus `/camera/rgb/camera_info` by
+default and publishes only `/tag_detections` plus TF. The annotated
+`/tag_detections_image` topic is opt-in for visual debugging:
+
+```bash
+roslaunch robotac_bringup apriltag_rgb.launch publish_debug_image:=true
+```
+
+The checked-in 1920x1080 calibration has 30 valid samples and 0.1000 px RMS
+reprojection error. The original calibration is retained as
+`config/camera/rgb_640x480.yaml`. AprilTag defaults to `tag36h11` and loads
+standalone IDs `0` and `1` from `config/apriltag/tags.yaml`. Each tag uses
+`0.15 m` for pose estimation; the print's total outer size is recorded as
+`0.25 m`. To temporarily test one different tag without editing the config, use
 `use_config_tags:=false tag_id:=N tag_size:=S`.
 
 Servo switch examples (with a running `roscore`):

@@ -7,5 +7,5 @@ tag_debug: 0
 max_hamming_dist: 2
 remove_duplicates: true
 publish_tf: true
-publish_tag_detections_image: true
+publish_tag_detections_image: false
 transport_hint: raw

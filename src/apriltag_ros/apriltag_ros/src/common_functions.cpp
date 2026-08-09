@@ -574,32 +574,41 @@ void TagDetector::drawDetections (cv_bridge::CvImagePtr image)
     // (going counter-clockwise, starting from lower-left corner in
     // tag coords). cv::Scalar(Blue, Green, Red) format for the edge
     // colors!
-    line(image->image, cv::Point((int)det->p[0][0], (int)det->p[0][1]),
-         cv::Point((int)det->p[1][0], (int)det->p[1][1]),
-         cv::Scalar(0, 0xff, 0)); // green
-    line(image->image, cv::Point((int)det->p[0][0], (int)det->p[0][1]),
-         cv::Point((int)det->p[3][0], (int)det->p[3][1]),
-         cv::Scalar(0, 0, 0xff)); // red
-    line(image->image, cv::Point((int)det->p[1][0], (int)det->p[1][1]),
-         cv::Point((int)det->p[2][0], (int)det->p[2][1]),
-         cv::Scalar(0xff, 0, 0)); // blue
-    line(image->image, cv::Point((int)det->p[2][0], (int)det->p[2][1]),
-         cv::Point((int)det->p[3][0], (int)det->p[3][1]),
-         cv::Scalar(0xff, 0, 0)); // blue
+    const int line_thickness = 5;
+    const cv::Point p0((int)det->p[0][0], (int)det->p[0][1]);
+    const cv::Point p1((int)det->p[1][0], (int)det->p[1][1]);
+    const cv::Point p2((int)det->p[2][0], (int)det->p[2][1]);
+    const cv::Point p3((int)det->p[3][0], (int)det->p[3][1]);
+    const cv::Point center((int)det->c[0], (int)det->c[1]);
+    line(image->image, p0, p1, cv::Scalar(0, 0xff, 0), line_thickness); // green
+    line(image->image, p0, p3, cv::Scalar(0, 0, 0xff), line_thickness); // red
+    line(image->image, p1, p2, cv::Scalar(0xff, 0, 0), line_thickness); // blue
+    line(image->image, p2, p3, cv::Scalar(0xff, 0, 0), line_thickness); // blue
+    cv::circle(image->image, center, 8, cv::Scalar(0, 0xff, 0xff), -1);
+    line(image->image, cv::Point(center.x - 18, center.y),
+         cv::Point(center.x + 18, center.y), cv::Scalar(0, 0, 0), 2);
+    line(image->image, cv::Point(center.x, center.y - 18),
+         cv::Point(center.x, center.y + 18), cv::Scalar(0, 0, 0), 2);
 
     // Print tag ID in the middle of the tag
     std::stringstream ss;
-    ss << det->id;
+    ss << "ID:" << det->id;
     cv::String text = ss.str();
-    int fontface = cv::FONT_HERSHEY_SCRIPT_SIMPLEX;
-    double fontscale = 0.5;
+    int fontface = cv::FONT_HERSHEY_SIMPLEX;
+    double fontscale = 1.0;
     int baseline;
     cv::Size textsize = cv::getTextSize(text, fontface,
-                                        fontscale, 2, &baseline);
+                                        fontscale, 3, &baseline);
+    cv::Point text_origin((int)(det->c[0] - textsize.width / 2),
+                          (int)(det->c[1] - 18));
+    cv::Point box_tl(text_origin.x - 8, text_origin.y - textsize.height - 8);
+    cv::Point box_br(text_origin.x + textsize.width + 8,
+                     text_origin.y + baseline + 8);
+    cv::rectangle(image->image, box_tl, box_br, cv::Scalar(0, 0, 0), -1);
+    cv::rectangle(image->image, box_tl, box_br, cv::Scalar(0, 0xff, 0xff), 2);
     cv::putText(image->image, text,
-                cv::Point((int)(det->c[0]-textsize.width/2),
-                          (int)(det->c[1]+textsize.height/2)),
-                fontface, fontscale, cv::Scalar(0xff, 0x99, 0), 2);
+                text_origin,
+                fontface, fontscale, cv::Scalar(0, 0xff, 0xff), 3);
   }
 }
 
