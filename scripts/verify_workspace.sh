@@ -92,7 +92,10 @@ required = {
 for name in sorted(required):
     if name not in whitelist:
         raise SystemExit(f"MAVROS local-only plugin check failed: missing {name}")
-for name in ("global_position", "gps_status", "waypoint"):
+for name in (
+        "distance_sensor", "global_position", "gps_status", "home_position",
+        "manual_control", "odom", "rc_io", "setpoint_attitude",
+        "vision_speed_estimate", "waypoint"):
     if name in whitelist:
         raise SystemExit(f"MAVROS local-only plugin check failed: {name} is whitelisted")
     if name not in blacklist:

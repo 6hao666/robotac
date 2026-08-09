@@ -41,10 +41,17 @@ MAVROS_REQUIRED_WHITELIST = {
 }
 
 MAVROS_FORBIDDEN_GLOBAL_PLUGINS = {
+    "distance_sensor",
     "fake_gps",
     "global_position",
     "gps_input",
     "gps_status",
+    "home_position",
+    "manual_control",
+    "odom",
+    "rc_io",
+    "setpoint_attitude",
+    "vision_speed_estimate",
     "waypoint",
 }
 
