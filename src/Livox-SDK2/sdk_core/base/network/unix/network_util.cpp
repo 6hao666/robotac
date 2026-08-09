@@ -64,15 +64,6 @@ socket_t CreateSocket(uint16_t port, bool nonblock, bool reuse_port, bool is_bro
       close(sock);
       return -1;
    }
-#ifdef SO_REUSEPORT
-    status = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT,
-                        (char *) &on, sizeof(on));
-    if (status != 0) {
-      printf("reuse port failed\n");
-      close(sock);
-      return -1;
-    }
-#endif
   }
   status = setsockopt(sock, SOL_SOCKET, SO_RCVBUF,
 	  (char *)&recv_buff_size, sizeof(recv_buff_size));
