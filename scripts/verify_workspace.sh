@@ -44,6 +44,7 @@ required_paths=(
   config/udev/99-robotac-servo.rules.template
   config/udev/99-robotac-rgb-camera.rules.template
   scripts/analyze_active_flight_evidence.py
+  scripts/analyze_frame_alignment_evidence.py
   scripts/analyze_readonly_flight_evidence.py
   scripts/check_flight_contract.py
   scripts/collect_readonly_flight_evidence.sh
@@ -1177,6 +1178,41 @@ if re.search(r"subprocess\.run|subprocess\.Popen|os\.system", source):
 print("Validated read-only flight evidence analyzer safety surface.")
 PY
 
+python3 - "${workspace_dir}/scripts/analyze_frame_alignment_evidence.py" <<'PY'
+import pathlib
+import re
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+for expected in (
+    "FRAME_ALIGNMENT_EVIDENCE_ANALYSIS",
+    "fastlio_frame_alignment_observer",
+    "positive_x",
+    "positive_y",
+    "positive_z",
+    "require_yaw",
+    "require_mavros_output_disabled",
+    "translation_distance_m",
+    "direction_error_deg",
+):
+    if expected not in source:
+        raise SystemExit(f"Frame-alignment evidence analyzer check failed: missing {expected}")
+for forbidden in (
+    "rospy.Publisher",
+    "ServiceProxy",
+    "rosservice",
+    "rostopic pub",
+    "/mavros/cmd/arming",
+    "/mavros/set_mode",
+    "/robotac/flight/start",
+):
+    if forbidden in source:
+        raise SystemExit(f"Frame-alignment analyzer must not reference control path {forbidden}")
+if re.search(r"subprocess\.run|subprocess\.Popen|os\.system", source):
+    raise SystemExit("Frame-alignment analyzer must only read files, not execute commands")
+print("Validated frame-alignment evidence analyzer safety surface.")
+PY
+
 python3 - "${workspace_dir}/scripts/analyze_active_flight_evidence.py" <<'PY'
 import pathlib
 import re
@@ -1409,6 +1445,111 @@ with tempfile.TemporaryDirectory(prefix="robotac-evidence-analysis.") as directo
     if unsafe.returncode == 0 or "read_only_no_setpoint_publishers=BLOCKED" not in unsafe.stdout:
         raise SystemExit("Read-only evidence analyzer unexpectedly accepted a setpoint publisher")
 print("Validated read-only flight evidence analyzer with synthetic evidence.")
+PY
+
+python3 - "${workspace_dir}/scripts/analyze_frame_alignment_evidence.py" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+script = sys.argv[1]
+
+def write_motion(root, name, expected, observed=None, yaw_deg=0.0):
+    observed = observed if observed is not None else expected
+    distance = sum(value * value for value in observed) ** 0.5
+    root.mkdir(parents=True, exist_ok=True)
+    (root / f"{name}.json").write_text(json.dumps({
+        "observer": "fastlio_frame_alignment_observer",
+        "success": True,
+        "reason": f"frame_alignment_preview_passed motion={name}",
+        "missing": [],
+        "notes": [],
+        "parameters": {
+            "pose_topic": "/robotac/fastlio_vision/pose_preview",
+            "expected_parent": "odom",
+            "motion_type": "translation",
+            "motion_name": name,
+            "expected_x": expected[0],
+            "expected_y": expected[1],
+            "expected_z": expected[2],
+            "expected_distance_m": 0.0,
+            "require_mavros_output_disabled": True,
+            "require_vision_status_ok": True,
+        },
+        "metrics": {
+            "motion_type": "translation",
+            "motion_name": name,
+            "observed_delta": observed,
+            "observed_yaw_delta_deg": yaw_deg,
+            "translation_distance_m": distance,
+            "projection_m": distance,
+            "direction_cos": 1.0,
+            "direction_error_deg": 0.0,
+            "expected_unit": expected,
+            "expected_distance_m": 0.0,
+            "sample_count": 100,
+            "pose_rate_hz": 10.0,
+        },
+    }, indent=2), encoding="utf-8")
+
+def write_yaw(root):
+    (root / "positive_yaw.json").write_text(json.dumps({
+        "observer": "fastlio_frame_alignment_observer",
+        "success": True,
+        "reason": "frame_alignment_preview_passed motion=positive_yaw",
+        "missing": [],
+        "notes": [],
+        "parameters": {
+            "pose_topic": "/robotac/fastlio_vision/pose_preview",
+            "expected_parent": "odom",
+            "motion_type": "yaw",
+            "motion_name": "positive_yaw",
+            "expected_yaw_deg": 30.0,
+            "expected_yaw_sign": 1,
+            "require_mavros_output_disabled": True,
+            "require_vision_status_ok": True,
+        },
+        "metrics": {
+            "motion_type": "yaw",
+            "motion_name": "positive_yaw",
+            "observed_delta": [0.0, 0.0, 0.0],
+            "observed_yaw_delta_deg": 30.0,
+            "expected_yaw_deg": 30.0,
+            "expected_yaw_sign": 1,
+            "yaw_error_deg": 0.0,
+            "sample_count": 100,
+            "pose_rate_hz": 10.0,
+        },
+    }, indent=2), encoding="utf-8")
+
+with tempfile.TemporaryDirectory(prefix="robotac-frame-alignment.") as directory:
+    root = pathlib.Path(directory)
+    write_motion(root, "preview_positive_x", [1.0, 0.0, 0.0])
+    write_motion(root, "preview_positive_y", [0.0, 1.0, 0.0])
+    write_motion(root, "preview_positive_z", [0.0, 0.0, 1.0])
+    ok = subprocess.run([sys.executable, script, str(root)], text=True,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if ok.returncode != 0 or "required_phase_ready=True" not in ok.stdout:
+        raise SystemExit("Frame-alignment analyzer rejected valid xyz evidence:\n%s\n%s" %
+                         (ok.stdout, ok.stderr))
+    missing_yaw = subprocess.run([sys.executable, script, str(root), "--require-yaw"], text=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_yaw.returncode == 0 or "yaw_alignment_evidence" not in missing_yaw.stdout:
+        raise SystemExit("Frame-alignment analyzer accepted missing yaw evidence")
+    write_yaw(root)
+    ok_yaw = subprocess.run([sys.executable, script, str(root), "--require-yaw"], text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if ok_yaw.returncode != 0 or "required_phase_ready=True" not in ok_yaw.stdout:
+        raise SystemExit("Frame-alignment analyzer rejected valid yaw evidence:\n%s\n%s" %
+                         (ok_yaw.stdout, ok_yaw.stderr))
+    (root / "preview_positive_z.json").unlink()
+    missing_z = subprocess.run([sys.executable, script, str(root)], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if missing_z.returncode == 0 or "translation_positive_z_evidence" not in missing_z.stdout:
+        raise SystemExit("Frame-alignment analyzer accepted missing +Z evidence")
+print("Validated frame-alignment evidence analyzer with synthetic evidence.")
 PY
 
 python3 - "${workspace_dir}/scripts/analyze_active_flight_evidence.py" <<'PY'
@@ -1808,6 +1949,47 @@ def write_readonly_evidence(root):
         },
     }, indent=2))
 
+def write_frame_alignment_evidence(root):
+    root.mkdir(parents=True, exist_ok=True)
+    for name, expected in {
+            "preview_positive_x": [1.0, 0.0, 0.0],
+            "preview_positive_y": [0.0, 1.0, 0.0],
+            "preview_positive_z": [0.0, 0.0, 1.0],
+    }.items():
+        write(root / f"{name}.json", json.dumps({
+            "observer": "fastlio_frame_alignment_observer",
+            "success": True,
+            "reason": f"frame_alignment_preview_passed motion={name}",
+            "missing": [],
+            "notes": [],
+            "parameters": {
+                "pose_topic": "/robotac/fastlio_vision/pose_preview",
+                "expected_parent": "odom",
+                "motion_type": "translation",
+                "motion_name": name,
+                "expected_x": expected[0],
+                "expected_y": expected[1],
+                "expected_z": expected[2],
+                "expected_distance_m": 0.0,
+                "require_mavros_output_disabled": True,
+                "require_vision_status_ok": True,
+            },
+            "metrics": {
+                "motion_type": "translation",
+                "motion_name": name,
+                "observed_delta": expected,
+                "observed_yaw_delta_deg": 0.0,
+                "translation_distance_m": 1.0,
+                "projection_m": 1.0,
+                "direction_cos": 1.0,
+                "direction_error_deg": 0.0,
+                "expected_unit": expected,
+                "expected_distance_m": 0.0,
+                "sample_count": 100,
+                "pose_rate_hz": 10.0,
+            },
+        }, indent=2))
+
 def write_active_evidence(root, payload_open=False, success=True, waypoint_count=8,
                           corrupt_waypoint_index=None, corrupt_initial_origin=False,
                           dynamic_manifest=False, corrupt_dynamic_manifest=False,
@@ -1948,6 +2130,7 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     root = pathlib.Path(directory)
     config_root = root / "config"
     readonly = root / "readonly"
+    frame = root / "frame"
     active = root / "active"
     shutil.copytree(str(workspace / "config"), str(config_root))
     shutil.copyfile(str(workspace / "config" / "deployment_sim.yaml"),
@@ -1955,23 +2138,33 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     shutil.copyfile(str(workspace / "config" / "fastlio" / "vision_bridge_sim.yaml"),
                     str(config_root / "fastlio" / "vision_bridge.yaml"))
     write_readonly_evidence(readonly)
+    write_frame_alignment_evidence(frame)
     write_active_evidence(active, payload_open=False)
     missing_active = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if missing_active.returncode == 0 or "active_local_flight_evidence=BLOCKED" not in missing_active.stdout:
         raise SystemExit("Goal audit accepted missing active-flight evidence")
-    ready = subprocess.run(
+    missing_frame = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
          "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if (missing_frame.returncode == 0 or
+            "fastlio_frame_alignment_preview_evidence=BLOCKED" not in missing_frame.stdout):
+        raise SystemExit("Goal audit accepted active-flight evidence without frame-alignment evidence")
+    ready = subprocess.run(
+        [sys.executable, str(script), "--config-root", str(config_root),
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if ready.returncode != 0 or "active_local_flight=READY" not in ready.stdout:
         raise SystemExit("Goal audit rejected valid synthetic active-flight evidence:\n%s\n%s" % (ready.stdout, ready.stderr))
     write_active_evidence(active, payload_open=False, omit_route_manifest=True)
     missing_configured_manifest = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if (missing_configured_manifest.returncode == 0 or
             "configured_route_manifest_missing" not in missing_configured_manifest.stdout):
@@ -1996,14 +2189,16 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     write_active_evidence(active, payload_open=False, waypoint_count=1)
     custom_without_route_file = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if custom_without_route_file.returncode == 0 or "expected_waypoints_mismatch:1!=8" not in custom_without_route_file.stdout:
         raise SystemExit("Goal audit accepted custom-route evidence without --route-file")
     custom_wrong_target = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
          "--route-file", str(custom_route),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if custom_wrong_target.returncode == 0 or "route_target_mismatch:waypoints0" not in custom_wrong_target.stdout:
         raise SystemExit("Goal audit accepted custom route-file evidence with the wrong target")
@@ -2011,7 +2206,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     custom_ready = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
          "--route-file", str(custom_route),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if custom_ready.returncode != 0 or "active_local_flight=READY" not in custom_ready.stdout:
         raise SystemExit("Goal audit rejected matching custom route-file evidence:\n%s\n%s" %
@@ -2020,7 +2216,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     write_active_evidence(active, payload_open=False, waypoint_count=1)
     short_route = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if short_route.returncode == 0 or "expected_waypoints_mismatch:1!=8" not in short_route.stdout:
         raise SystemExit("Goal audit accepted active-flight evidence from the wrong route length")
@@ -2028,7 +2225,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     write_active_evidence(active, payload_open=False, corrupt_waypoint_index=4)
     wrong_target = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if wrong_target.returncode == 0 or "route_target_mismatch:waypoints4" not in wrong_target.stdout:
         raise SystemExit("Goal audit accepted active-flight evidence for the wrong configured route target")
@@ -2036,14 +2234,16 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     write_active_evidence(active, payload_open=False, corrupt_initial_origin=True)
     wrong_origin = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active)],
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active)],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if wrong_origin.returncode == 0 or "route_origin_mismatch" not in wrong_origin.stdout:
         raise SystemExit("Goal audit accepted active-flight evidence with the wrong local route origin")
     write_active_evidence(active, payload_open=False, waypoint_count=2, omit_route_manifest=True)
     dynamic_missing_manifest = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active),
          "--allow-dynamic-active-route"],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if dynamic_missing_manifest.returncode == 0 or "dynamic_route_manifest_missing" not in dynamic_missing_manifest.stdout:
@@ -2051,7 +2251,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     write_active_evidence(active, payload_open=False, waypoint_count=2, dynamic_manifest=True)
     dynamic_ready = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active),
          "--allow-dynamic-active-route"],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if dynamic_ready.returncode != 0 or "active_local_flight=READY" not in dynamic_ready.stdout:
@@ -2060,7 +2261,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
                           corrupt_dynamic_manifest=True)
     dynamic_wrong_target = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active),
          "--allow-dynamic-active-route"],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if dynamic_wrong_target.returncode == 0 or "dynamic_route_target_mismatch:waypoints0" not in dynamic_wrong_target.stdout:
@@ -2068,7 +2270,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     write_active_evidence(active, payload_open=False)
     payload_missing = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active),
          "--require-phase", "payload_local_flight"],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if payload_missing.returncode == 0 or "payload_local_flight=BLOCKED" not in payload_missing.stdout:
@@ -2076,7 +2279,8 @@ with tempfile.TemporaryDirectory(prefix="robotac-goal-audit.") as directory:
     write_active_evidence(active, payload_open=True)
     payload_ready = subprocess.run(
         [sys.executable, str(script), "--config-root", str(config_root),
-         "--readonly-evidence", str(readonly), "--active-evidence", str(active),
+         "--readonly-evidence", str(readonly), "--frame-alignment-evidence", str(frame),
+         "--active-evidence", str(active),
          "--require-phase", "payload_local_flight"],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if payload_ready.returncode != 0 or "payload_local_flight=READY" not in payload_ready.stdout:

@@ -25,6 +25,7 @@ if str(FLIGHT_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(FLIGHT_SCRIPT_DIR))
 
 import analyze_active_flight_evidence  # noqa: E402
+import analyze_frame_alignment_evidence  # noqa: E402
 import analyze_readonly_flight_evidence  # noqa: E402
 import local_flight_readiness  # noqa: E402
 import preview_local_route  # noqa: E402
@@ -80,6 +81,28 @@ def _readonly_report(args):
         json=False,
     )
     return analyze_readonly_flight_evidence.build_report(readonly_args)
+
+
+def _frame_alignment_report(args):
+    if not args.frame_alignment_evidence:
+        return None
+    frame_args = SimpleNamespace(
+        evidence=args.frame_alignment_evidence,
+        required_axes=args.frame_alignment_required_axes,
+        require_yaw=args.require_frame_alignment_yaw,
+        pose_topic=args.frame_alignment_pose_topic,
+        expected_parent=args.frame_alignment_expected_parent,
+        min_pose_rate_hz=args.frame_alignment_min_pose_rate_hz,
+        min_translation_m=args.frame_alignment_min_translation_m,
+        max_direction_error_deg=args.frame_alignment_max_direction_error_deg,
+        min_delta_scale=args.frame_alignment_min_delta_scale,
+        max_delta_scale=args.frame_alignment_max_delta_scale,
+        min_yaw_deg=args.frame_alignment_min_yaw_deg,
+        max_yaw_error_deg=args.frame_alignment_max_yaw_error_deg,
+        require_vision_status_ok=True,
+        json=False,
+    )
+    return analyze_frame_alignment_evidence.build_report(frame_args)
 
 
 def _active_report(args, configured_waypoints):
@@ -386,6 +409,7 @@ def _config_phase(readiness, name):
 def build_report(args):
     readiness = _readiness_report(args)
     readonly = _readonly_report(args)
+    frame_alignment = _frame_alignment_report(args)
     configured_waypoints = int(readiness.get("mission", {}).get("waypoints") or 0)
     active = _active_report(args, configured_waypoints)
     active_route_match = _active_route_match_report(args)
@@ -395,6 +419,22 @@ def build_report(args):
         _config_phase(readiness, "active_local_flight"),
         _config_phase(readiness, "payload_local_flight"),
     ]
+
+    if frame_alignment is None:
+        phases.append(_phase("fastlio_frame_alignment_preview_evidence", False,
+                             ["frame_alignment_evidence_missing"],
+                             ["pass --frame-alignment-evidence with preview +X/+Y/+Z JSON evidence"] ))
+    else:
+        missing = []
+        notes = []
+        for phase in frame_alignment.get("phases", []):
+            if not phase.get("ready"):
+                missing.extend(phase.get("missing") or [phase.get("name")])
+        if frame_alignment.get("required_phase_ready"):
+            notes.append("frame_alignment_preview_evidence ready")
+        phases.append(_phase("fastlio_frame_alignment_preview_evidence",
+                             frame_alignment.get("required_phase_ready") is True,
+                             missing, notes))
 
     if readonly is None:
         phases.append(_phase("readonly_active_preflight_evidence", False,
@@ -440,11 +480,13 @@ def build_report(args):
         "active_preflight": (
             "config_vision_output",
             "config_active_local_flight",
+            "fastlio_frame_alignment_preview_evidence",
             "readonly_active_preflight_evidence",
         ),
         "active_local_flight": (
             "config_vision_output",
             "config_active_local_flight",
+            "fastlio_frame_alignment_preview_evidence",
             "readonly_active_preflight_evidence",
             "active_local_flight_evidence",
             "active_route_matches_config",
@@ -453,6 +495,7 @@ def build_report(args):
             "config_vision_output",
             "config_active_local_flight",
             "config_payload_local_flight",
+            "fastlio_frame_alignment_preview_evidence",
             "readonly_active_preflight_evidence",
             "active_local_flight_evidence",
             "active_route_matches_config",
@@ -467,6 +510,7 @@ def build_report(args):
         "config_root": str(pathlib.Path(args.config_root).expanduser().resolve()),
         "route_file": str(_route_file(args)),
         "readonly_evidence": None if not args.readonly_evidence else str(pathlib.Path(args.readonly_evidence).expanduser().resolve()),
+        "frame_alignment_evidence": None if not args.frame_alignment_evidence else [str(pathlib.Path(path).expanduser().resolve()) for path in args.frame_alignment_evidence],
         "active_evidence": None if not args.active_evidence else str(pathlib.Path(args.active_evidence).expanduser().resolve()),
         "required_phase": args.require_phase,
         "required_phase_ready": phase_groups[args.require_phase],
@@ -480,6 +524,9 @@ def _print_text(report):
     print("route_file=%s" % report["route_file"])
     if report["readonly_evidence"]:
         print("readonly_evidence=%s" % report["readonly_evidence"])
+    if report["frame_alignment_evidence"]:
+        for path in report["frame_alignment_evidence"]:
+            print("frame_alignment_evidence=%s" % path)
     if report["active_evidence"]:
         print("active_evidence=%s" % report["active_evidence"])
     for phase in report["phases"]:
@@ -502,6 +549,8 @@ def _build_parser():
                         help="Local waypoint YAML; default: CONFIG_ROOT/flight/local_waypoints.yaml")
     parser.add_argument("--readonly-evidence", default="",
                         help="Directory containing read-only topic evidence and ev_acceptance_observer.json")
+    parser.add_argument("--frame-alignment-evidence", nargs="*", default=[],
+                        help="FAST-LIO preview frame-alignment JSON file(s) or directories")
     parser.add_argument("--active-evidence", default="",
                         help="active_flight_observer.json or directory containing it")
     parser.add_argument("--preflight-evidence-file", default="",
@@ -519,6 +568,17 @@ def _build_parser():
     parser.add_argument("--min-preview-hz", type=float, default=5.0)
     parser.add_argument("--min-vision-hz", type=float, default=5.0)
     parser.add_argument("--min-timesync-hz", type=float, default=2.0)
+    parser.add_argument("--frame-alignment-required-axes", default="positive_x,positive_y,positive_z")
+    parser.add_argument("--require-frame-alignment-yaw", action="store_true")
+    parser.add_argument("--frame-alignment-pose-topic", default="/robotac/fastlio_vision/pose_preview")
+    parser.add_argument("--frame-alignment-expected-parent", default="odom")
+    parser.add_argument("--frame-alignment-min-pose-rate-hz", type=float, default=5.0)
+    parser.add_argument("--frame-alignment-min-translation-m", type=float, default=0.30)
+    parser.add_argument("--frame-alignment-max-direction-error-deg", type=float, default=25.0)
+    parser.add_argument("--frame-alignment-min-delta-scale", type=float, default=0.50)
+    parser.add_argument("--frame-alignment-max-delta-scale", type=float, default=2.00)
+    parser.add_argument("--frame-alignment-min-yaw-deg", type=float, default=20.0)
+    parser.add_argument("--frame-alignment-max-yaw-error-deg", type=float, default=25.0)
     parser.add_argument("--min-waypoints", type=int, default=0,
                         help="Minimum observed active-flight waypoints; 0 uses the configured route count")
     parser.add_argument("--expected-waypoints", type=int, default=0,

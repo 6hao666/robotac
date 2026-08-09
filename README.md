@@ -264,6 +264,7 @@ roslaunch robotac_flight fastlio_frame_alignment_observer.launch \
 
 # Repeat with expected_y:=1 for +Y, expected_z:=1 for +Z, and use
 # motion_type:=yaw expected_yaw_sign:=1 for a positive yaw check if needed.
+./scripts/analyze_frame_alignment_evidence.py "${evidence_dir}"
 ```
 
 Treat these JSON files as evidence for the human review that sets
@@ -621,7 +622,10 @@ To capture the read-only evidence bundle for later review, run:
   --duration 8 --bag-seconds 0 \
   --output-dir "${evidence_dir}"
 ./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
-./scripts/flight_goal_audit.py --readonly-evidence "${evidence_dir}"
+frame_alignment_evidence_dir=~/robotac_ws/logs/frame_alignment/<timestamp_from_preview_step>
+./scripts/flight_goal_audit.py \
+  --frame-alignment-evidence "${frame_alignment_evidence_dir}" \
+  --readonly-evidence "${evidence_dir}"
 ```
 
 The collector only subscribes and inspects the existing ROS graph. It records
