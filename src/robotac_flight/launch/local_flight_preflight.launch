@@ -58,9 +58,11 @@
   <arg name="fastlio_topic" default="/Odometry" />
   <arg name="vision_health_topic" default="/robotac/fastlio_vision/healthy" />
   <arg name="vision_status_topic" default="/robotac/fastlio_vision/status" />
-  <arg name="preview_topic" default="/robotac/fastlio_vision/pose_preview" />
+  <arg name="preview_topic" default="/robotac/fastlio_vision/path_a_pose_preview" />
+  <arg name="preview_type" default="pose" />
   <arg name="vision_output_enabled_topic" default="/robotac/fastlio_vision/output_enabled" />
-  <arg name="vision_output_topic" default="/mavros/vision_pose/pose_cov" />
+  <arg name="vision_output_topic" default="/mavros/vision_pose/pose" />
+  <arg name="vision_output_type" default="pose" />
   <arg name="param_get_service" default="/mavros/param/get" />
   <arg name="evidence_file" default="" />
 
@@ -123,8 +125,10 @@
     <param name="vision_health_topic" value="$(arg vision_health_topic)" />
     <param name="vision_status_topic" value="$(arg vision_status_topic)" />
     <param name="preview_topic" value="$(arg preview_topic)" />
+    <param name="preview_type" value="$(arg preview_type)" />
     <param name="vision_output_enabled_topic" value="$(arg vision_output_enabled_topic)" />
     <param name="vision_output_topic" value="$(arg vision_output_topic)" />
+    <param name="vision_output_type" value="$(arg vision_output_type)" />
     <param name="param_get_service" value="$(arg param_get_service)" />
     <param name="evidence_file" value="$(arg evidence_file)" />
   </node>

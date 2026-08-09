@@ -11,9 +11,10 @@ import hashlib
 import json
 import math
 import time
+import traceback
 
 import rospy
-from geometry_msgs.msg import PoseArray, PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseArray, PoseStamped, PoseWithCovarianceStamped
 from mavros_msgs.msg import EstimatorStatus, ExtendedState, PositionTarget, State, TimesyncStatus
 from mavros_msgs.srv import CommandBool, SetMode
 from nav_msgs.msg import Odometry
@@ -209,7 +210,9 @@ class LocalWaypointFlight(object):
         self.vision_status_topic = rospy.get_param(
             "~vision_status_topic", "/robotac/fastlio_vision/status")
         self.vision_output_topic = rospy.get_param(
-            "~vision_output_topic", "/mavros/vision_pose/pose_cov")
+            "~vision_output_topic", "/mavros/vision_pose/pose")
+        self.vision_output_type = str(rospy.get_param(
+            "~vision_output_type", "pose")).strip().lower()
         self.require_vision_output_consumer = _as_bool(
             rospy.get_param("~require_vision_output_consumer", True))
         self.vision_output_consumer_node = str(rospy.get_param(
@@ -325,8 +328,16 @@ class LocalWaypointFlight(object):
         rospy.Subscriber("/mavros/timesync_status", TimesyncStatus,
                          self._timesync_cb, queue_size=10)
         if self.require_vision_output:
-            rospy.Subscriber(self.vision_output_topic, PoseWithCovarianceStamped,
-                             self._vision_pose_cb, queue_size=10)
+            if self.vision_output_type in ("pose", "pose_stamped", "posestamped"):
+                rospy.Subscriber(self.vision_output_topic, PoseStamped,
+                                 self._vision_pose_cb, queue_size=10)
+            elif self.vision_output_type in (
+                    "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+                    "posewithcovariancestamped"):
+                rospy.Subscriber(self.vision_output_topic, PoseWithCovarianceStamped,
+                                 self._vision_pose_cov_cb, queue_size=10)
+            else:
+                raise ValueError("unsupported vision_output_type: %s" % self.vision_output_type)
         rospy.Subscriber(self.payload_status_topic, String, self._payload_status_cb, queue_size=5)
         rospy.Subscriber(self.waypoint_topic, PoseArray, self._waypoints_cb, queue_size=1)
 
@@ -530,18 +541,18 @@ class LocalWaypointFlight(object):
         self.vision_output_stamp = None
         self.vision_output_rejection_reason = reason
 
-    def _vision_pose_cb(self, msg):
-        if msg.header.frame_id != self.vision_output_parent:
-            self._reject_vision_output("unexpected_parent:%s" % msg.header.frame_id)
+    def _accept_vision_output_pose(self, header, pose):
+        if header.frame_id != self.vision_output_parent:
+            self._reject_vision_output("unexpected_parent:%s" % header.frame_id)
             return
-        if not self._finite_geometry_pose(msg.pose.pose):
+        if not self._finite_geometry_pose(pose):
             self._reject_vision_output("nonfinite_or_invalid_quaternion")
             return
-        normalized = self._normalized_quaternion(msg.pose.pose.orientation)
+        normalized = self._normalized_quaternion(pose.orientation)
         if normalized is None:
             self._reject_vision_output("invalid_quaternion")
             return
-        stamp = msg.header.stamp
+        stamp = header.stamp
         if stamp == rospy.Time(0):
             self._reject_vision_output("zero_timestamp")
             return
@@ -557,6 +568,12 @@ class LocalWaypointFlight(object):
         self.vision_output_receive_time = time.monotonic()
         self.vision_output_stamp = stamp
         self.vision_output_rejection_reason = None
+
+    def _vision_pose_cb(self, msg):
+        self._accept_vision_output_pose(msg.header, msg.pose)
+
+    def _vision_pose_cov_cb(self, msg):
+        self._accept_vision_output_pose(msg.header, msg.pose.pose)
 
     def _payload_status_cb(self, msg):
         fields = {}
@@ -777,6 +794,12 @@ class LocalWaypointFlight(object):
             return False
         if not self.vision_output_parent:
             self.last_error = "invalid_vision_output_parent"
+            return False
+        if self.vision_output_type not in (
+                "pose", "pose_stamped", "posestamped",
+                "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+                "posewithcovariancestamped"):
+            self.last_error = "invalid_vision_output_type"
             return False
         if self.require_vision_output_consumer and not self.vision_output_consumer_node:
             self.last_error = "invalid_vision_output_consumer_node"
@@ -1075,6 +1098,7 @@ class LocalWaypointFlight(object):
             "takeoff_timeout": self._manifest_float(self.takeoff_timeout),
             "vision_output_parent": str(self.vision_output_parent),
             "vision_output_topic": str(self.vision_output_topic),
+            "vision_output_type": str(self.vision_output_type),
             "waypoint_timeout": self._manifest_float(self.waypoint_timeout),
             "yaw_tolerance": self._manifest_float(self.yaw_tolerance),
         }
@@ -1417,5 +1441,10 @@ class LocalWaypointFlight(object):
 
 if __name__ == "__main__":
     rospy.init_node("local_waypoint_flight")
-    LocalWaypointFlight()
+    try:
+        LocalWaypointFlight()
+    except Exception as exc:  # pylint: disable=broad-except
+        rospy.logfatal("Local waypoint flight startup failed: %s", exc)
+        traceback.print_exc()
+        raise
     rospy.spin()

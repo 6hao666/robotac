@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only FAST-LIO preview frame-alignment observer.
 
-This node subscribes to ``/robotac/fastlio_vision/pose_preview`` and optional
+This node subscribes to a FAST-LIO vision preview pose and optional
 bridge health topics only. It never publishes, calls services, changes PX4
 state, arms, switches modes, sends MAVROS setpoints, or writes deployment
 configuration. Use it on the ground before enabling MAVROS vision output: move
@@ -16,7 +16,7 @@ import sys
 import time
 
 import rospy
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from std_msgs.msg import Bool, String
 from tf.transformations import euler_from_quaternion
 
@@ -147,7 +147,9 @@ class FastlioFrameAlignmentObserver(object):
         self.require_mavros_output_disabled = _as_bool(
             rospy.get_param("~require_mavros_output_disabled", True))
         self.expected_parent = str(rospy.get_param("~expected_parent", "odom")).strip()
-        self.pose_topic = rospy.get_param("~pose_topic", "/robotac/fastlio_vision/pose_preview")
+        self.pose_topic = rospy.get_param(
+            "~pose_topic", "/robotac/fastlio_vision/path_a_pose_preview")
+        self.pose_type = str(rospy.get_param("~pose_type", "pose")).strip().lower()
         self.vision_status_topic = rospy.get_param(
             "~vision_status_topic", "/robotac/fastlio_vision/status")
         self.output_enabled_topic = rospy.get_param(
@@ -166,7 +168,15 @@ class FastlioFrameAlignmentObserver(object):
         self.finished = False
         self.last_metrics = {}
 
-        rospy.Subscriber(self.pose_topic, PoseWithCovarianceStamped, self._pose_cb, queue_size=20)
+        if self.pose_type in ("pose", "pose_stamped", "posestamped"):
+            rospy.Subscriber(self.pose_topic, PoseStamped, self._pose_cb, queue_size=20)
+        elif self.pose_type in (
+                "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+                "posewithcovariancestamped"):
+            rospy.Subscriber(self.pose_topic, PoseWithCovarianceStamped,
+                             self._pose_cov_cb, queue_size=20)
+        else:
+            raise ValueError("unsupported pose_type: %s" % self.pose_type)
         if self.require_vision_status_ok:
             rospy.Subscriber(self.vision_status_topic, String, self._vision_status_cb, queue_size=10)
         if self.require_mavros_output_disabled:
@@ -192,6 +202,13 @@ class FastlioFrameAlignmentObserver(object):
             raise ValueError("motion_name must be non-empty")
         if not self.expected_parent:
             raise ValueError("expected_parent must be non-empty")
+        allowed_pose_types = (
+            "pose", "pose_stamped", "posestamped",
+            "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+            "posewithcovariancestamped",
+        )
+        if self.pose_type not in allowed_pose_types:
+            raise ValueError("pose_type must be pose or pose_cov")
         if self.motion_type == "translation":
             expected = (self.expected_x, self.expected_y, self.expected_z)
             if not all(math.isfinite(value) for value in expected):
@@ -224,18 +241,24 @@ class FastlioFrameAlignmentObserver(object):
             return False, "timestamp_age:%.3f" % age
         return True, "ok"
 
-    def _pose_cb(self, msg):
-        if msg.header.frame_id != self.expected_parent:
-            self.poses.reject("unexpected_frame:%s" % msg.header.frame_id)
+    def _accept_pose_msg(self, header, pose):
+        if header.frame_id != self.expected_parent:
+            self.poses.reject("unexpected_frame:%s" % header.frame_id)
             return
-        if not _finite_pose(msg.pose.pose):
+        if not _finite_pose(pose):
             self.poses.reject("nonfinite_or_invalid_quaternion")
             return
-        valid, reason = self._stamp_current(msg.header.stamp)
+        valid, reason = self._stamp_current(header.stamp)
         if not valid:
             self.poses.reject(reason)
             return
-        self.poses.accept(msg.header.stamp, msg.pose.pose)
+        self.poses.accept(header.stamp, pose)
+
+    def _pose_cb(self, msg):
+        self._accept_pose_msg(msg.header, msg.pose)
+
+    def _pose_cov_cb(self, msg):
+        self._accept_pose_msg(msg.header, msg.pose.pose)
 
     def _vision_status_cb(self, msg):
         self.vision_status = str(msg.data).strip() or "empty"

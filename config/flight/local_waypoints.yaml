@@ -52,6 +52,9 @@ local_waypoint_flight:
   vision_output_timeout: 0.50
   vision_output_stamp_timeout: 0.30
   vision_output_stamp_future_tolerance: 0.10
+  # Sunray Path A uses geometry_msgs/PoseStamped on /mavros/vision_pose/pose.
+  vision_output_topic: /mavros/vision_pose/pose
+  vision_output_type: pose
   vision_output_parent: odom
   # Verify that MAVROS's vision_pose plugin, not merely another monitor, has
   # subscribed to the bridge output before the start service accepts a mission.

@@ -7,6 +7,8 @@
   <rosparam command="load" file="$(arg fastlio_config)" />
   <param name="pcd_save/pcd_save_en" type="bool" value="$(arg pcd_save)" />
   <node pkg="fast_lio" type="fastlio_mapping" name="fastlio_mapping" output="screen" />
+  <!-- Sunray Path A publishes corrected local odometry here for MAVROS vision pose. -->
+  <node pkg="fast_lio" type="transform_odom_pointCloud" name="transform_odom_pointCloud" output="screen" />
 
   <group if="$(arg rviz)">
     <node pkg="rviz" type="rviz" name="fastlio_rviz"

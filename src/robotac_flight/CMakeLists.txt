@@ -21,6 +21,7 @@ catkin_install_python(PROGRAMS
   scripts/ev_acceptance_observer.py
   scripts/fastlio_frame_alignment_observer.py
   scripts/fastlio_vision_bridge.py
+  scripts/local_odom_to_vision_pose.py
   scripts/local_flight_readiness.py
   scripts/local_flight_preflight.py
   scripts/local_waypoint_flight.py

@@ -28,7 +28,8 @@
   <arg name="require_vision_status_ok" default="true" />
   <arg name="require_mavros_output_disabled" default="true" />
   <arg name="expected_parent" default="odom" />
-  <arg name="pose_topic" default="/robotac/fastlio_vision/pose_preview" />
+  <arg name="pose_topic" default="/robotac/fastlio_vision/path_a_pose_preview" />
+  <arg name="pose_type" default="pose" />
   <arg name="vision_status_topic" default="/robotac/fastlio_vision/status" />
   <arg name="vision_output_enabled_topic" default="/robotac/fastlio_vision/output_enabled" />
   <arg name="evidence_file" default="" />
@@ -60,6 +61,7 @@
     <param name="require_mavros_output_disabled" value="$(arg require_mavros_output_disabled)" />
     <param name="expected_parent" value="$(arg expected_parent)" />
     <param name="pose_topic" value="$(arg pose_topic)" />
+    <param name="pose_type" value="$(arg pose_type)" />
     <param name="vision_status_topic" value="$(arg vision_status_topic)" />
     <param name="vision_output_enabled_topic" value="$(arg vision_output_enabled_topic)" />
     <param name="evidence_file" value="$(arg evidence_file)" />

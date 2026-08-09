@@ -25,7 +25,8 @@
   <arg name="state_topic" default="/mavros/state" />
   <arg name="extended_state_topic" default="/mavros/extended_state" />
   <arg name="local_topic" default="/mavros/local_position/odom" />
-  <arg name="vision_topic" default="/mavros/vision_pose/pose_cov" />
+  <arg name="vision_topic" default="/mavros/vision_pose/pose" />
+  <arg name="vision_type" default="pose" />
   <arg name="vision_output_enabled_topic" default="/robotac/fastlio_vision/output_enabled" />
   <arg name="vision_status_topic" default="/robotac/fastlio_vision/status" />
 
@@ -51,6 +52,7 @@
     <param name="local_parent" value="$(arg local_parent)" />
     <param name="local_child" value="$(arg local_child)" />
     <param name="vision_parent" value="$(arg vision_parent)" />
+    <param name="vision_type" value="$(arg vision_type)" />
     <param name="state_topic" value="$(arg state_topic)" />
     <param name="extended_state_topic" value="$(arg extended_state_topic)" />
     <param name="local_topic" value="$(arg local_topic)" />

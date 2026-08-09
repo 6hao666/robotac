@@ -40,7 +40,8 @@
   <arg name="extended_state_topic" default="/mavros/extended_state" />
   <arg name="payload_status_topic" default="/robotac_servo/status" />
   <arg name="route_manifest_topic" default="/robotac/flight/route_manifest" />
-  <arg name="vision_pose_topic" default="/mavros/vision_pose/pose_cov" />
+  <arg name="vision_pose_topic" default="/mavros/vision_pose/pose" />
+  <arg name="vision_pose_type" default="pose" />
   <arg name="vision_output_enabled_topic" default="/robotac/fastlio_vision/output_enabled" />
   <arg name="vision_status_topic" default="/robotac/fastlio_vision/status" />
 
@@ -85,6 +86,7 @@
     <param name="payload_status_topic" value="$(arg payload_status_topic)" />
     <param name="route_manifest_topic" value="$(arg route_manifest_topic)" />
     <param name="vision_pose_topic" value="$(arg vision_pose_topic)" />
+    <param name="vision_pose_type" value="$(arg vision_pose_type)" />
     <param name="vision_output_enabled_topic" value="$(arg vision_output_enabled_topic)" />
     <param name="vision_status_topic" value="$(arg vision_status_topic)" />
   </node>

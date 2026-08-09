@@ -37,7 +37,7 @@ EXECUTION_CONFIG_EXPECTED_VALUES = {
     "land_mode": ("AUTO.LAND", "route_manifest_execution_config_land_mode_mismatch"),
     "setpoint_topic": ("/mavros/setpoint_raw/local", "route_manifest_execution_config_setpoint_topic_mismatch"),
     "vision_output_parent": ("odom", "route_manifest_execution_config_vision_output_parent_mismatch"),
-    "vision_output_topic": ("/mavros/vision_pose/pose_cov", "route_manifest_execution_config_vision_output_topic_mismatch"),
+    "vision_output_topic": ("/mavros/vision_pose/pose", "route_manifest_execution_config_vision_output_topic_mismatch"),
 }
 
 
@@ -546,7 +546,7 @@ def _build_parser():
     parser.add_argument("--min-target-dwell-s", type=float, default=0.25,
                         help="Require each TAKEOFF/WAYPOINTS target to remain within reach tolerance for this many continuous seconds")
     parser.add_argument("--min-active-vision-pose-count", type=int, default=5,
-                        help="Require at least this many /mavros/vision_pose/pose_cov samples during active flight; 0 disables")
+                        help="Require at least this many /mavros/vision_pose/pose samples during active flight; 0 disables")
     parser.add_argument("--min-active-vision-local-pairs", type=int, default=5,
                         help="Require this many paired local_position / vision_pose relative-motion samples; 0 disables")
     parser.add_argument("--max-active-vision-local-delta-m", type=float, default=0.75,

@@ -124,27 +124,27 @@ def _mission_report(config_root, args):
 
 
 def _vision_bridge_report(config_root):
-    path = config_root / "fastlio" / "vision_bridge.yaml"
-    data = _load_yaml(path).get("fastlio_vision_bridge", {})
+    path = config_root / "fastlio" / "path_a_vision_pose.yaml"
+    data = _load_yaml(path).get("path_a_vision_pose", {})
     if not isinstance(data, dict):
-        raise ValueError("fastlio/vision_bridge.yaml must contain fastlio_vision_bridge mapping")
+        raise ValueError("fastlio/path_a_vision_pose.yaml must contain path_a_vision_pose mapping")
     missing = []
     notes = []
     if data.get("frame_alignment_approved") is not True:
         missing.append("frame_alignment_approved")
     for key, expected in (
-            ("expected_input_parent", "camera_init"),
-            ("expected_input_child", "body"),
-            ("output_parent_frame", "odom")):
+            ("input_topic", "/sunray/odometry"),
+            ("output_topic", "/mavros/vision_pose/pose"),
+            ("output_frame_id", "odom")):
         if data.get(key) != expected:
-            missing.append("vision_bridge_%s" % key)
-    if data.get("strict_input_frames") is not True:
-        missing.append("vision_bridge_strict_input_frames")
+            missing.append("path_a_vision_pose_%s" % key)
+    if data.get("zero_origin_on_start") is not False:
+        missing.append("path_a_vision_pose_zero_origin_on_start")
     if data.get("frame_alignment_approved") is True:
-        notes.append("FAST-LIO frame alignment approved")
+        notes.append("Path A FAST-LIO frame alignment approved")
     else:
-        notes.append("FAST-LIO frame alignment still requires aircraft evidence")
-    return _phase("fastlio_vision_bridge_config", not missing, missing, notes)
+        notes.append("Path A frame alignment still requires aircraft evidence")
+    return _phase("path_a_vision_pose_config", not missing, missing, notes)
 
 
 def build_report(args):
@@ -169,7 +169,7 @@ def build_report(args):
         "vision_output",
         not vision_missing,
         vision_missing,
-        ["FAST-LIO /Odometry -> /mavros/vision_pose/pose_cov"] if not vision_missing else []))
+        ["FAST-LIO /sunray/odometry -> /mavros/vision_pose/pose"] if not vision_missing else []))
 
     flight_missing = _missing(deployment, FLIGHT_GATES)
     if not mission_phase["ready"]:

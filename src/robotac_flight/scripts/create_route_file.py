@@ -71,6 +71,8 @@ BASE_ROUTE_DEFAULTS = {
     "vision_output_timeout": 0.50,
     "vision_output_stamp_timeout": 0.30,
     "vision_output_stamp_future_tolerance": 0.10,
+    "vision_output_topic": "/mavros/vision_pose/pose",
+    "vision_output_type": "pose",
     "vision_output_parent": "odom",
     "require_vision_output_consumer": True,
     "vision_output_consumer_node": "/mavros",

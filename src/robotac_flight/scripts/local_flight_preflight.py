@@ -15,7 +15,7 @@ import sys
 import time
 
 import rospy
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from mavros_msgs.msg import EstimatorStatus, ExtendedState, State, TimesyncStatus
 from mavros_msgs.srv import ParamGet
 from nav_msgs.msg import Odometry
@@ -192,11 +192,14 @@ class LocalFlightPreflight(object):
         self.vision_status_topic = rospy.get_param(
             "~vision_status_topic", "/robotac/fastlio_vision/status")
         self.preview_topic = rospy.get_param(
-            "~preview_topic", "/robotac/fastlio_vision/pose_preview")
+            "~preview_topic", "/robotac/fastlio_vision/path_a_pose_preview")
+        self.preview_type = str(rospy.get_param("~preview_type", "pose")).strip().lower()
         self.vision_output_enabled_topic = rospy.get_param(
             "~vision_output_enabled_topic", "/robotac/fastlio_vision/output_enabled")
         self.vision_output_topic = rospy.get_param(
-            "~vision_output_topic", "/mavros/vision_pose/pose_cov")
+            "~vision_output_topic", "/mavros/vision_pose/pose")
+        self.vision_output_type = str(rospy.get_param(
+            "~vision_output_type", "pose")).strip().lower()
         self.param_get_service = rospy.get_param("~param_get_service", "/mavros/param/get")
 
         self._validate_parameters()
@@ -243,12 +246,28 @@ class LocalFlightPreflight(object):
             rospy.Subscriber(self.fastlio_topic, Odometry, self._fastlio_cb, queue_size=20)
             rospy.Subscriber(self.vision_health_topic, Bool, self._vision_health_cb, queue_size=10)
             rospy.Subscriber(self.vision_status_topic, String, self._vision_status_cb, queue_size=10)
-            rospy.Subscriber(self.preview_topic, PoseWithCovarianceStamped, self._preview_cb, queue_size=20)
+            if self.preview_type in ("pose", "pose_stamped", "posestamped"):
+                rospy.Subscriber(self.preview_topic, PoseStamped, self._preview_cb, queue_size=20)
+            elif self.preview_type in (
+                    "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+                    "posewithcovariancestamped"):
+                rospy.Subscriber(self.preview_topic, PoseWithCovarianceStamped,
+                                 self._preview_cov_cb, queue_size=20)
+            else:
+                raise ValueError("unsupported preview_type: %s" % self.preview_type)
         if self.require_vision_output:
             rospy.Subscriber(self.vision_output_enabled_topic, Bool,
                              self._output_enabled_cb, queue_size=10)
-            rospy.Subscriber(self.vision_output_topic, PoseWithCovarianceStamped,
-                             self._output_cb, queue_size=20)
+            if self.vision_output_type in ("pose", "pose_stamped", "posestamped"):
+                rospy.Subscriber(self.vision_output_topic, PoseStamped,
+                                 self._output_cb, queue_size=20)
+            elif self.vision_output_type in (
+                    "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+                    "posewithcovariancestamped"):
+                rospy.Subscriber(self.vision_output_topic, PoseWithCovarianceStamped,
+                                 self._output_cov_cb, queue_size=20)
+            else:
+                raise ValueError("unsupported vision_output_type: %s" % self.vision_output_type)
         self.timer = rospy.Timer(rospy.Duration(0.10), self._tick)
 
     def _validate_parameters(self):
@@ -269,6 +288,15 @@ class LocalFlightPreflight(object):
         if not self.local_parent or not self.local_child or not self.fastlio_parent or \
                 not self.fastlio_child or not self.vision_parent:
             raise ValueError("expected frame names must be non-empty")
+        allowed_pose_types = (
+            "pose", "pose_stamped", "posestamped",
+            "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+            "posewithcovariancestamped",
+        )
+        if self.preview_type not in allowed_pose_types:
+            raise ValueError("preview_type must be pose or pose_cov")
+        if self.vision_output_type not in allowed_pose_types:
+            raise ValueError("vision_output_type must be pose or pose_cov")
         if self.require_vision_output and not self.require_vision:
             raise ValueError("require_vision_output requires require_vision=true")
         if self.require_vision_output_consumer and not self.require_vision_output:
@@ -363,31 +391,30 @@ class LocalFlightPreflight(object):
             self.fastlio_stream, msg, self.fastlio_parent, self.fastlio_child,
             self.vision_age_limit)
 
-    def _preview_cb(self, msg):
-        if msg.header.frame_id != self.vision_parent:
-            self.preview_stream.reject("unexpected_parent:%s" % msg.header.frame_id)
+    def _accept_stamped_pose_stream(self, stream, header, pose):
+        if header.frame_id != self.vision_parent:
+            stream.reject("unexpected_parent:%s" % header.frame_id)
             return
-        if not _finite_pose(msg.pose.pose):
-            self.preview_stream.reject("nonfinite_or_invalid_quaternion")
+        if not _finite_pose(pose):
+            stream.reject("nonfinite_or_invalid_quaternion")
             return
-        valid, reason = self._stamp_is_current(msg.header.stamp, self.vision_age_limit)
+        valid, reason = self._stamp_is_current(header.stamp, self.vision_age_limit)
         if not valid:
-            self.preview_stream.reject(reason)
+            stream.reject(reason)
             return
-        self.preview_stream.accept(msg.header.stamp)
+        stream.accept(header.stamp)
+
+    def _preview_cb(self, msg):
+        self._accept_stamped_pose_stream(self.preview_stream, msg.header, msg.pose)
+
+    def _preview_cov_cb(self, msg):
+        self._accept_stamped_pose_stream(self.preview_stream, msg.header, msg.pose.pose)
 
     def _output_cb(self, msg):
-        if msg.header.frame_id != self.vision_parent:
-            self.output_stream.reject("unexpected_parent:%s" % msg.header.frame_id)
-            return
-        if not _finite_pose(msg.pose.pose):
-            self.output_stream.reject("nonfinite_or_invalid_quaternion")
-            return
-        valid, reason = self._stamp_is_current(msg.header.stamp, self.vision_age_limit)
-        if not valid:
-            self.output_stream.reject(reason)
-            return
-        self.output_stream.accept(msg.header.stamp)
+        self._accept_stamped_pose_stream(self.output_stream, msg.header, msg.pose)
+
+    def _output_cov_cb(self, msg):
+        self._accept_stamped_pose_stream(self.output_stream, msg.header, msg.pose.pose)
 
     def _vision_health_cb(self, msg):
         now = time.monotonic()

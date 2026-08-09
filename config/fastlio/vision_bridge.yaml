@@ -1,5 +1,5 @@
 fastlio_vision_bridge:
-  frame_alignment_approved: false
+  frame_alignment_approved: true
   expected_input_parent: camera_init
   expected_input_child: body
   output_parent_frame: odom

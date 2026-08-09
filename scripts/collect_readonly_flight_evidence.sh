@@ -117,12 +117,12 @@ topics=(
   /mavros/local_position/odom
   /mavros/estimator_status
   /mavros/timesync_status
-  /mavros/vision_pose/pose_cov
+  /mavros/vision_pose/pose
   /mavros/setpoint_raw/local
   /robotac/fastlio_vision/healthy
   /robotac/fastlio_vision/status
   /robotac/fastlio_vision/output_enabled
-  /robotac/fastlio_vision/pose_preview
+  /robotac/fastlio_vision/path_a_pose_preview
   /Odometry
   /livox/lidar
   /livox/imu
@@ -150,11 +150,11 @@ if command -v rosbag >/dev/null 2>&1 && (( bag_seconds > 0 )); then
       /mavros/local_position/odom \
       /mavros/estimator_status \
       /mavros/timesync_status \
-      /mavros/vision_pose/pose_cov \
+      /mavros/vision_pose/pose \
       /robotac/fastlio_vision/healthy \
       /robotac/fastlio_vision/status \
       /robotac/fastlio_vision/output_enabled \
-      /robotac/fastlio_vision/pose_preview \
+      /robotac/fastlio_vision/path_a_pose_preview \
       /Odometry \
       /livox/lidar \
       /livox/imu
@@ -171,8 +171,8 @@ fi
   echo
   echo "Key checks to inspect:"
   echo "- topic_hz_mavros_local_position_odom.txt"
-  echo "- topic_hz_mavros_vision_pose_pose_cov.txt"
-  echo "- topic_info_mavros_vision_pose_pose_cov.txt"
+  echo "- topic_hz_mavros_vision_pose_pose.txt"
+  echo "- topic_info_mavros_vision_pose_pose.txt"
   echo "- topic_info_mavros_setpoint_raw_local.txt"
   echo "- topic_echo_mavros_state.txt"
   echo "- topic_echo_robotac_fastlio_vision_status.txt"

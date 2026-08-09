@@ -25,6 +25,9 @@ local_waypoint_flight:
   require_estimator_status: true
   require_horizontal_relative: true
   require_vertical_estimate: true
+  vision_output_topic: /mavros/vision_pose/pose
+  vision_output_type: pose
+  vision_output_parent: odom
   require_vision_output_consumer: true
   require_setpoint_consumer: true
   require_timesync: true

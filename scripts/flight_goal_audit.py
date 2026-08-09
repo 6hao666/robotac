@@ -570,7 +570,7 @@ def _build_parser():
     parser.add_argument("--min-timesync-hz", type=float, default=2.0)
     parser.add_argument("--frame-alignment-required-axes", default="positive_x,positive_y,positive_z")
     parser.add_argument("--require-frame-alignment-yaw", action="store_true")
-    parser.add_argument("--frame-alignment-pose-topic", default="/robotac/fastlio_vision/pose_preview")
+    parser.add_argument("--frame-alignment-pose-topic", default="/robotac/fastlio_vision/path_a_pose_preview")
     parser.add_argument("--frame-alignment-expected-parent", default="odom")
     parser.add_argument("--frame-alignment-min-pose-rate-hz", type=float, default=5.0)
     parser.add_argument("--frame-alignment-min-translation-m", type=float, default=0.30)

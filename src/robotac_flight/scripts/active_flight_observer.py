@@ -14,7 +14,7 @@ import sys
 import time
 
 import rospy
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from mavros_msgs.msg import ExtendedState, PositionTarget, State
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
@@ -74,6 +74,7 @@ class ActiveFlightObserver(object):
         self.min_target_dwell_s = float(rospy.get_param("~min_target_dwell_s", 0.25))
         self.require_active_vision_pose = _as_bool(rospy.get_param("~require_active_vision_pose", True))
         self.min_active_vision_pose_count = int(rospy.get_param("~min_active_vision_pose_count", 5))
+        self.vision_pose_type = str(rospy.get_param("~vision_pose_type", "pose")).strip().lower()
         self.expected_vision_parent = str(rospy.get_param("~expected_vision_parent", "odom")).strip()
         self.require_active_vision_local_consistency = _as_bool(rospy.get_param(
             "~require_active_vision_local_consistency", True))
@@ -199,8 +200,16 @@ class ActiveFlightObserver(object):
                          String, self._payload_status_cb, queue_size=10)
         rospy.Subscriber(rospy.get_param("~route_manifest_topic", "/robotac/flight/route_manifest"),
                          String, self._route_manifest_cb, queue_size=10)
-        rospy.Subscriber(rospy.get_param("~vision_pose_topic", "/mavros/vision_pose/pose_cov"),
-                         PoseWithCovarianceStamped, self._vision_pose_cb, queue_size=50)
+        vision_pose_topic = rospy.get_param("~vision_pose_topic", "/mavros/vision_pose/pose")
+        if self.vision_pose_type in ("pose", "pose_stamped", "posestamped"):
+            rospy.Subscriber(vision_pose_topic, PoseStamped, self._vision_pose_cb, queue_size=50)
+        elif self.vision_pose_type in (
+                "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+                "posewithcovariancestamped"):
+            rospy.Subscriber(vision_pose_topic, PoseWithCovarianceStamped,
+                             self._vision_pose_cov_cb, queue_size=50)
+        else:
+            raise ValueError("unsupported vision_pose_type: %s" % self.vision_pose_type)
         rospy.Subscriber(rospy.get_param("~vision_output_enabled_topic", "/robotac/fastlio_vision/output_enabled"),
                          Bool, self._vision_output_enabled_cb, queue_size=10)
         rospy.Subscriber(rospy.get_param("~vision_status_topic", "/robotac/fastlio_vision/status"),
@@ -236,6 +245,13 @@ class ActiveFlightObserver(object):
             raise ValueError("min_target_dwell_s must be finite and non-negative")
         if self.min_active_vision_pose_count < 0:
             raise ValueError("min_active_vision_pose_count must be non-negative")
+        allowed_pose_types = (
+            "pose", "pose_stamped", "posestamped",
+            "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+            "posewithcovariancestamped",
+        )
+        if self.vision_pose_type not in allowed_pose_types:
+            raise ValueError("vision_pose_type must be pose or pose_cov")
         if self.require_active_vision_pose and not self.expected_vision_parent:
             raise ValueError("expected_vision_parent must be non-empty")
         if self.min_active_vision_local_pairs < 0:
@@ -617,29 +633,34 @@ class ActiveFlightObserver(object):
         if len(self.route_manifest_history) > 20:
             self.route_manifest_history = self.route_manifest_history[-20:]
 
-    def _vision_pose_cb(self, msg):
+    def _accept_vision_pose(self, header, pose):
         if not self._mission_active():
             return
-        pose = msg.pose.pose
         values = (pose.position.x, pose.position.y, pose.position.z,
                   pose.orientation.x, pose.orientation.y,
                   pose.orientation.z, pose.orientation.w)
         if not _finite(values):
             return
-        if self.expected_vision_parent and msg.header.frame_id != self.expected_vision_parent:
+        if self.expected_vision_parent and header.frame_id != self.expected_vision_parent:
             return
         self.active_vision_pose_count += 1
         self.active_vision_pose_receive = time.monotonic()
         self.latest_vision_position = tuple(float(value) for value in (
             pose.position.x, pose.position.y, pose.position.z))
         self.latest_vision_receive = self.active_vision_pose_receive
-        stamp = msg.header.stamp.to_sec()
-        self.active_vision_pose_parent = msg.header.frame_id
+        stamp = header.stamp.to_sec()
+        self.active_vision_pose_parent = header.frame_id
         if stamp > 0.0:
             if self.active_vision_pose_first_stamp is None:
                 self.active_vision_pose_first_stamp = stamp
             self.active_vision_pose_last_stamp = stamp
         self._update_vision_local_consistency()
+
+    def _vision_pose_cb(self, msg):
+        self._accept_vision_pose(msg.header, msg.pose)
+
+    def _vision_pose_cov_cb(self, msg):
+        self._accept_vision_pose(msg.header, msg.pose.pose)
 
     def _vision_output_enabled_cb(self, msg):
         self.vision_output_enabled_latest = bool(msg.data)

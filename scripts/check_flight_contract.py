@@ -309,6 +309,77 @@ def _check_local_takeoff_landing(root):
     return _phase("local_takeoff_landing_contract", not missing, missing, notes)
 
 
+def _check_payload_drop_box_test(root):
+    missing = []
+    notes = []
+    route_file = root / "config" / "flight" / "payload_drop_box_test.yaml"
+    launch_file = root / "src" / "robotac_bringup" / "launch" / "payload_drop_box_test.launch"
+    if not route_file.exists():
+        return _phase("payload_drop_box_test_contract", False, ["missing:payload_drop_box_test.yaml"])
+    if not launch_file.exists():
+        return _phase("payload_drop_box_test_contract", False, ["missing:payload_drop_box_test.launch"])
+
+    audit_args = SimpleNamespace(
+        file=str(route_file),
+        origin_x=0.0,
+        origin_y=0.0,
+        origin_z=0.0,
+        origin_yaw=None,
+        origin_yaw_deg=0.0,
+        no_takeoff=False,
+        require_auto_land=True,
+        require_payload_open=True,
+        json=False,
+    )
+    try:
+        summary = audit_local_mission._build_summary(audit_args)
+    except Exception as exc:  # pragma: no cover - surfaced in script output
+        return _phase("payload_drop_box_test_contract", False, ["mission_audit:%s" % exc])
+    route = _load_yaml(route_file).get("local_waypoint_flight", {})
+    expected_points = [
+        (1.0, 0.0, 1.0),
+        (0.0, 0.0, 1.0),
+        (0.0, 1.0, 1.0),
+        (0.0, 0.0, 1.0),
+        (0.0, -1.0, 1.0),
+        (0.0, 0.0, 1.0),
+        (-1.0, 0.0, 1.0),
+        (0.0, 0.0, 1.0),
+    ]
+    waypoints = route.get("waypoints") or []
+    if len(waypoints) != len(expected_points):
+        missing.append("payload_test_waypoint_count")
+    for index, expected in enumerate(expected_points):
+        if index >= len(waypoints):
+            break
+        actual = tuple(float(waypoints[index].get(axis, 999.0)) for axis in ("x", "y", "z"))
+        if any(abs(actual[i] - expected[i]) > 1.0e-6 for i in range(3)):
+            missing.append("payload_test_waypoint_%d" % index)
+    payload_events = summary.get("payload_events") or []
+    if len(payload_events) != 1:
+        missing.append("payload_test_single_payload_event")
+    elif payload_events[0].get("name") != "wp6":
+        missing.append("payload_test_payload_event_index")
+    if route.get("vision_output_topic") != "/mavros/vision_pose/pose" or route.get("vision_output_type") != "pose":
+        missing.append("payload_test_path_a_vision")
+    if route.get("payload_topic") != "/robotac_servo/control":
+        missing.append("payload_test_servo_topic")
+
+    launch = _read(launch_file)
+    missing.extend("payload_test_launch_missing:%s" % token for token in _contains_all(launch, (
+        '<arg name="live_flight" default="false" />',
+        '<arg name="route_file" default="$(arg config_root)/flight/payload_drop_box_test.yaml" />',
+        '<arg name="flight_auto_arm" value="$(arg live_flight)" />',
+        '<arg name="flight_auto_mode" value="$(arg live_flight)" />',
+        '<arg name="flight_auto_land" value="$(arg live_flight)" />',
+        '<arg name="flight_enable_payload" value="$(arg live_flight)" />',
+        '<arg name="vision_bridge_type" value="path_a" />',
+    )))
+    if not missing:
+        notes.append("payload drop-box route is forward/home/left/home/right/home/rear-open/home with explicit live_flight gate")
+    return _phase("payload_drop_box_test_contract", not missing, missing, notes)
+
+
 def _check_route_generator(root):
     missing = []
     notes = []
@@ -482,6 +553,74 @@ def _check_fastlio_vision_bridge(root):
     return _phase("fastlio_vision_pose_contract", not missing, missing, notes)
 
 
+def _check_path_a_vision_pose(root):
+    missing = []
+    notes = []
+    config_path = root / "config" / "fastlio" / "path_a_vision_pose.yaml"
+    launch_path = root / "src" / "robotac_flight" / "launch" / "path_a_vision_pose.launch"
+    source_path = root / "src" / "robotac_flight" / "scripts" / "local_odom_to_vision_pose.py"
+    route_path = root / "config" / "flight" / "local_waypoints.yaml"
+    if not config_path.exists():
+        return _phase("path_a_vision_pose_contract", False, ["missing:path_a_vision_pose.yaml"])
+    config = _load_yaml(config_path).get("path_a_vision_pose", {})
+    if not isinstance(config, dict):
+        return _phase("path_a_vision_pose_contract", False, ["path_a_vision_pose_mapping"])
+    for key, expected in (
+            ("input_topic", "/sunray/odometry"),
+            ("output_topic", "/mavros/vision_pose/pose"),
+            ("preview_topic", "/robotac/fastlio_vision/path_a_pose_preview"),
+            ("output_frame_id", "odom")):
+        if config.get(key) != expected:
+            missing.append("path_a_%s" % key)
+    if config.get("frame_alignment_approved") is True:
+        missing.append("path_a_real_config_frame_alignment_should_not_be_preapproved")
+    if config.get("preserve_input_frame") is not False:
+        missing.append("path_a_preserve_input_frame_false")
+    if config.get("zero_origin_on_start") is not False:
+        missing.append("path_a_zero_origin_on_start_false")
+
+    route = _load_yaml(route_path).get("local_waypoint_flight", {})
+    if route.get("vision_output_topic") != "/mavros/vision_pose/pose":
+        missing.append("route_path_a_vision_output_topic")
+    if route.get("vision_output_type") != "pose":
+        missing.append("route_path_a_vision_output_type")
+
+    launch = _read(launch_path) if launch_path.exists() else ""
+    missing.extend("path_a_launch_missing:%s" % token for token in _contains_all(launch, (
+        '<arg name="input_topic" default="/sunray/odometry" />',
+        '<arg name="output_topic" default="/mavros/vision_pose/pose" />',
+        '<arg name="enable_mavros_output" default="false" />',
+        'type="local_odom_to_vision_pose.py"',
+    )))
+    source = _read(source_path) if source_path.exists() else ""
+    missing.extend("path_a_source_missing:%s" % token for token in _contains_all(source, (
+        "from geometry_msgs.msg import PoseStamped",
+        "self.input_topic = rospy.get_param(\"~input_topic\", \"/sunray/odometry\")",
+        "self.output_topic = rospy.get_param(\"~output_topic\", \"/mavros/vision_pose/pose\")",
+        "requested_output = _as_bool(rospy.get_param(\"~enable_mavros_output\", False))",
+        "self.enable_mavros_output = requested_output and self.frame_alignment_approved",
+        "self.pose_pub = rospy.Publisher(self.output_topic, PoseStamped, queue_size=10)",
+        "if self.enable_mavros_output and self.healthy:",
+        "self.pose_pub.publish(output)",
+    )))
+    waypoint_source = _read(root / "src" / "robotac_flight" / "scripts" / "local_waypoint_flight.py")
+    missing.extend("path_a_controller_missing:%s" % token for token in _contains_all(waypoint_source, (
+        "PoseStamped",
+        "vision_output_type",
+        "def _vision_pose_cov_cb(self, msg):",
+        "def _vision_pose_cb(self, msg):",
+    )))
+    full_system = _read(root / "src" / "robotac_bringup" / "launch" / "full_system.launch")
+    missing.extend("path_a_full_system_missing:%s" % token for token in _contains_all(full_system, (
+        '<arg name="vision_bridge_type" default="path_a" />',
+        'path_a_vision_pose.launch',
+        '<arg name="vision_output_type" default="pose" />',
+    )))
+    if not missing:
+        notes.append("Path A /sunray/odometry -> /mavros/vision_pose/pose is gated and selected by default")
+    return _phase("path_a_vision_pose_contract", not missing, missing, notes)
+
+
 def _check_evidence_surface(root):
     missing = []
     notes = []
@@ -622,8 +761,10 @@ def build_report(args):
         _check_local_route(root),
         _check_controller_source(root),
         _check_local_takeoff_landing(root),
+        _check_payload_drop_box_test(root),
         _check_route_generator(root),
         _check_fastlio_vision_bridge(root),
+        _check_path_a_vision_pose(root),
         _check_evidence_surface(root),
     ]
     return {

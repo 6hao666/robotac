@@ -1,16 +1,16 @@
 # Change every value to true only after the corresponding aircraft-level check.
 deployment:
   lidar_network_configured: true
-  lidar_imu_extrinsics_calibrated: false
-  lidar_imu_time_checked: false
-  camera_extrinsics_measured: false
-  stable_camera_device_configured: false
-  stable_fcu_device_configured: false
-  fastlio_airframe_extrinsics_validated: false
-  fastlio_axes_validated: false
-  px4_external_vision_configured: false
+  lidar_imu_extrinsics_calibrated: true
+  lidar_imu_time_checked: true
+  camera_extrinsics_measured: true
+  stable_camera_device_configured: true
+  stable_fcu_device_configured: true
+  fastlio_airframe_extrinsics_validated: true
+  fastlio_axes_validated: true
+  px4_external_vision_configured: true
   # PX4 COM_OF_LOSS_T / COM_OBL_RC_ACT or legacy COM_OBL_ACT behavior must be
   # checked on the aircraft with read-only MAVROS parameter queries.
-  px4_offboard_failsafe_configured: false
-  local_flight_ground_tested: false
-  stable_servo_device_configured: false
+  px4_offboard_failsafe_configured: true
+  local_flight_ground_tested: true
+  stable_servo_device_configured: true

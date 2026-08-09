@@ -1,0 +1,88 @@
+local_waypoint_flight:
+  # Payload drop-box flight test route.
+  # Frame: FLU offsets relative to the aircraft heading captured by
+  # /robotac/flight/start. x forward, y left, z up. No GPS/global coordinates.
+  waypoint_frame: robotac_start_body
+  takeoff_height: 1.0
+  require_auto_land: true
+
+  # Sequence after takeoff:
+  #   forward 1 m -> home -> left 1 m -> home -> right 1 m -> home
+  #   backward 1 m -> open payload servo -> home -> AUTO.LAND
+  waypoints:
+    - {x: 1.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 1.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: -1.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+    - {x: -1.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0,
+       payload_action: open, payload_settle: 2.0}
+    - {x: 0.0, y: 0.0, z: 1.0, yaw_deg: 0.0, hold: 2.0}
+
+  position_tolerance: 0.25
+  yaw_tolerance_deg: 12.0
+  waypoint_timeout: 45.0
+  mission_timeout: 600.0
+  control_rate_hz: 20.0
+  prestream_seconds: 5.0
+
+  require_vision: true
+  require_vision_output: true
+  require_estimator_status: true
+  require_horizontal_relative: true
+  require_vertical_estimate: true
+  require_vision_output_consumer: true
+  require_setpoint_consumer: true
+  require_timesync: true
+
+  max_waypoint_xy: 20.0
+  max_waypoint_z: 5.0
+  local_pose_timeout: 0.30
+  local_stamp_timeout: 0.50
+  local_stamp_future_tolerance: 0.10
+  strict_local_frames: true
+  expected_local_parent: map
+  expected_local_child: base_link
+  max_local_position_speed: 6.0
+  max_local_yaw_rate: 6.0
+  state_timeout: 1.0
+  extended_state_timeout: 1.0
+
+  vision_timeout: 0.50
+  vision_status_timeout: 0.50
+  vision_output_timeout: 0.50
+  vision_output_stamp_timeout: 0.30
+  vision_output_stamp_future_tolerance: 0.10
+  vision_output_topic: /mavros/vision_pose/pose
+  vision_output_type: pose
+  vision_output_parent: odom
+  vision_output_consumer_node: /mavros
+
+  setpoint_topic: /mavros/setpoint_raw/local
+  setpoint_consumer_node: /mavros
+  consumer_check_interval: 0.50
+
+  timesync_timeout: 1.0
+  max_timesync_rtt_ms: 20.0
+  estimator_timeout: 1.0
+  offboard_timeout: 15.0
+  arming_timeout: 15.0
+  takeoff_timeout: 45.0
+
+  critical_fault_action: release
+  operator_abort_action: release
+  abort_land_mode_timeout: 8.0
+  auto_land_mode_timeout: 8.0
+  landing_timeout: 60.0
+  land_mode: AUTO.LAND
+  land_descent_rate: 0.30
+  land_switch_height: 0.50
+
+  payload_topic: /robotac_servo/control
+  payload_status_topic: /robotac_servo/status
+  payload_required_connection: true
+  payload_require_ack: true
+  payload_ack_timeout: 1.0
+  payload_preflight_close: true
+  payload_default_settle_seconds: 2.0

@@ -9,6 +9,11 @@
   <arg name="rviz" default="false" />
   <!-- MAVROS is opt-in so sensor and SLAM bench tests never open the FCU link. -->
   <arg name="enable_mavros" default="false" />
+  <arg name="vision_bridge_type" default="path_a" />
+  <arg name="vision_input_topic" default="/sunray/odometry" />
+  <arg name="vision_output_topic" default="/mavros/vision_pose/pose" />
+  <arg name="vision_output_type" default="pose" />
+  <arg name="vision_output_parent" default="odom" />
   <arg name="enable_vision_bridge" default="false" />
   <arg name="vision_enable_output" default="false" />
   <arg name="enable_flight_controller" default="false" />
@@ -71,10 +76,22 @@
     </include>
   </group>
   <group if="$(arg enable_vision_bridge)">
-    <include file="$(find robotac_flight)/launch/fastlio_vision_bridge.launch">
-      <arg name="config_root" value="$(arg config_root)" />
-      <arg name="enable_mavros_output" value="$(arg vision_enable_output)" />
-    </include>
+    <group if="$(eval arg('vision_bridge_type') == 'path_a')">
+      <include file="$(find robotac_flight)/launch/path_a_vision_pose.launch">
+        <arg name="config_root" value="$(arg config_root)" />
+        <arg name="input_topic" value="$(arg vision_input_topic)" />
+        <arg name="output_topic" value="$(arg vision_output_topic)" />
+        <arg name="enable_mavros_output" value="$(arg vision_enable_output)" />
+      </include>
+    </group>
+    <group if="$(eval arg('vision_bridge_type') == 'pose_cov')">
+      <include file="$(find robotac_flight)/launch/fastlio_vision_bridge.launch">
+        <arg name="config_root" value="$(arg config_root)" />
+        <arg name="input_topic" value="$(arg vision_input_topic)" />
+        <arg name="output_topic" value="$(arg vision_output_topic)" />
+        <arg name="enable_mavros_output" value="$(arg vision_enable_output)" />
+      </include>
+    </group>
   </group>
   <group if="$(arg enable_flight_controller)">
     <include file="$(find robotac_flight)/launch/local_waypoint_flight.launch">
@@ -88,6 +105,9 @@
       <arg name="setpoint_topic" value="$(arg flight_setpoint_topic)" />
       <arg name="require_setpoint_consumer" value="$(arg flight_require_setpoint_consumer)" />
       <arg name="setpoint_consumer_node" value="$(arg flight_setpoint_consumer_node)" />
+      <arg name="vision_output_topic" value="$(arg vision_output_topic)" />
+      <arg name="vision_output_type" value="$(arg vision_output_type)" />
+      <arg name="vision_output_parent" value="$(arg vision_output_parent)" />
     </include>
   </group>
 </launch>

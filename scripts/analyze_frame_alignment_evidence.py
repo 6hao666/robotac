@@ -274,7 +274,7 @@ def _build_parser():
     parser.add_argument("--required-axes", default="positive_x,positive_y,positive_z",
                         help="Comma-separated cardinal translation evidence labels")
     parser.add_argument("--require-yaw", action="store_true")
-    parser.add_argument("--pose-topic", default="/robotac/fastlio_vision/pose_preview")
+    parser.add_argument("--pose-topic", default="/robotac/fastlio_vision/path_a_pose_preview")
     parser.add_argument("--expected-parent", default="odom")
     parser.add_argument("--min-pose-rate-hz", type=float, default=5.0)
     parser.add_argument("--min-translation-m", type=float, default=0.30)

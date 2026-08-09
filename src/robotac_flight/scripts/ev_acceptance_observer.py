@@ -15,7 +15,7 @@ import sys
 import time
 
 import rospy
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from mavros_msgs.msg import ExtendedState, State
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
@@ -141,6 +141,7 @@ class EvAcceptanceObserver(object):
         self.local_parent = str(rospy.get_param("~local_parent", "map")).strip()
         self.local_child = str(rospy.get_param("~local_child", "base_link")).strip()
         self.vision_parent = str(rospy.get_param("~vision_parent", "odom")).strip()
+        self.vision_type = str(rospy.get_param("~vision_type", "pose")).strip().lower()
         self._validate_parameters()
 
         # Keep the full ground-observation window even at camera/LiDAR-like
@@ -168,8 +169,16 @@ class EvAcceptanceObserver(object):
                          ExtendedState, self._extended_cb, queue_size=10)
         rospy.Subscriber(rospy.get_param("~local_topic", "/mavros/local_position/odom"),
                          Odometry, self._local_cb, queue_size=20)
-        rospy.Subscriber(rospy.get_param("~vision_topic", "/mavros/vision_pose/pose_cov"),
-                         PoseWithCovarianceStamped, self._vision_cb, queue_size=20)
+        vision_topic = rospy.get_param("~vision_topic", "/mavros/vision_pose/pose")
+        if self.vision_type in ("pose", "pose_stamped", "posestamped"):
+            rospy.Subscriber(vision_topic, PoseStamped, self._vision_cb, queue_size=20)
+        elif self.vision_type in (
+                "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+                "posewithcovariancestamped"):
+            rospy.Subscriber(vision_topic, PoseWithCovarianceStamped,
+                             self._vision_cov_cb, queue_size=20)
+        else:
+            raise ValueError("unsupported vision_type: %s" % self.vision_type)
         rospy.Subscriber(rospy.get_param("~vision_output_enabled_topic",
                                          "/robotac/fastlio_vision/output_enabled"),
                          Bool, self._output_enabled_cb, queue_size=10)
@@ -196,6 +205,13 @@ class EvAcceptanceObserver(object):
             raise ValueError("max_direction_error_deg must be below 90 degrees")
         if not self.local_parent or not self.local_child or not self.vision_parent:
             raise ValueError("expected frame names must be non-empty")
+        allowed_pose_types = (
+            "pose", "pose_stamped", "posestamped",
+            "pose_cov", "pose_with_covariance", "pose_with_covariance_stamped",
+            "posewithcovariancestamped",
+        )
+        if self.vision_type not in allowed_pose_types:
+            raise ValueError("vision_type must be pose or pose_cov")
 
     def _stamp_current(self, stamp):
         if stamp == rospy.Time(0):
@@ -237,18 +253,24 @@ class EvAcceptanceObserver(object):
             return
         self.local.accept(msg.header.stamp, msg.pose.pose)
 
-    def _vision_cb(self, msg):
-        if msg.header.frame_id != self.vision_parent:
-            self.vision.reject("unexpected_parent:%s" % msg.header.frame_id)
+    def _accept_vision_pose(self, header, pose):
+        if header.frame_id != self.vision_parent:
+            self.vision.reject("unexpected_parent:%s" % header.frame_id)
             return
-        if not _finite_pose(msg.pose.pose):
+        if not _finite_pose(pose):
             self.vision.reject("nonfinite_or_invalid_quaternion")
             return
-        valid, reason = self._stamp_current(msg.header.stamp)
+        valid, reason = self._stamp_current(header.stamp)
         if not valid:
             self.vision.reject(reason)
             return
-        self.vision.accept(msg.header.stamp, msg.pose.pose)
+        self.vision.accept(header.stamp, pose)
+
+    def _vision_cb(self, msg):
+        self._accept_vision_pose(msg.header, msg.pose)
+
+    def _vision_cov_cb(self, msg):
+        self._accept_vision_pose(msg.header, msg.pose.pose)
 
     @staticmethod
     def _fresh(receive_time, timeout):
