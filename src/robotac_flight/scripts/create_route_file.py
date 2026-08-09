@@ -97,8 +97,8 @@ BASE_ROUTE_DEFAULTS = {
 
 
 PAYLOAD_ROUTE_DEFAULTS = {
-    "payload_topic": "/robotac/servo/open",
-    "payload_status_topic": "/robotac/servo/status",
+    "payload_topic": "/robotac_servo/control",
+    "payload_status_topic": "/robotac_servo/status",
     "payload_required_connection": True,
     "payload_require_ack": True,
     "payload_ack_timeout": 1.0,

@@ -7,7 +7,7 @@ from std_msgs.msg import Bool
 
 def main() -> None:
     rospy.init_node("servo_cycle_test")
-    topic = rospy.get_param("~topic", "/robotac/servo/open")
+    topic = rospy.get_param("~topic", "/robotac_servo/control")
     closed_seconds = float(rospy.get_param("~closed_seconds", 1.0))
     open_seconds = float(rospy.get_param("~open_seconds", 5.0))
     publisher = rospy.Publisher(topic, Bool, queue_size=1, latch=True)

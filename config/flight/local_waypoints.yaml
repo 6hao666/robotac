@@ -91,10 +91,10 @@ local_waypoint_flight:
   # The flight node emits payload commands only with the explicit launch
   # argument enable_payload:=true. It first commands false (0 degrees), then
   # this route publishes true (45 degrees) only at the rear waypoint.
-  payload_topic: /robotac/servo/open
+  payload_topic: /robotac_servo/control
   # The servo status is a serial-write acknowledgement, not a physical angle
   # measurement. Require it so a missing/failed controller blocks the mission.
-  payload_status_topic: /robotac/servo/status
+  payload_status_topic: /robotac_servo/status
   payload_required_connection: true
   payload_require_ack: true
   payload_ack_timeout: 1.0

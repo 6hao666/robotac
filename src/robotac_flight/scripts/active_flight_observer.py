@@ -195,7 +195,7 @@ class ActiveFlightObserver(object):
                          State, self._mavros_state_cb, queue_size=20)
         rospy.Subscriber(rospy.get_param("~extended_state_topic", "/mavros/extended_state"),
                          ExtendedState, self._extended_state_cb, queue_size=20)
-        rospy.Subscriber(rospy.get_param("~payload_status_topic", "/robotac/servo/status"),
+        rospy.Subscriber(rospy.get_param("~payload_status_topic", "/robotac_servo/status"),
                          String, self._payload_status_cb, queue_size=10)
         rospy.Subscriber(rospy.get_param("~route_manifest_topic", "/robotac/flight/route_manifest"),
                          String, self._route_manifest_cb, queue_size=10)

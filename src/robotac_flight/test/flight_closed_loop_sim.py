@@ -79,7 +79,7 @@ class ClosedLoopMavrosSim(object):
         self.vision_pose_pub = rospy.Publisher(
             "/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped, queue_size=5)
         self.payload_status_pub = rospy.Publisher(
-            "/robotac/servo/status", String, queue_size=5, latch=True)
+            "/robotac_servo/status", String, queue_size=5, latch=True)
         # Mirror the servo node's startup closed command so the controller can
         # establish its required status sequence baseline before mission start.
         self.payload_sequence = 1
@@ -99,7 +99,7 @@ class ClosedLoopMavrosSim(object):
             "/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped,
             lambda _msg: None, queue_size=10)
         rospy.Subscriber("/robotac/flight/status", String, self._status_cb, queue_size=10)
-        rospy.Subscriber("/robotac/servo/open", Bool, self._payload_cb, queue_size=5)
+        rospy.Subscriber("/robotac_servo/control", Bool, self._payload_cb, queue_size=5)
         rospy.Service("/mavros/set_mode", SetMode, self._set_mode_cb)
         rospy.Service("/mavros/cmd/arming", CommandBool, self._arming_cb)
         self.timer = rospy.Timer(rospy.Duration(1.0 / max(1.0, self.rate_hz)), self._tick)

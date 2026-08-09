@@ -13,7 +13,7 @@
     <param name="open_angle" value="$(arg open_angle)" />
     <param name="initial_open" value="$(arg initial_open)" />
     <param name="close_on_shutdown" value="$(arg close_on_shutdown)" />
-    <remap from="open" to="/robotac/servo/open" />
-    <remap from="status" to="/robotac/servo/status" />
+    <remap from="control" to="/robotac_servo/control" />
+    <remap from="status" to="/robotac_servo/status" />
   </node>
 </launch>

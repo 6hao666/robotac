@@ -3,7 +3,7 @@
 
 The controller protocol is the one used by yundrone_blink:
 5A <channel> <frequency high> <frequency low> <duty percent>.
-Only the ``open`` Boolean topic is exposed. False maps to 0 degrees and True
+Only the ``control`` Boolean topic is exposed. False maps to 0 degrees and True
 maps to the configured opening angle (45 degrees by default).
 """
 
@@ -133,7 +133,7 @@ class ServoSwitch:
         # so a bench launch can select the configured opening angle without a
         # second command.
         self._subscriber = rospy.Subscriber(
-            "open", Bool, self._on_open, queue_size=1
+            "control", Bool, self._on_open, queue_size=1
         )
         # This is feedback only.  It confirms that the command frame was
         # accepted by the USB serial device; it is not a measured servo angle.

@@ -214,9 +214,9 @@ class LocalWaypointFlight(object):
             rospy.get_param("~require_vision_output_consumer", True))
         self.vision_output_consumer_node = str(rospy.get_param(
             "~vision_output_consumer_node", "/mavros")).strip()
-        self.payload_topic = rospy.get_param("~payload_topic", "/robotac/servo/open")
+        self.payload_topic = rospy.get_param("~payload_topic", "/robotac_servo/control")
         self.payload_status_topic = rospy.get_param(
-            "~payload_status_topic", "/robotac/servo/status")
+            "~payload_status_topic", "/robotac_servo/status")
         self.payload_required_connection = _as_bool(
             rospy.get_param("~payload_required_connection", True))
         self.payload_require_ack = _as_bool(

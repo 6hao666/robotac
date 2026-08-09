@@ -38,7 +38,7 @@
   <arg name="local_position_topic" default="/mavros/local_position/odom" />
   <arg name="mavros_state_topic" default="/mavros/state" />
   <arg name="extended_state_topic" default="/mavros/extended_state" />
-  <arg name="payload_status_topic" default="/robotac/servo/status" />
+  <arg name="payload_status_topic" default="/robotac_servo/status" />
   <arg name="route_manifest_topic" default="/robotac/flight/route_manifest" />
   <arg name="vision_pose_topic" default="/mavros/vision_pose/pose_cov" />
   <arg name="vision_output_enabled_topic" default="/robotac/fastlio_vision/output_enabled" />

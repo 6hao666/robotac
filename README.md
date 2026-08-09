@@ -85,7 +85,7 @@ as `/etc/udev/rules.d/99-robotac-servo.rules`, reload udev, and ensure the
 runtime user can access the `dialout` group. The known HL-340 controller is
 `1a86:7523` and is exposed as `/dev/robotac_servo`.
 
-The servo package exposes only `/robotac/servo/open` (`std_msgs/Bool`):
+The servo package exposes only `/robotac_servo/control` (`std_msgs/Bool`):
 `false` commands 0 degrees and `true` commands the configured opening angle,
 45 degrees by default. The PWM protocol is 115200 baud, channel 1, 50 Hz;
 integer duty quantization means nearby angles can share one duty value. The
@@ -346,8 +346,8 @@ Runtime interfaces:
 /robotac/flight/setpoint_preview   mavros_msgs/PositionTarget
 /robotac/flight/route_manifest     std_msgs/String (JSON, latched)
 /mavros/setpoint_raw/local         mavros_msgs/PositionTarget (opt-in)
-/robotac/servo/open                std_msgs/Bool (payload opt-in only)
-/robotac/servo/status              std_msgs/String (serial-write feedback)
+/robotac_servo/control             std_msgs/Bool (payload opt-in only)
+/robotac_servo/status              std_msgs/String (serial-write feedback)
 ```
 
 To replace the configured route at runtime, publish a `PoseArray` only while
@@ -663,7 +663,7 @@ return, right 1 m and return, rearward 1 m, open the payload servo, return to
 the start point, then enter `AUTO.LAND`. Payload motion has its own explicit
 gate and cannot occur unless `enable_payload:=true` is supplied together with
 `enable_control:=true`. Start `robotac_servo` separately; the flight node
-requires an active subscriber on `/robotac/servo/open`, commands it closed at
+requires an active subscriber on `/robotac_servo/control`, commands it closed at
 mission start, waits for the servo node's successful serial-write acknowledgement,
 and only commands it open after the rear waypoint's hold time. The status topic
 confirms a USB serial write, not a measured servo angle or a physical payload lock.
@@ -794,8 +794,8 @@ standalone IDs `0` and `1` from `config/apriltag/tags.yaml`. Each tag uses
 Servo switch examples (with a running `roscore`):
 
 ```bash
-rostopic pub -1 /robotac/servo/open std_msgs/Bool "data: true"
-rostopic pub -1 /robotac/servo/open std_msgs/Bool "data: false"
+rostopic pub -1 /robotac_servo/control std_msgs/Bool "data: true"
+rostopic pub -1 /robotac_servo/control std_msgs/Bool "data: false"
 rosrun robotac_servo servo_cycle_test.py
 ```
 
