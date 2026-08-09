@@ -327,6 +327,34 @@ class ActiveFlightObserver(object):
                 return True
         return False
 
+    def _targets_match(self, actual, expected):
+        position_delta = self._distance3(actual[:3], expected[:3])
+        yaw_delta = abs(self._angle_error(actual[3], expected[3]))
+        return (position_delta <= self.route_manifest_target_tolerance and
+                yaw_delta <= self.route_manifest_yaw_tolerance)
+
+    def _raw_setpoints_follow_manifest_route(self, manifest_route):
+        raw_targets = []
+        for raw_target in self.unique_raw_setpoints:
+            actual = self._target_values(raw_target)
+            if actual is not None:
+                raw_targets.append(actual)
+        raw_index = 0
+        for item in manifest_route:
+            expected = self._record_target(item)
+            if expected is None:
+                continue
+            found = False
+            while raw_index < len(raw_targets):
+                if self._targets_match(raw_targets[raw_index], expected):
+                    raw_index += 1
+                    found = True
+                    break
+                raw_index += 1
+            if not found:
+                return False
+        return True
+
     def _update_raw_setpoint_publishers(self):
         if not self.require_raw_setpoint_publisher:
             return
@@ -688,6 +716,9 @@ class ActiveFlightObserver(object):
         if len(manifest_targets) != expected_target_count:
             return "route_manifest_target_count_mismatch:%d/%d" % (
                 len(manifest_targets), expected_target_count)
+        if (self.require_raw_setpoints and
+                not self._raw_setpoints_follow_manifest_route(target_route)):
+            return "route_manifest_raw_setpoint_order_mismatch"
         for key, expected in manifest_targets.items():
             actual = observed_targets.get(key)
             if actual is None:

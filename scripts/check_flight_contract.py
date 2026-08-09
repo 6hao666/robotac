@@ -495,6 +495,7 @@ def _check_evidence_surface(root):
         "route_manifest_target_tolerance",
         "route_manifest_observed_target_mismatch",
         "route_manifest_raw_setpoint_missing",
+        "route_manifest_raw_setpoint_order_mismatch",
         "route_status_fingerprint_mismatch",
         "active_vision_output_enabled_seen",
         "active_fastlio_vision_status_ok_seen",

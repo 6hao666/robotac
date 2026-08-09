@@ -114,6 +114,38 @@ def _target_present(targets, expected, tolerance, yaw_tolerance):
     return False
 
 
+def _targets_match(actual, expected, tolerance, yaw_tolerance):
+    position_delta = math.sqrt(sum((actual[index] - expected[index]) ** 2
+                                   for index in range(3)))
+    yaw_delta = abs(_angle_error(actual[3], expected[3]))
+    return position_delta <= tolerance and yaw_delta <= yaw_tolerance
+
+
+def _targets_follow_route(raw_targets, manifest_route, tolerance, yaw_tolerance):
+    if not isinstance(raw_targets, list) or not isinstance(manifest_route, list):
+        return False
+    parsed_raw = []
+    for record in raw_targets:
+        target = _target_tuple({"target": record})
+        if target is not None:
+            parsed_raw.append(target)
+    raw_index = 0
+    for item in manifest_route:
+        expected = _target_tuple(item) if isinstance(item, dict) else None
+        if expected is None:
+            continue
+        found = False
+        while raw_index < len(parsed_raw):
+            if _targets_match(parsed_raw[raw_index], expected, tolerance, yaw_tolerance):
+                raw_index += 1
+                found = True
+                break
+            raw_index += 1
+        if not found:
+            return False
+    return True
+
+
 def _base_phase(data, args):
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     last_status = summary.get("last_status") if isinstance(summary.get("last_status"), dict) else {}
@@ -363,6 +395,10 @@ def _route_manifest_phase(data, args):
         yaw_tolerance = math.radians(args.route_manifest_yaw_tolerance_deg)
         max_position_delta = 0.0
         max_yaw_delta = 0.0
+        if (args.require_raw_setpoints and
+                not _targets_follow_route(summary.get("unique_raw_setpoints"), manifest_route,
+                                          tolerance, yaw_tolerance)):
+            missing.append("route_manifest_raw_setpoint_order_mismatch")
         for key, expected in manifest_targets.items():
             actual = observed_targets.get(key)
             if actual is None:
