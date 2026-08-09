@@ -71,6 +71,46 @@ CONTROL_DEPLOYMENT_GATES = VISION_DEPLOYMENT_GATES + (
 )
 
 
+ALLOWED_ROUTE_WAYPOINT_KEYS = {
+    "x", "y", "z", "yaw", "yaw_deg", "hold", "payload_action", "payload_settle",
+}
+
+
+FORBIDDEN_GLOBAL_KEYS = {
+    "lat",
+    "lon",
+    "latitude",
+    "longitude",
+    "altitude_amsl",
+    "altitude_wgs84",
+    "global_frame",
+    "global_position",
+    "gps",
+    "gps_fix",
+    "frame_global",
+    "command_tol",
+    "commandtol",
+    "mission_item",
+    "mission_items",
+}
+
+
+def _global_key_violations(value, prefix=""):
+    violations = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key)
+            key_path = "%s.%s" % (prefix, key_text) if prefix else key_text
+            if key_text.strip().lower() in FORBIDDEN_GLOBAL_KEYS:
+                violations.append(key_path)
+            violations.extend(_global_key_violations(child, key_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            key_path = "%s[%d]" % (prefix, index) if prefix else "[%d]" % index
+            violations.extend(_global_key_violations(child, key_path))
+    return violations
+
+
 class LocalWaypointFlight(object):
     IDLE = "IDLE"
     PAYLOAD_PREPARE = "PAYLOAD_PREPARE"
@@ -308,6 +348,11 @@ class LocalWaypointFlight(object):
             rospy.logwarn("payload output is enabled; it is sent only after explicit mission start")
 
     def _load_waypoints(self):
+        private_params = rospy.get_param("~", {})
+        violations = _global_key_violations(private_params)
+        if violations:
+            raise ValueError("global/GPS flight parameters are not allowed: %s" %
+                             ",".join(violations))
         raw = rospy.get_param("~waypoints", [])
         if not isinstance(raw, list):
             raise ValueError("waypoints must be a list")
@@ -315,6 +360,10 @@ class LocalWaypointFlight(object):
         for index, item in enumerate(raw):
             if not isinstance(item, dict):
                 raise ValueError("waypoints must be dictionaries")
+            extra_keys = set(item) - ALLOWED_ROUTE_WAYPOINT_KEYS
+            if extra_keys:
+                raise ValueError("waypoint %d contains unsupported fields: %s" %
+                                 (index, ",".join(sorted(extra_keys))))
             yaw_keys = [key for key in ("yaw", "yaw_deg") if key in item]
             if len(yaw_keys) > 1:
                 raise ValueError("waypoint %d must use yaw or yaw_deg, not both" % index)

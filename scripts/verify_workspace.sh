@@ -504,6 +504,10 @@ for expected in (
     '"yaw": yaw',
     '"waypoint %d yaw_deg"',
     '"waypoint %d yaw"',
+    "ALLOWED_ROUTE_WAYPOINT_KEYS",
+    "FORBIDDEN_GLOBAL_KEYS",
+    "global/GPS flight parameters are not allowed",
+    "contains unsupported fields",
 ):
     if expected not in flight_source:
         raise SystemExit(f"Configured waypoint yaw parsing check failed: missing {expected}")
@@ -559,6 +563,10 @@ for name, source in (("flight controller", flight_source),
         "latitude",
         "longitude",
     ):
+        if (name == "flight controller" and forbidden in ("latitude", "longitude") and
+                "FORBIDDEN_GLOBAL_KEYS" in source and
+                "global/GPS flight parameters are not allowed" in source):
+            continue
         if forbidden in source:
             raise SystemExit(
                 f"{name} must stay local-only; found forbidden token {forbidden}")

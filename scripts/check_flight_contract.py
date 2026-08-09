@@ -220,6 +220,10 @@ def _check_controller_source(root):
         "mavros_setpoint_raw_consumer_lost",
         "mavros_vision_pose_consumer_lost",
         "waypoints_empty",
+        "ALLOWED_ROUTE_WAYPOINT_KEYS",
+        "FORBIDDEN_GLOBAL_KEYS",
+        "global/GPS flight parameters are not allowed",
+        "contains unsupported fields",
     )))
     missing.extend("launch_missing:%s" % token for token in _contains_all(launch, (
         '<arg name="route_file" default="$(arg config_root)/flight/local_waypoints.yaml" />',
