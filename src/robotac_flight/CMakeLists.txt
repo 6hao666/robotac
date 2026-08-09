@@ -19,6 +19,7 @@ catkin_install_python(PROGRAMS
   scripts/check_px4_vision_config.py
   scripts/create_route_file.py
   scripts/ev_acceptance_observer.py
+  scripts/fastlio_frame_alignment_observer.py
   scripts/fastlio_vision_bridge.py
   scripts/local_flight_readiness.py
   scripts/local_flight_preflight.py

@@ -247,8 +247,29 @@ Interfaces:
 ```
 
 First run preview only and inspect position/orientation while moving the
-aircraft along each positive body/local axis. After the transform and PX4 EKF
-configuration are confirmed, set `frame_alignment_approved: true` in
+aircraft along each positive body/local axis. The preview-only frame-alignment
+observer records JSON evidence from `/robotac/fastlio_vision/pose_preview` while
+requiring `/robotac/fastlio_vision/output_enabled` to stay false, so it does not
+feed PX4 external vision:
+
+```bash
+evidence_dir=~/robotac_ws/logs/frame_alignment/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${evidence_dir}"
+
+# Move the disarmed aircraft slowly in the expected +X preview direction.
+roslaunch robotac_flight fastlio_frame_alignment_observer.launch \
+  motion_name:=preview_positive_x expected_x:=1 expected_y:=0 expected_z:=0 \
+  min_translation_m:=0.30 \
+  evidence_file:="${evidence_dir}/preview_positive_x.json"
+
+# Repeat with expected_y:=1 for +Y, expected_z:=1 for +Z, and use
+# motion_type:=yaw expected_yaw_sign:=1 for a positive yaw check if needed.
+```
+
+Treat these JSON files as evidence for the human review that sets
+`fastlio_axes_validated` and `frame_alignment_approved`; the observer never
+edits `deployment.yaml` or `vision_bridge.yaml` by itself. After the transform
+and PX4 EKF configuration are confirmed, set `frame_alignment_approved: true` in
 `config/fastlio/vision_bridge.yaml`:
 
 ```bash

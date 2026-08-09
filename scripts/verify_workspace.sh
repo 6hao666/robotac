@@ -17,11 +17,13 @@ required_paths=(
   src/robotac_flight
   src/robotac_flight/launch/active_flight_observer.launch
   src/robotac_flight/launch/ev_acceptance_observer.launch
+  src/robotac_flight/launch/fastlio_frame_alignment_observer.launch
   src/robotac_flight/launch/local_flight_preflight.launch
   src/robotac_flight/scripts/active_flight_observer.py
   src/robotac_flight/scripts/audit_local_mission.py
   src/robotac_flight/scripts/create_route_file.py
   src/robotac_flight/scripts/ev_acceptance_observer.py
+  src/robotac_flight/scripts/fastlio_frame_alignment_observer.py
   src/robotac_flight/scripts/local_flight_readiness.py
   src/robotac_flight/scripts/preview_local_route.py
   src/robotac_flight/test/run_route_file_sim.sh
@@ -651,6 +653,34 @@ for forbidden in (
 ):
     if forbidden in ev_acceptance_source:
         raise SystemExit(f"EV acceptance observer must remain read-only; found {forbidden}")
+frame_alignment_source = pathlib.Path(
+    pathlib.Path(sys.argv[14]).parent / "fastlio_frame_alignment_observer.py").read_text()
+for expected in (
+    "Read-only FAST-LIO preview frame-alignment observer",
+    "fastlio_frame_alignment_observer",
+    "pose_preview",
+    "require_mavros_output_disabled",
+    "motion_type",
+    "translation_direction_error_deg",
+    "expected_yaw_sign",
+    "frame_alignment_preview_passed",
+    "evidence_file",
+):
+    if expected not in frame_alignment_source:
+        raise SystemExit(f"FAST-LIO frame alignment observer check failed: missing {expected}")
+for forbidden in (
+    "rospy.Publisher(",
+    "ServiceProxy",
+    "SetMode",
+    "CommandBool",
+    "CommandTOL",
+    "/mavros/setpoint_raw/local",
+    "/mavros/cmd/arming",
+    "/mavros/set_mode",
+    "/robotac/flight/start",
+):
+    if forbidden in frame_alignment_source:
+        raise SystemExit(f"FAST-LIO frame alignment observer must remain read-only; found {forbidden}")
 for expected in (
     "Read-only observer for a real Robotac local waypoint flight",
     "active_flight_observer",
