@@ -553,6 +553,11 @@ def _check_evidence_surface(root):
         "payload_open_at=none",
         "Route-file closed-loop flight simulation passed.",
     )))
+    missing.extend("dynamic_waypoint_test_missing:%s" % token for token in _contains_all(
+        _read(root / "src" / "robotac_flight" / "test" / "run_dynamic_waypoints_sim.sh"), (
+            "waypoints_locked_during_mission",
+            "Published attempted mid-mission PoseArray route override",
+        )))
     if not missing:
         notes.append("read-only and active evidence gates cover vision input, target reach, landing, and payload")
     return _phase("evidence_gate_contract", not missing, missing, notes)

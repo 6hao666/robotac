@@ -124,6 +124,44 @@ start_result=$(rosservice call /robotac/flight/start)
 printf '%s\n' "${start_result}"
 [[ "${start_result}" == *"success: True"* ]]
 
+python3 - <<'PY' >"${log_dir}/locked-waypoints.log" 2>&1
+import time
+
+import rospy
+from geometry_msgs.msg import Pose, PoseArray, Quaternion
+
+rospy.init_node("robotac_locked_waypoint_test", anonymous=True)
+publisher = rospy.Publisher("/robotac/flight/waypoints", PoseArray, queue_size=1, latch=True)
+deadline = time.monotonic() + 3.0
+while not rospy.is_shutdown() and publisher.get_num_connections() < 1:
+    if time.monotonic() >= deadline:
+        raise RuntimeError("no waypoint subscriber")
+    rospy.sleep(0.05)
+message = PoseArray()
+message.header.frame_id = "robotac_start_body"
+message.header.stamp = rospy.Time.now()
+pose = Pose()
+pose.position.x = 9.0
+pose.position.y = 9.0
+pose.position.z = 1.0
+pose.orientation = Quaternion(w=1.0)
+message.poses.append(pose)
+publisher.publish(message)
+rospy.sleep(0.20)
+print("Published attempted mid-mission PoseArray route override")
+PY
+cat "${log_dir}/locked-waypoints.log"
+locked_status=
+for _ in $(seq 1 30); do
+  locked_status=$(timeout 1 rostopic echo -n 1 /robotac/flight/status 2>/dev/null || true)
+  if [[ "${locked_status}" == *"error=waypoints_locked_during_mission"* ]]; then
+    break
+  fi
+  sleep 0.1
+done
+printf '%s\n' "${locked_status}"
+[[ "${locked_status}" == *"error=waypoints_locked_during_mission"* ]]
+
 summary=
 for _ in $(seq 1 700); do
   summary=$(timeout 1 rostopic echo -n 1 /robotac/test/flight_summary 2>/dev/null || true)

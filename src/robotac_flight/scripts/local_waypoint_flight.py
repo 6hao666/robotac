@@ -549,6 +549,7 @@ class LocalWaypointFlight(object):
     def _waypoints_cb(self, msg):
         if self.state != self.IDLE:
             self.last_error = "waypoints_locked_during_mission"
+            self._publish_status()
             return
         if msg.header.frame_id != self.input_frame:
             self.last_error = "waypoint_frame_must_be_%s" % self.input_frame

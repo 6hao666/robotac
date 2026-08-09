@@ -548,6 +548,8 @@ for expected in (
     "config/flight/posearray_waypoints_example.yaml",
     "waypoints_empty",
     "waypoints_loaded=6",
+    "waypoints_locked_during_mission",
+    "Published attempted mid-mission PoseArray route override",
 ):
     if expected not in dynamic_waypoint_test:
         raise SystemExit(f"Dynamic waypoint regression check failed: missing {expected}")
