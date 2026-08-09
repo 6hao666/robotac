@@ -496,6 +496,9 @@ for expected in (
         raise SystemExit(f"Flight preflight check failed: missing {expected}")
 if "rospy.Publisher(" in preflight_source:
     raise SystemExit("Flight preflight must remain subscriber-only")
+if preflight_source.find('self.setpoint_topic = rospy.get_param("~setpoint_topic"') > \
+        preflight_source.find("self._validate_parameters()"):
+    raise SystemExit("Flight preflight must load setpoint_topic before validating consumer config")
 for source, name in ((flight_source, "flight controller"),
                      (bridge_source, "vision bridge")):
     if "ros_clock_unavailable" not in source:

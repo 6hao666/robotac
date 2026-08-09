@@ -178,7 +178,6 @@ class LocalFlightPreflight(object):
         self.fastlio_parent = str(rospy.get_param("~fastlio_parent", "camera_init")).strip()
         self.fastlio_child = str(rospy.get_param("~fastlio_child", "body")).strip()
         self.vision_parent = str(rospy.get_param("~vision_parent", "odom")).strip()
-        self._validate_parameters()
 
         self.state_topic = rospy.get_param("~state_topic", "/mavros/state")
         self.extended_state_topic = rospy.get_param(
@@ -199,6 +198,8 @@ class LocalFlightPreflight(object):
         self.vision_output_topic = rospy.get_param(
             "~vision_output_topic", "/mavros/vision_pose/pose_cov")
         self.param_get_service = rospy.get_param("~param_get_service", "/mavros/param/get")
+
+        self._validate_parameters()
 
         self.local_stream = Stream("mavros_local_odom")
         self.fastlio_stream = Stream("fastlio_odom")
