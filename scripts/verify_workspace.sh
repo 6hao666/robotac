@@ -723,6 +723,110 @@ for expected in (
 print("Validated local ENU/MAVROS-NED route and vision-pose semantics.")
 PY
 
+python3 - "${workspace_dir}/src/robotac_flight/scripts/local_waypoint_flight.py" <<'PY'
+import importlib.util
+import pathlib
+import sys
+import types
+
+source_path = pathlib.Path(sys.argv[1])
+
+
+def dummy_class(name):
+    return type(name, (), {})
+
+
+def install_module(name, attrs=None):
+    module = types.ModuleType(name)
+    for key, value in (attrs or {}).items():
+        setattr(module, key, value)
+    sys.modules[name] = module
+    return module
+
+
+install_module("rospy")
+geometry_msgs = install_module("geometry_msgs")
+geometry_msgs.msg = install_module("geometry_msgs.msg", {
+    "PoseArray": dummy_class("PoseArray"),
+    "PoseWithCovarianceStamped": dummy_class("PoseWithCovarianceStamped"),
+})
+mavros_msgs = install_module("mavros_msgs")
+mavros_msgs.msg = install_module("mavros_msgs.msg", {
+    "EstimatorStatus": dummy_class("EstimatorStatus"),
+    "ExtendedState": dummy_class("ExtendedState"),
+    "PositionTarget": dummy_class("PositionTarget"),
+    "State": dummy_class("State"),
+    "TimesyncStatus": dummy_class("TimesyncStatus"),
+})
+mavros_msgs.srv = install_module("mavros_msgs.srv", {
+    "CommandBool": dummy_class("CommandBool"),
+    "SetMode": dummy_class("SetMode"),
+})
+nav_msgs = install_module("nav_msgs")
+nav_msgs.msg = install_module("nav_msgs.msg", {"Odometry": dummy_class("Odometry")})
+std_msgs = install_module("std_msgs")
+std_msgs.msg = install_module("std_msgs.msg", {
+    "Bool": dummy_class("Bool"),
+    "String": dummy_class("String"),
+})
+std_srvs = install_module("std_srvs")
+std_srvs.srv = install_module("std_srvs.srv", {
+    "Trigger": dummy_class("Trigger"),
+    "TriggerResponse": dummy_class("TriggerResponse"),
+})
+tf = install_module("tf")
+tf.transformations = install_module("tf.transformations", {
+    "euler_from_quaternion": lambda quaternion: (0.0, 0.0, 0.0),
+})
+
+spec = importlib.util.spec_from_file_location("local_waypoint_flight_under_test", str(source_path))
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+
+class FakeRospy(object):
+    def __init__(self, params):
+        self.params = params
+
+    def get_param(self, name, default=None):
+        return self.params.get(name, default)
+
+
+def parse_waypoints(params):
+    module.rospy = FakeRospy(params)
+    controller = module.LocalWaypointFlight.__new__(module.LocalWaypointFlight)
+    controller.hold_seconds = 2.0
+    controller.payload_default_settle = 2.0
+    return controller._load_waypoints()
+
+
+valid_params = {
+    "~": {"waypoints": [{"x": 0, "y": 0, "z": 1.0, "yaw": 0.0}]},
+    "~waypoints": [{"x": 0, "y": 0, "z": 1.0, "yaw": 0.0}],
+}
+if len(parse_waypoints(valid_params)) != 1:
+    raise SystemExit("Controller route parser did not accept a minimal local-only route")
+
+for params, expected in (
+        ({
+            "~": {"waypoints": [{"x": 0, "y": 0, "z": 1.0, "latitude": 31.0}]},
+            "~waypoints": [{"x": 0, "y": 0, "z": 1.0, "latitude": 31.0}],
+        }, "global/GPS flight parameters are not allowed"),
+        ({
+            "~": {"waypoints": [{"x": 0, "y": 0, "z": 1.0, "speed": 0.2}]},
+            "~waypoints": [{"x": 0, "y": 0, "z": 1.0, "speed": 0.2}],
+        }, "contains unsupported fields"),
+):
+    try:
+        parse_waypoints(params)
+    except ValueError as exc:
+        if expected not in str(exc):
+            raise SystemExit("Controller route parser failed with the wrong error: %s" % exc)
+    else:
+        raise SystemExit("Controller route parser accepted a forbidden route: %s" % expected)
+print("Validated controller route parser rejects global/GPS and unsupported configured fields.")
+PY
+
 python3 - "${workspace_dir}/config/apriltag/tags.yaml" <<'PY'
 import pathlib
 import sys
