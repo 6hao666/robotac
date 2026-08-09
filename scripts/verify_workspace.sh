@@ -1153,6 +1153,9 @@ for expected in (
     "max-active-vision-local-delta-m",
     "active_route_manifest",
     "route_manifest_missing",
+    "route_manifest_execution_config_missing",
+    "route_manifest_execution_config_setpoint_topic_mismatch",
+    "execution_config=local_setpoint_raw+fastlio_vision+auto_land",
     "route_manifest_target_route_missing",
     "route_manifest_observed_target_mismatch",
     "route_manifest_raw_setpoint_missing",
@@ -1366,7 +1369,9 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                    active_raw_setpoint_order_mismatch=False,
                    corrupt_active_raw_setpoint_target=False,
                    omit_route_manifest=False, corrupt_route_manifest_target=False,
-                   corrupt_route_status_fingerprint=False):
+                   corrupt_route_status_fingerprint=False,
+                   omit_execution_config=False,
+                   corrupt_execution_setpoint_topic=False):
     target_records = [
         {"target": [0, 0, 1, 0], "state": "TAKEOFF", "waypoint_index": 0,
          "waypoint_total": 8, "min_distance_m": 0.08,
@@ -1407,6 +1412,26 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
                 "waypoint_index": record["waypoint_index"] if record["state"] == "WAYPOINTS" else None,
                 "target": manifest_target,
             })
+        execution_config = {
+            "auto_land": True,
+            "critical_fault_action": "release",
+            "expected_local_child": "base_link",
+            "expected_local_parent": "map",
+            "land_mode": "AUTO.LAND",
+            "require_auto_land": True,
+            "require_estimator_status": True,
+            "require_setpoint_consumer": True,
+            "require_timesync": True,
+            "require_vision": True,
+            "require_vision_output": True,
+            "require_vision_output_consumer": True,
+            "setpoint_topic": "/mavros/setpoint_raw/local",
+            "strict_local_frames": True,
+            "vision_output_parent": "odom",
+            "vision_output_topic": "/mavros/vision_pose/pose_cov",
+        }
+        if corrupt_execution_setpoint_topic:
+            execution_config["setpoint_topic"] = "/mavros/setpoint_position/local"
         route_manifest = {
             "event": "mission_started",
             "route_source": "configured",
@@ -1421,6 +1446,8 @@ def write_evidence(path, *, success=True, reason="active_local_flight_passed",
             "origin_yaw": 0.0,
             "target_route": manifest_route,
         }
+        if not omit_execution_config:
+            route_manifest["execution_config"] = execution_config
     raw_targets = [[0, 0, 0, 0]] + [list(record["target"]) for record in target_records]
     if corrupt_raw_setpoint_target and len(raw_targets) > 4:
         raw_targets[4][0] += 0.50
@@ -1505,6 +1532,18 @@ with tempfile.TemporaryDirectory(prefix="robotac-active-flight-evidence.") as di
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if missing_manifest.returncode == 0 or "route_manifest_missing" not in missing_manifest.stdout:
         raise SystemExit("Active flight evidence analyzer accepted missing route manifest evidence")
+    write_evidence(evidence, omit_execution_config=True)
+    missing_execution_config = subprocess.run([sys.executable, script, str(root)], text=True,
+                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if (missing_execution_config.returncode == 0 or
+            "route_manifest_execution_config_missing" not in missing_execution_config.stdout):
+        raise SystemExit("Active flight evidence analyzer accepted missing route execution config")
+    write_evidence(evidence, corrupt_execution_setpoint_topic=True)
+    bad_execution_config = subprocess.run([sys.executable, script, str(root)], text=True,
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if (bad_execution_config.returncode == 0 or
+            "route_manifest_execution_config_setpoint_topic_mismatch" not in bad_execution_config.stdout):
+        raise SystemExit("Active flight evidence analyzer accepted a non-raw local setpoint execution config")
     write_evidence(evidence, corrupt_route_manifest_target=True)
     bad_manifest_target = subprocess.run([sys.executable, script, str(root)], text=True,
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -1800,6 +1839,24 @@ def write_active_evidence(root, payload_open=False, success=True, waypoint_count
         route_revision = 1 if dynamic_manifest else 0
         summary["route_manifest"] = {
             "event": "mission_started",
+            "execution_config": {
+                "auto_land": True,
+                "critical_fault_action": "release",
+                "expected_local_child": "base_link",
+                "expected_local_parent": "map",
+                "land_mode": "AUTO.LAND",
+                "require_auto_land": True,
+                "require_estimator_status": True,
+                "require_setpoint_consumer": True,
+                "require_timesync": True,
+                "require_vision": True,
+                "require_vision_output": True,
+                "require_vision_output_consumer": True,
+                "setpoint_topic": "/mavros/setpoint_raw/local",
+                "strict_local_frames": True,
+                "vision_output_parent": "odom",
+                "vision_output_topic": "/mavros/vision_pose/pose_cov",
+            },
             "route_source": route_source,
             "route_revision": route_revision,
             "route_fingerprint": "synthetic",

@@ -1048,8 +1048,42 @@ class LocalWaypointFlight(object):
             })
         return waypoints
 
-    def _route_fingerprint(self, waypoints):
+    def _manifest_execution_config(self):
+        return {
+            "auto_land": bool(self.auto_land),
+            "critical_fault_action": str(self.critical_fault_action),
+            "enable_payload": bool(self.enable_payload),
+            "expected_local_child": str(self.expected_local_child),
+            "expected_local_parent": str(self.expected_local_parent),
+            "land_descent_rate": self._manifest_float(self.land_descent_rate),
+            "land_mode": str(self.land_mode),
+            "land_switch_height": self._manifest_float(self.land_switch_height),
+            "local_pose_timeout": self._manifest_float(self.local_pose_timeout),
+            "operator_abort_action": str(self.operator_abort_action),
+            "payload_require_ack": bool(self.payload_require_ack),
+            "payload_required_connection": bool(self.payload_required_connection),
+            "position_tolerance": self._manifest_float(self.position_tolerance),
+            "require_auto_land": bool(self.require_auto_land),
+            "require_estimator_status": bool(self.require_estimator),
+            "require_setpoint_consumer": bool(self.require_setpoint_consumer),
+            "require_timesync": bool(self.require_timesync),
+            "require_vision": bool(self.require_vision),
+            "require_vision_output": bool(self.require_vision_output),
+            "require_vision_output_consumer": bool(self.require_vision_output_consumer),
+            "setpoint_topic": str(self.setpoint_topic),
+            "strict_local_frames": bool(self.strict_local_frames),
+            "takeoff_timeout": self._manifest_float(self.takeoff_timeout),
+            "vision_output_parent": str(self.vision_output_parent),
+            "vision_output_topic": str(self.vision_output_topic),
+            "waypoint_timeout": self._manifest_float(self.waypoint_timeout),
+            "yaw_tolerance": self._manifest_float(self.yaw_tolerance),
+        }
+
+    def _route_fingerprint(self, waypoints, execution_config=None):
+        if execution_config is None:
+            execution_config = self._manifest_execution_config()
         route = {
+            "execution_config": execution_config,
             "frame": self.input_frame,
             "takeoff_height": self._manifest_float(self.takeoff_height),
             "waypoints": waypoints,
@@ -1081,14 +1115,16 @@ class LocalWaypointFlight(object):
 
     def _publish_route_manifest(self, event):
         waypoints = self._manifest_waypoints()
+        execution_config = self._manifest_execution_config()
         origin = None
         if self.origin is not None:
             origin = [self._manifest_float(value) for value in self.origin]
         manifest = {
             "event": event,
+            "execution_config": execution_config,
             "route_source": self.route_source,
             "route_revision": self.route_revision,
-            "route_fingerprint": self._route_fingerprint(waypoints),
+            "route_fingerprint": self._route_fingerprint(waypoints, execution_config),
             "waypoint_frame": self.input_frame,
             "waypoint_count": len(waypoints),
             "takeoff_height": self._manifest_float(self.takeoff_height),
@@ -1367,7 +1403,9 @@ class LocalWaypointFlight(object):
 
     def _publish_status(self):
         event_stamp = rospy.Time.now().to_sec()
-        route_fingerprint = self._route_fingerprint(self._manifest_waypoints())
+        waypoints = self._manifest_waypoints()
+        route_fingerprint = self._route_fingerprint(
+            waypoints, self._manifest_execution_config())
         self.status_pub.publish(String(data="state=%s waypoint=%d/%d route_revision=%d route_fingerprint=%s connected=%s armed=%s mode=%s vision=%s estimator=%s timesync=%s payload=%s abort_action=%s tx=%s error=%s stamp=%.9f" %
                                       (self.state, self.index, len(self.waypoints),
                                        self.route_revision, route_fingerprint,

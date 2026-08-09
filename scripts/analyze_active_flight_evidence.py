@@ -17,6 +17,30 @@ import sys
 LANDED_STATE_ON_GROUND = 1
 
 
+EXECUTION_CONFIG_TRUE_REASONS = {
+    "auto_land": "route_manifest_execution_config_auto_land_not_true",
+    "require_auto_land": "route_manifest_execution_config_require_auto_land_not_true",
+    "require_estimator_status": "route_manifest_execution_config_require_estimator_status_not_true",
+    "require_setpoint_consumer": "route_manifest_execution_config_require_setpoint_consumer_not_true",
+    "require_timesync": "route_manifest_execution_config_require_timesync_not_true",
+    "require_vision": "route_manifest_execution_config_require_vision_not_true",
+    "require_vision_output": "route_manifest_execution_config_require_vision_output_not_true",
+    "require_vision_output_consumer": "route_manifest_execution_config_require_vision_output_consumer_not_true",
+    "strict_local_frames": "route_manifest_execution_config_strict_local_frames_not_true",
+}
+
+
+EXECUTION_CONFIG_EXPECTED_VALUES = {
+    "critical_fault_action": ("release", "route_manifest_execution_config_critical_fault_action_mismatch"),
+    "expected_local_child": ("base_link", "route_manifest_execution_config_expected_local_child_mismatch"),
+    "expected_local_parent": ("map", "route_manifest_execution_config_expected_local_parent_mismatch"),
+    "land_mode": ("AUTO.LAND", "route_manifest_execution_config_land_mode_mismatch"),
+    "setpoint_topic": ("/mavros/setpoint_raw/local", "route_manifest_execution_config_setpoint_topic_mismatch"),
+    "vision_output_parent": ("odom", "route_manifest_execution_config_vision_output_parent_mismatch"),
+    "vision_output_topic": ("/mavros/vision_pose/pose_cov", "route_manifest_execution_config_vision_output_topic_mismatch"),
+}
+
+
 def _load(path):
     evidence_path = pathlib.Path(path).expanduser().resolve()
     if evidence_path.is_dir():
@@ -367,6 +391,16 @@ def _route_manifest_phase(data, args):
         missing.append("route_manifest_source_invalid:%s" % route_source)
     if not manifest.get("route_fingerprint"):
         missing.append("route_manifest_fingerprint_missing")
+    execution_config = manifest.get("execution_config")
+    if not isinstance(execution_config, dict):
+        missing.append("route_manifest_execution_config_missing")
+    else:
+        for key, reason in EXECUTION_CONFIG_TRUE_REASONS.items():
+            if execution_config.get(key) is not True:
+                missing.append(reason)
+        for key, (expected, reason) in EXECUTION_CONFIG_EXPECTED_VALUES.items():
+            if execution_config.get(key) != expected:
+                missing.append(reason)
     last_status = summary.get("last_status") if isinstance(summary.get("last_status"), dict) else {}
     status_revision = last_status.get("route_revision")
     if status_revision is None:
@@ -447,6 +481,7 @@ def _route_manifest_phase(data, args):
         notes.append("route_source=%s revision=%s fingerprint=%s" % (
             route_source, manifest.get("route_revision", "unknown"),
             str(manifest.get("route_fingerprint", ""))[:12]))
+        notes.append("execution_config=local_setpoint_raw+fastlio_vision+auto_land")
     return _phase("active_route_manifest", not missing, missing, notes)
 
 
