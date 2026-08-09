@@ -40,6 +40,96 @@ The bootstrap script recreates `src/apriltag/CATKIN_IGNORE` before building;
 this is required because AprilTag is installed as a native CMake library and
 then linked by `apriltag_ros`.
 
+## One-command aircraft deployment
+
+For a prepared aircraft image with Ubuntu 20.04, ROS Noetic, SSH access, and
+the basic build dependencies already installed, deploy from the Mac checkout
+with:
+
+```bash
+cd /Users/liyh/RoboTac
+ROBOTAC_SSH_PASSWORD='<ssh-password>' ./scripts/deploy_aircraft.sh 192.168.10.66 \
+  --lidar-ip 192.168.1.171 \
+  --mavros-port /dev/ttyTHS0
+```
+
+The script performs the standard safe deployment path:
+
+- creates `/home/yundrone/robotac_ws` on the aircraft;
+- syncs the current source tree with `rsync`, excluding `.git`, `build`,
+  `devel`, `install`, logs, bags, PCDs, and Python caches;
+- adds the remote user to `dialout` and `video` when sudo is available;
+- optionally patches `config/lidar/mid360s.json` with `--lidar-ip`;
+- rebuilds and installs native `Livox-SDK2` and `apriltag`, then runs
+  `catkin_make -DCMAKE_BUILD_TYPE=Release -DROS_EDITION=ROS1`;
+- verifies important ROS packages and launch parsing; and
+- runs read-only MAVROS plus MID360/FAST-LIO smoke tests unless
+  `--skip-readonly-tests` is supplied.
+
+The runtime smoke tests are intentionally passive. They start MAVROS, the Livox
+driver, and FAST-LIO only long enough to subscribe to telemetry/sensor topics.
+They do **not** call MAVROS services, arm, change mode, publish setpoints, call
+`/robotac/flight/start`, or start the flight controller. Use
+`--skip-build`, `--skip-native-install`, or `--skip-readonly-tests` when only a
+subset of the deployment path is required. Use repeated `--mavros-port` flags to
+try multiple ports, for example `--mavros-port /dev/ttyTHS0 --mavros-port
+/dev/ttyTHS1`.
+
+Do not hard-code aircraft passwords in the repository. Pass the password through
+`ROBOTAC_SSH_PASSWORD` or use SSH keys. The tested new-aircraft command for
+`192.168.10.66` is shown above; that aircraft used `wlan0=192.168.10.66`,
+`eth0=192.168.1.5`, MID360 `192.168.1.171`, and PX4 on
+`/dev/ttyTHS0:921600`.
+
+## 2026-08-09 aircraft deployment notes
+
+New aircraft `192.168.10.66` was deployed and tested with the safety constraint
+that no control, arming, mode change, setpoint, or flight-start command could be
+sent. The final result was successful:
+
+- `catkin_make -DCMAKE_BUILD_TYPE=Release` completed on the aircraft;
+- MAVROS on `serial:///dev/ttyTHS0:921600` reported `/mavros/state.connected:
+  True`, `armed: False`, and valid `/mavros/imu/data`;
+- `/dev/ttyTHS1` was not present on this aircraft; available onboard serial
+  devices were `ttyTHS0`, `ttyTHS3`, and `ttyTHS4`;
+- the MID360 host NIC was `eth0=192.168.1.5/24`, matching the config host IP;
+- the actual MID360 IP was `192.168.1.171`, not the previous aircraft's
+  `192.168.1.145`; and
+- FAST-LIO produced `/Odometry` at about 10 Hz and `/cloud_registered` at about
+  10 Hz after the LiDAR IP was corrected.
+
+Issues found and fixes applied:
+
+- **Clean FAST-LIO build ordering:** a clean machine failed with
+  `fatal error: fast_lio/Pose6D.h: No such file or directory` because
+  `fastlio_mapping` could build before message generation. `src/fast_lio` now
+  adds explicit dependencies on generated catkin targets for `fastlio_mapping`
+  and `transform_odom_pointCloud`.
+- **MAVROS GeographicLib dependency:** the aircraft image had
+  `geographiclib-tools` but no readable `egm96-5` geoid dataset. The upstream
+  MAVROS UAS constructor treated that as fatal even though Robotac's default
+  MAVROS plugin list is local-only. `src/mavros` now downgrades a missing geoid
+  to a warning and leaves altitude geoid conversion disabled. Install the geoid
+  dataset before re-enabling `global_position` plugins.
+- **Slow GeographicLib download path:** the stock MAVROS dataset installer tried
+  to fetch from SourceForge and stalled for several minutes. The local-only
+  MAVROS configuration avoids requiring that download for onboard serial/IMU and
+  local-position work.
+- **Serial permissions:** `yundrone` initially lacked `dialout`, so a fresh SSH
+  session would not be able to open `/dev/ttyTHS*`. The deployment script adds
+  `dialout` automatically when sudo is available; log out/in or use a new SSH
+  session after changing group membership.
+- **MAVROS timing:** querying topics before the auto-started ROS master and
+  `/mavros` node are stable can produce `Unable to communicate with master`.
+  The deployment script waits for `/mavros` before subscribing to state/IMU.
+- **MID360 IP mismatch:** the first FAST-LIO run showed topics but no data, and
+  the Livox log reported `found lidar not defined in the user-defined config,
+  ip: 192.168.1.171`. Updating `config/lidar/mid360s.json` fixed the driver;
+  `/livox/lidar` then ran at about 10 Hz and `/livox/imu` at about 200 Hz.
+- **Process hygiene:** all runtime tests were launched only for sampling and
+  then stopped. A final process check showed no residual `roslaunch`, MAVROS,
+  Livox, or FAST-LIO test processes.
+
 ## Configuration
 
 Before connecting hardware, update these files:
