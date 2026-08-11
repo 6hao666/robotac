@@ -153,7 +153,19 @@ class TagStabilityTracker(object):
 
 class TagPayloadMission(object):
     def __init__(self):
-        self.config = rospy.get_param("~tag_payload_mission", {})
+        # ``tag_payload_mission.launch`` historically loaded
+        # ``config/flight/tag_payload_mission.yaml`` at the global namespace,
+        # creating ``/tag_payload_mission``.  A private ``~tag_payload_mission``
+        # lookup resolves to ``/tag_payload_mission/tag_payload_mission`` and
+        # therefore silently fell back to code defaults.  Read the private key
+        # first, then the existing global key so field edits in the YAML really
+        # drive the aircraft mission.
+        if rospy.has_param("~tag_payload_mission"):
+            self.config = rospy.get_param("~tag_payload_mission")
+            self.config_source = "private"
+        else:
+            self.config = rospy.get_param("/tag_payload_mission", {})
+            self.config_source = "global"
         if not isinstance(self.config, dict):
             raise ValueError("~tag_payload_mission must be a YAML dictionary")
 
@@ -314,6 +326,11 @@ class TagPayloadMission(object):
         rospy.logwarn("tag payload mission launched: enable_control=%s auto_mode=%s auto_arm=%s auto_land=%s enable_payload=%s",
                       self.enable_control, self.auto_mode, self.auto_arm,
                       self.auto_land, self.enable_payload)
+        rospy.logwarn("tag payload mission config source=%s takeoff_height=%.2f first=(%.2f,%.2f,%.2f) drop=(%.2f,%.2f,%.2f) skip_tag_alignment=%s",
+                      self.config_source, self.takeoff_height,
+                      self.first_xy["x"], self.first_xy["y"], self.first_xy["z"],
+                      self.drop_scan_xy["x"], self.drop_scan_xy["y"], self.drop_scan_xy["z"],
+                      getattr(self, "skip_tag_alignment", False))
 
     def _cfg(self, key, default):
         return self.config.get(key, default)
