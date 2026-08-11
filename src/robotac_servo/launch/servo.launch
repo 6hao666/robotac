@@ -1,5 +1,5 @@
 <launch>
-  <arg name="port" default="/dev/robotac_servo" />
+  <arg name="port" default="/dev/ttyUSB0" />
   <arg name="baudrate" default="115200" />
   <arg name="open_angle" default="45" />
   <arg name="initial_open" default="false" />

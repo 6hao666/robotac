@@ -12,7 +12,7 @@
   <arg name="live_flight" default="false" />
   <arg name="fcu_url" default="serial:///dev/ttyACM0:921600" />
   <arg name="video_device" default="/dev/robotac_rgb_camera" />
-  <arg name="servo_port" default="/dev/robotac_servo" />
+  <arg name="servo_port" default="/dev/ttyUSB0" />
   <arg name="rviz" default="false" />
 
   <include file="$(find robotac_bringup)/launch/full_system.launch">

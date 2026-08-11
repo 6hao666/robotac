@@ -101,7 +101,7 @@ def bool_param(name: str, default: bool) -> bool:
 
 class ServoSwitch:
     def __init__(self) -> None:
-        self.port = rospy.get_param("~port", "/dev/robotac_servo")
+        self.port = rospy.get_param("~port", "/dev/ttyUSB0")
         self.baudrate = int(rospy.get_param("~baudrate", BAUDRATE))
         self.open_angle = int(rospy.get_param("~open_angle", DEFAULT_OPEN_ANGLE))
         if not 0 <= self.open_angle <= 180:

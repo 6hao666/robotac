@@ -167,7 +167,7 @@ for expected in (
     "DEFAULT_OPEN_ANGLE = 45",
     "MIN_DUTY = 3",
     "MAX_DUTY = 12",
-    '"/dev/robotac_servo"',
+    '"/dev/ttyUSB0"',
 ):
     if expected not in source:
         raise SystemExit(f"Servo protocol check failed: missing {expected}")

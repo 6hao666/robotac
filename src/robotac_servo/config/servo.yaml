@@ -1,5 +1,5 @@
 # USB PWM controller protocol used by yundrone_blink.
-port: /dev/robotac_servo
+port: /dev/ttyUSB0
 baudrate: 115200
 open_angle: 45
 initial_open: false

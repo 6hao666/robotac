@@ -1,0 +1,51 @@
+<launch>
+  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
+  <arg name="mission_file" default="$(arg config_root)/flight/tag_payload_mission.yaml" />
+  <arg name="deployment_file" default="$(arg config_root)/deployment.yaml" />
+
+  <!-- Safe defaults: launch-time startup is passive.  Actual FCU output,
+       mode changes, arming, landing, and servo output require explicit args
+       plus a later /robotac/tag_payload_mission/start service call. -->
+  <arg name="enable_control" default="false" />
+  <arg name="auto_mode" default="false" />
+  <arg name="auto_arm" default="false" />
+  <arg name="auto_land" default="false" />
+  <arg name="enable_payload" default="false" />
+
+  <arg name="local_odom_topic" default="/mavros/local_position/odom" />
+  <arg name="state_topic" default="/mavros/state" />
+  <arg name="extended_state_topic" default="/mavros/extended_state" />
+  <arg name="setpoint_topic" default="/mavros/setpoint_raw/local" />
+  <arg name="tag_detections_topic" default="/tag_detections" />
+  <arg name="payload_topic" default="/robotac_servo/control" />
+  <arg name="payload_status_topic" default="/robotac_servo/status" />
+  <arg name="payload_required_connection" default="true" />
+  <arg name="payload_require_ack" default="true" />
+  <arg name="payload_ack_timeout" default="1.0" />
+  <arg name="require_setpoint_consumer" default="true" />
+  <arg name="setpoint_consumer_node" default="/mavros" />
+
+  <rosparam command="load" file="$(arg deployment_file)" />
+  <rosparam command="load" file="$(arg mission_file)" />
+
+  <node pkg="robotac_flight" type="tag_payload_mission.py"
+        name="tag_payload_mission" output="screen">
+    <param name="enable_control" value="$(arg enable_control)" />
+    <param name="auto_mode" value="$(arg auto_mode)" />
+    <param name="auto_arm" value="$(arg auto_arm)" />
+    <param name="auto_land" value="$(arg auto_land)" />
+    <param name="enable_payload" value="$(arg enable_payload)" />
+    <param name="local_odom_topic" value="$(arg local_odom_topic)" />
+    <param name="state_topic" value="$(arg state_topic)" />
+    <param name="extended_state_topic" value="$(arg extended_state_topic)" />
+    <param name="setpoint_topic" value="$(arg setpoint_topic)" />
+    <param name="tag_detections_topic" value="$(arg tag_detections_topic)" />
+    <param name="payload_topic" value="$(arg payload_topic)" />
+    <param name="payload_status_topic" value="$(arg payload_status_topic)" />
+    <param name="payload_required_connection" value="$(arg payload_required_connection)" />
+    <param name="payload_require_ack" value="$(arg payload_require_ack)" />
+    <param name="payload_ack_timeout" value="$(arg payload_ack_timeout)" />
+    <param name="require_setpoint_consumer" value="$(arg require_setpoint_consumer)" />
+    <param name="setpoint_consumer_node" value="$(arg setpoint_consumer_node)" />
+  </node>
+</launch>

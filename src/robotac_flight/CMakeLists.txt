@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(robotac_flight)
 
 find_package(catkin REQUIRED COMPONENTS
+  apriltag_ros
   geometry_msgs
   mavros_msgs
   nav_msgs
@@ -27,6 +28,7 @@ catkin_install_python(PROGRAMS
   scripts/local_waypoint_flight.py
   scripts/preview_local_route.py
   scripts/publish_waypoints.py
+  scripts/tag_payload_mission.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

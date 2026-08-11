@@ -172,10 +172,9 @@ deliberately add global-position plugins back to the MAVROS plugin list.
 Do not launch `camera_extrinsics.launch` with its zero defaults on an aircraft:
 pass the measured `base_link -> camera_rgb_optical_frame` transform first.
 
-For the servo controller, install `config/udev/99-robotac-servo.rules.template`
-as `/etc/udev/rules.d/99-robotac-servo.rules`, reload udev, and ensure the
-runtime user can access the `dialout` group. The known HL-340 controller is
-`1a86:7523` and is exposed as `/dev/robotac_servo`.
+For the servo controller, ensure the runtime user can access the `dialout`
+group. The known HL-340 controller is `1a86:7523`; current aircraft defaults
+use the direct serial device `/dev/ttyUSB0`.
 
 The servo package exposes only `/robotac_servo/control` (`std_msgs/Bool`):
 `false` commands 0 degrees and `true` commands the configured opening angle,
@@ -198,7 +197,7 @@ can run independently, but `enable_mavros_output:=true` or
 `enable_control:=true` is rejected by the node itself until the relevant gates
 are `true`. Flight control additionally requires recorded PX4 Offboard-loss
 failsafe behavior and a ground-test result; payload control also requires a
-stable `/dev/robotac_servo` device. Do not set those values until the FAST-LIO
+stable `/dev/ttyUSB0` servo device. Do not set those values until the FAST-LIO
 axes and `body -> base_link` extrinsics have been measured, PX4 external-vision
 fusion has been confirmed, and ground checks have passed. The checked-in
 transforms are identity bench defaults, not flight calibration.
@@ -973,6 +972,69 @@ rostopic echo -n 1 /tag_detections
 `camera_extrinsics.launch` is intentionally standalone and defaults to a zero
 transform. Pass measured values before using its TF for navigation, for example
 `roslaunch robotac_bringup camera_extrinsics.launch x:=... y:=... z:=...`.
+
+## AprilTag payload mission
+
+The dedicated AprilTag payload mission is implemented by
+`robotac_flight/scripts/tag_payload_mission.py`. It is separate from the older
+local waypoint box mission and keeps the same safety model: launching the node
+does not arm, switch modes, send FCU setpoints, land, or open the payload until
+the explicit start service succeeds.
+
+Mission frame and route are configured in `config/flight/tag_payload_mission.yaml`:
+
+- Mission frame is captured when `/robotac/tag_payload_mission/start` is called.
+- `+x` is aircraft nose/front, `+y` is aircraft right, `+z` is up.
+- Route: take off to `0.30 m`, fly to `(x=2, y=2, z=0.30)`, fly to
+  `(x=4, y=0, z=0.80)`, wait `2 s`, confirm drop tag ID `1` with 15 stable
+  detections, overfly it at `0.30 m`, wait `1 s`, open payload, return through
+  `(x=2, y=2, z=0.30)` and `(x=0, y=0, z=0.30)`, confirm landing tag ID `0`
+  with 15 stable detections, overfly it at `0.30 m`, then command `AUTO.LAND`.
+- Tag stability uses `tag_stable_samples: 15` and `tag_jump_threshold: 0.05 m`.
+
+Safe launch for code/graph inspection:
+
+```bash
+roslaunch robotac_bringup tag_payload_mission_full.launch live_flight:=false
+```
+
+Live launch template, only after camera TF, AprilTag, local position, MAVROS,
+payload status, and PX4 mode/arming checks are confirmed:
+
+```bash
+roslaunch robotac_bringup tag_payload_mission_full.launch \
+  live_flight:=true \
+  fcu_url:=serial:///dev/ttyTHS0:921600 \
+  camera_extrinsics_enabled:=true \
+  camera_x:=... camera_y:=... camera_z:=... \
+  camera_roll:=... camera_pitch:=... camera_yaw:=...
+```
+
+Start/abort/status interfaces:
+
+```bash
+rosservice call /robotac/tag_payload_mission/start "{}"
+rosservice call /robotac/tag_payload_mission/abort "{}"
+rostopic echo /robotac/tag_payload_mission/status
+rostopic echo /robotac/tag_payload_mission/confirmed_tag_pose
+rostopic echo /robotac/tag_payload_mission/setpoint_preview
+```
+
+The full mission requires a valid TF chain from the local odometry frame
+usually `map` to the AprilTag detection frame, typically through
+`map -> base_link -> camera_rgb_optical_frame`. Do not enable
+`camera_extrinsics_enabled` with placeholder zero extrinsics on the aircraft.
+
+Hardware-isolated integration test on Ubuntu/ROS Noetic after a catkin build:
+
+```bash
+src/robotac_flight/test/run_tag_payload_mission_sim.sh
+```
+
+The test starts a private `roscore`, simulates MAVROS/local odometry/AprilTag
+ID `1` and `0`/payload acknowledgement, calls the mission start service, and
+expects the mission to complete with OFFBOARD, one payload open command, the
+configured route, and AUTO.LAND.
 
 ## macOS to Ubuntu sync
 

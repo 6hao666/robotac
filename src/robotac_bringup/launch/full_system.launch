@@ -28,7 +28,7 @@
   <arg name="flight_setpoint_consumer_node" default="/mavros" />
   <!-- Servo hardware is independent and never starts unless explicitly asked. -->
   <arg name="enable_servo" default="false" />
-  <arg name="servo_port" default="/dev/robotac_servo" />
+  <arg name="servo_port" default="/dev/ttyUSB0" />
   <arg name="servo_open_angle" default="45" />
   <arg name="servo_close_on_shutdown" default="true" />
   <!-- Telemetry is passive; PX4 output/control requires an explicitly requested FCU connection. -->
