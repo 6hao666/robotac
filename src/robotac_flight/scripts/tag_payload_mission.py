@@ -200,6 +200,7 @@ class TagPayloadMission(object):
         self.land_descent_rate = _finite_float(
             self._cfg("land_descent_rate", 0.25), "land_descent_rate")
         self.auto_land_required = _as_bool(self._cfg("auto_land_required", True))
+        self.skip_tag_alignment = _as_bool(self._cfg("skip_tag_alignment", False))
 
         self.position_tolerance = _finite_float(
             self._cfg("position_tolerance", 0.18), "position_tolerance")
@@ -785,7 +786,10 @@ class TagPayloadMission(object):
         elif self.state == MissionState.DROP_STABILIZE:
             self._publish_setpoint(self.target)
             if now - self.state_started >= self.drop_stabilize_seconds:
-                self._enter(MissionState.DROP_TAG_SCAN)
+                if self.skip_tag_alignment:
+                    self._enter(MissionState.PAYLOAD_WAIT)
+                else:
+                    self._enter(MissionState.DROP_TAG_SCAN)
         elif self.state == MissionState.DROP_TAG_SCAN:
             self._publish_setpoint(self.target)
             if self.tag_tracker.confirmed_pose is not None:
@@ -824,7 +828,10 @@ class TagPayloadMission(object):
             self.target = self._body_right_target(self.home_xy)
             self._publish_setpoint(self.target)
             if self._hold_reached(self.target):
-                self._enter(MissionState.LAND_TAG_SCAN)
+                if self.skip_tag_alignment:
+                    self._enter(MissionState.LANDING if self.auto_land else MissionState.WAIT_LAND)
+                else:
+                    self._enter(MissionState.LAND_TAG_SCAN)
             elif now - self.state_started > self.segment_timeout:
                 self._abort("return_home_timeout")
         elif self.state == MissionState.LAND_TAG_SCAN:
@@ -888,6 +895,7 @@ class TagPayloadMission(object):
             "tag_stable_samples": self.tag_stable_samples,
             "tag_jump_threshold": self.tag_jump_threshold,
             "tag_overfly_height": self.tag_overfly_height,
+            "skip_tag_alignment": self.skip_tag_alignment,
             "return_first_point": self.return_first_xy,
             "home_point": self.home_xy,
             "payload_wait_seconds": self.payload_wait_seconds,
