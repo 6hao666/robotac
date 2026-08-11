@@ -42,7 +42,10 @@ tag_payload_mission:
   segment_timeout: 60.0
   mission_timeout: 600.0
   local_pose_timeout: 0.50
-  state_timeout: 1.0
+  # MAVROS /state is commonly about 1 Hz on the aircraft. Keep this comfortably
+  # above one period so normal scheduler jitter does not abort the mission
+  # before OFFBOARD/arming requests are sent.
+  state_timeout: 3.0
   extended_state_timeout: 1.0
   max_local_position_speed: 8.0
 

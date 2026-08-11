@@ -204,7 +204,7 @@ class TagPayloadMission(object):
         self.mission_timeout = _finite_float(self._cfg("mission_timeout", 600.0), "mission_timeout")
         self.local_pose_timeout = _finite_float(
             self._cfg("local_pose_timeout", 0.5), "local_pose_timeout")
-        self.state_timeout = _finite_float(self._cfg("state_timeout", 1.0), "state_timeout")
+        self.state_timeout = _finite_float(self._cfg("state_timeout", 3.0), "state_timeout")
         self.extended_state_timeout = _finite_float(
             self._cfg("extended_state_timeout", 1.0), "extended_state_timeout")
         self.max_local_position_speed = _finite_float(
