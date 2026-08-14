@@ -1,1048 +1,183 @@
-# Robotac ROS Noetic Workspace
+# Robotac 无人机竞赛工作空间
 
-This workspace is staged on macOS and built on Ubuntu 20.04 with ROS Noetic.
-It contains a Livox MID360s driver, FAST-LIO, a V4L2 RGB webcam, MAVROS for
-PX4, AprilTag detection, and the local `robotac_servo` switch package. No
-Sunray private control packages or messages are included.
+Robotac 是面向 ROBOTAC AIROBOTIC C 组无人机任务的 ROS Noetic 工作空间。
+该工作空间集成 Livox MID360、FAST-LIO、RGB 相机、AprilTag、MAVROS/PX4 和投放舵机，
+构成可分级验证的实机任务系统。
 
-## Source layout
+本仓库供参赛选手和指导老师进行部署、验证与二次开发。使用者应具备 Linux 命令行和
+ROS 基础，无须预先掌握本项目的节点关系。
 
-- `src/livox_ros_driver2`: Sunray-validated Livox ROS1 driver.
-- `src/Livox-SDK2`: Livox SDK required by the driver.
-- `src/fast_lio`: Sunray-validated FAST-LIO source.
-- `src/web_cam`: V4L2 RGB camera driver.
-- `src/mavros`: official MAVROS 1.21.1 source.
-- `src/apriltag` and `src/apriltag_ros`: official AprilTag 3 source and ROS wrapper.
-- `src/robotac_bringup`: project launch files and runtime checks.
-- `src/robotac_flight`: FAST-LIO vision adapter and safety-gated local ENU
-  waypoint flight state machine.
-- `src/robotac_servo`: Boolean switch for the channel-1 USB PWM servo controller
-  used by `yundrone_blink`.
+> **安全提示：** 本项目包含可能影响真实无人机的控制程序。任何实机操作都必须
+> 在合规封闭场地内，由指导老师或现场安全负责人组织，并完成标定、地面检查、
+> PX4 失控保护确认和人员隔离。编译通过或话题正常出数均不构成实机起飞条件。
 
-Exact source revisions are recorded in `versions.lock`. Official git sources
-are also described in `.repos` for `vcs import` users.
+## 本 Repo 作用
 
-## Ubuntu build
+- 接收 MID360 点云和 IMU 数据，运行 FAST-LIO 本地定位。
+- 将经过坐标系校准和健康检查的位姿送入 MAVROS 外部视觉接口。
+- 采集 RGB 图像并识别 AprilTag。
+- 以本地相对坐标执行航点、目标对准、投放、返航和降落任务。
+- 控制 USB PWM 舵机，并检查串口写入状态。
+- 通过离线、仿真、只读观察和实机证据工具逐级验证系统。
 
-Copy this workspace to Ubuntu, then run:
+本 Repo 不构成可直接投入飞行的成品飞控，也不替代 PX4 参数配置、传感器标定、现场安全制度
+或组委会规则。仓库中的航线、Tag 编号、等待时间和超时参数都是历史开发示例，
+不得直接作为当前比赛参数使用。
+
+## 系统组成
+
+| 模块 | 主要职责 |
+| --- | --- |
+| `src/robotac_bringup` | 组合相机、雷达、FAST-LIO、MAVROS、AprilTag 和任务节点 |
+| `src/robotac_flight` | 外部视觉转换、飞行前检查、航点与竞赛任务状态机 |
+| `src/robotac_servo` | USB PWM 舵机开关控制与写入状态发布 |
+| `src/livox_ros_driver2`、`src/Livox-SDK2` | Livox 驱动与 SDK |
+| `src/fast_lio` | 激光雷达惯性里程计 |
+| `src/mavros` | PX4 与 ROS 之间的 MAVLink 接口 |
+| `src/apriltag`、`src/apriltag_ros` | AprilTag 检测与 ROS 封装 |
+| `src/web_cam` | V4L2 RGB 相机驱动 |
+| `config` | 项目级硬件、标定、任务和安全门禁配置 |
+| `scripts` | 构建、同步、只读检查、证据采集和离线审计工具 |
+
+第三方目录保留上游原文、许可证和变更记录。项目自有中文说明统一放在本页和
+[`docs/`](docs/README.md) 中。
+
+## 支持环境
+
+- 机载计算机：能够运行 Ubuntu 20.04 的 x86_64 或 aarch64 设备。
+- 操作系统：Ubuntu 20.04。
+- ROS：ROS Noetic。
+- 飞控：PX4，通过 MAVROS 串口连接。
+- 雷达：Livox MID360 系列。
+- 相机：V4L2 兼容 RGB 相机。
+- 投放机构：兼容当前串口协议的 USB PWM 控制器。
+
+macOS 仅用于编辑、版本管理和源码同步，不属于本仓库支持的 ROS 构建与运行平台。
+精确上游版本见 [`versions.lock`](versions.lock)，源码来源见 [`.repos`](.repos)。
+
+## 离线验证入口
+
+以下步骤仅执行源码和构建检查，不连接设备、不启动 ROS、不发送任何飞行命令。
+
+### 1. 前置阅读
+
+前置阅读顺序如下：
+
+1. [项目总览](docs/01-project-overview.md)
+2. [环境与构建](docs/02-environment-and-build.md)
+3. [硬件与配置](docs/03-hardware-and-configuration.md)
+4. [安全与验证](docs/06-safety-and-validation.md)
+
+### 2. Ubuntu 工作空间准备
+
+仓库应位于 Ubuntu 20.04 主机的工作目录中，例如：
 
 ```bash
-cd ~/robotac_ws
+cd <工作空间目录>
 ./scripts/bootstrap_ubuntu20.sh
+```
+
+该脚本负责安装本仓库所需的本机依赖、解析 ROS 依赖并执行 catkin 构建。
+执行前须审阅脚本，并确认软件源、权限和磁盘空间符合所在实验室要求。
+
+### 3. 环境加载与离线检查
+
+```bash
+cd <工作空间目录>
+source /opt/ros/noetic/setup.bash
 source devel/setup.bash
+./scripts/check_flight_contract.py
 ./scripts/verify_workspace.sh
 ```
 
-The bootstrap script installs the Livox SDK and the native AprilTag library,
-then installs ROS dependencies, MAVROS GeographicLib data, and performs a ROS1
-catkin build. Do not install the apt MAVROS package alongside this source build.
-The bootstrap script recreates `src/apriltag/CATKIN_IGNORE` before building;
-this is required because AprilTag is installed as a native CMake library and
-then linked by `apriltag_ros`.
+上述检查用于验证文件、参数契约、包发现和测试入口。检查通过不足以证明实机标定完成，
+也不足以证明无人机具备安全起飞条件。
 
-## One-command aircraft deployment
-
-For a prepared aircraft image with Ubuntu 20.04, ROS Noetic, SSH access, and
-the basic build dependencies already installed, deploy from the Mac checkout
-with:
-
-```bash
-cd /Users/liyh/RoboTac
-ROBOTAC_SSH_PASSWORD='<ssh-password>' ./scripts/deploy_aircraft.sh 192.168.10.66 \
-  --lidar-ip 192.168.1.171 \
-  --mavros-port /dev/ttyTHS0
-```
-
-The script performs the standard safe deployment path:
-
-- creates `/home/yundrone/robotac_ws` on the aircraft;
-- syncs the current source tree with `rsync`, excluding `.git`, `build`,
-  `devel`, `install`, logs, bags, PCDs, and Python caches;
-- adds the remote user to `dialout` and `video` when sudo is available;
-- optionally patches `config/lidar/mid360s.json` with `--lidar-ip`;
-- rebuilds and installs native `Livox-SDK2` and `apriltag`, then runs
-  `catkin_make -DCMAKE_BUILD_TYPE=Release -DROS_EDITION=ROS1`;
-- verifies important ROS packages and launch parsing; and
-- runs read-only MAVROS plus MID360/FAST-LIO smoke tests unless
-  `--skip-readonly-tests` is supplied.
-
-The runtime smoke tests are intentionally passive. They start MAVROS, the Livox
-driver, and FAST-LIO only long enough to subscribe to telemetry/sensor topics.
-They do **not** call MAVROS services, arm, change mode, publish setpoints, call
-`/robotac/flight/start`, or start the flight controller. Use
-`--skip-build`, `--skip-native-install`, or `--skip-readonly-tests` when only a
-subset of the deployment path is required. Use repeated `--mavros-port` flags to
-try multiple ports, for example `--mavros-port /dev/ttyTHS0 --mavros-port
-/dev/ttyTHS1`.
-
-Do not hard-code aircraft passwords in the repository. Pass the password through
-`ROBOTAC_SSH_PASSWORD` or use SSH keys. The tested new-aircraft command for
-`192.168.10.66` is shown above; that aircraft used `wlan0=192.168.10.66`,
-`eth0=192.168.1.5`, MID360 `192.168.1.171`, and PX4 on
-`/dev/ttyTHS0:921600`.
-
-## 2026-08-09 aircraft deployment notes
-
-New aircraft `192.168.10.66` was deployed and tested with the safety constraint
-that no control, arming, mode change, setpoint, or flight-start command could be
-sent. The final result was successful:
-
-- `catkin_make -DCMAKE_BUILD_TYPE=Release` completed on the aircraft;
-- MAVROS on `serial:///dev/ttyTHS0:921600` reported `/mavros/state.connected:
-  True`, `armed: False`, and valid `/mavros/imu/data`;
-- `/dev/ttyTHS1` was not present on this aircraft; available onboard serial
-  devices were `ttyTHS0`, `ttyTHS3`, and `ttyTHS4`;
-- the MID360 host NIC was `eth0=192.168.1.5/24`, matching the config host IP;
-- the actual MID360 IP was `192.168.1.171`, not the previous aircraft's
-  `192.168.1.145`; and
-- FAST-LIO produced `/Odometry` at about 10 Hz and `/cloud_registered` at about
-  10 Hz after the LiDAR IP was corrected.
-
-Issues found and fixes applied:
-
-- **Clean FAST-LIO build ordering:** a clean machine failed with
-  `fatal error: fast_lio/Pose6D.h: No such file or directory` because
-  `fastlio_mapping` could build before message generation. `src/fast_lio` now
-  adds explicit dependencies on generated catkin targets for `fastlio_mapping`
-  and `transform_odom_pointCloud`.
-- **MAVROS GeographicLib dependency:** the aircraft image had
-  `geographiclib-tools` but no readable `egm96-5` geoid dataset. The upstream
-  MAVROS UAS constructor treated that as fatal even though Robotac's default
-  MAVROS plugin list is local-only. `src/mavros` now downgrades a missing geoid
-  to a warning and leaves altitude geoid conversion disabled. Install the geoid
-  dataset before re-enabling `global_position` plugins.
-- **Slow GeographicLib download path:** the stock MAVROS dataset installer tried
-  to fetch from SourceForge and stalled for several minutes. The local-only
-  MAVROS configuration avoids requiring that download for onboard serial/IMU and
-  local-position work.
-- **Serial permissions:** `yundrone` initially lacked `dialout`, so a fresh SSH
-  session would not be able to open `/dev/ttyTHS*`. The deployment script adds
-  `dialout` automatically when sudo is available; log out/in or use a new SSH
-  session after changing group membership.
-- **MAVROS timing:** querying topics before the auto-started ROS master and
-  `/mavros` node are stable can produce `Unable to communicate with master`.
-  The deployment script waits for `/mavros` before subscribing to state/IMU.
-- **MID360 IP mismatch:** the first FAST-LIO run showed topics but no data, and
-  the Livox log reported `found lidar not defined in the user-defined config,
-  ip: 192.168.1.171`. Updating `config/lidar/mid360s.json` fixed the driver;
-  `/livox/lidar` then ran at about 10 Hz and `/livox/imu` at about 200 Hz.
-- **Process hygiene:** all runtime tests were launched only for sampling and
-  then stopped. A final process check showed no residual `roslaunch`, MAVROS,
-  Livox, or FAST-LIO test processes.
-
-## Configuration
-
-Before connecting hardware, update these files:
-
-- `config/lidar/mid360s.json`: host and LiDAR IP addresses.
-- `config/fastlio/mid360s.yaml`: LiDAR-to-IMU extrinsics and timing.
-- `config/camera/rgb.yaml`: camera calibration.
-- `config/apriltag/tags.yaml`: tag36h11 IDs 0 and 1, each with a 0.15 m
-  pose-estimation side length and 0.25 m printed total size metadata.
-- `config/mavros/px4.yaml`: PX4 frame and plugin settings.
-- `config/fastlio/path_a_vision_pose.yaml`: Sunray Path A external-vision
-  bridge settings from `/sunray/odometry` to `/mavros/vision_pose/pose`.
-- `config/fastlio/vision_bridge.yaml`: legacy covariance bridge settings for
-  `/Odometry` to `/mavros/vision_pose/pose_cov` comparison or rollback.
-- `config/flight/local_waypoints.yaml`: takeoff height, local relative ENU
-  waypoints, landing profile, and flight limits.
-- `config/flight/posearray_waypoints_example.yaml`: position-only runtime
-  waypoint example for `/robotac/flight/waypoints`.
-- `config/deployment.yaml`: deployment gate checklist.
-
-Install `config/udev/99-robotac-rgb-camera.rules.template` as
-`/etc/udev/rules.d/99-robotac-rgb-camera.rules`, reload udev rules, and ensure
-the runtime user belongs to the `video` group. The template matches the tested
-Realtek `0bda:5858` camera and only aliases its capture node (V4L2 index 0) as
-`/dev/robotac_rgb_camera`. If a different camera is used, replace the IDs and
-add its serial attribute before installing the rule. The launch can be pointed
-at a temporary device path with `video_device:=/dev/video0` while diagnosing
-udev.
-
-Install a corresponding PX4 rule from
-`config/udev/99-robotac-px4.rules.template`, and ensure the runtime user is in
-the `dialout` group. MAVROS defaults to `serial:///dev/ttyACM0:921600`.
-The default `config/mavros/px4_pluginlists.yaml` is intentionally local-only:
-it loads MAVROS command, IMU, local-position, parameter, system-status/time,
-setpoint_raw, and vision-pose plugins, while `global_position`, `gps_status`,
-and `waypoint` remain blacklisted. The local waypoint controller therefore does
-not require GPS fixes, latitude/longitude, global mission upload, or
-GeographicLib datasets. Only re-enable the GeographicLib launch check after you
-deliberately add global-position plugins back to the MAVROS plugin list.
-Do not launch `camera_extrinsics.launch` with its zero defaults on an aircraft:
-pass the measured `base_link -> camera_rgb_optical_frame` transform first.
-
-For the servo controller, ensure the runtime user can access the `dialout`
-group. The known HL-340 controller is `1a86:7523`; current aircraft defaults
-use the direct serial device `/dev/ttyUSB0`.
-
-The servo package exposes only `/robotac_servo/control` (`std_msgs/Bool`):
-`false` commands 0 degrees and `true` commands the configured opening angle,
-45 degrees by default. The PWM protocol is 115200 baud, channel 1, 50 Hz;
-integer duty quantization means nearby angles can share one duty value. The
-default launch closes on shutdown; explicitly set `close_on_shutdown:=false`
-only for a bench test that must retain the last PWM output.
-
-`full_system.launch` supports passive sensor/SLAM/AprilTag observation before
-the flight calibration gates are complete. `enable_mavros` still defaults to
-`false`; setting it to `true` explicitly opens a telemetry link only and does
-not send flight commands. Enabling external-vision output or flight control
-requires the sensor, FCU, PX4, and deployment gates in
-`config/deployment.yaml`; it is a configuration error to request either without
-explicitly enabling MAVROS. A checked-in `192.168.1.5` LiDAR host address is
-allowed only for passive diagnostics and is rejected for vision or flight output.
-
-The two `robotac_flight` launches also load `deployment.yaml`. Passive preview
-can run independently, but `enable_mavros_output:=true` or
-`enable_control:=true` is rejected by the node itself until the relevant gates
-are `true`. Flight control additionally requires recorded PX4 Offboard-loss
-failsafe behavior and a ground-test result; payload control also requires a
-stable `/dev/ttyUSB0` servo device. Do not set those values until the FAST-LIO
-axes and `body -> base_link` extrinsics have been measured, PX4 external-vision
-fusion has been confirmed, and ground checks have passed. The checked-in
-transforms are identity bench defaults, not flight calibration.
-
-`full_system.launch` exposes `flight_enable_control`, `flight_auto_mode`,
-`flight_auto_arm`, `flight_auto_land`, and `flight_enable_payload` separately.
-All default to `false`; setting `flight_enable_payload:=true` without
-`flight_enable_control:=true` causes the flight node to reject startup rather
-than send a payload command. It exposes `enable_servo:=false`, `servo_port`,
-and `servo_open_angle` separately as well; the servo process never starts
-unless `enable_servo:=true` is explicit.
-
-FAST-LIO keeps the upstream local-coordinate contract: `/Odometry`,
-`/cloud_registered`, `/PointCloud`, and `/path` use `camera_init` as the world
-frame and `body` as the estimator IMU frame. These are not aliases for
-`map`/`base_link`; do not add a static transform until the LiDAR/IMU and airframe
-extrinsics have been measured and recorded in `config/fastlio/mid360s.yaml`.
-
-FAST-LIO PCD writing is disabled by default. Set `pcd_save:=true` on the
-FAST-LIO launch only after verifying sufficient free disk and memory.
-
-## Launches
-
-```bash
-roslaunch robotac_bringup camera_rgb.launch
-roslaunch robotac_bringup lidar_mid360s.launch
-roslaunch robotac_bringup fastlio_mid360s.launch
-roslaunch robotac_bringup mapping_demo.launch rviz:=true
-roslaunch robotac_bringup mavros_px4.launch fcu_url:=serial:///dev/ttyACM0:921600
-roslaunch robotac_bringup apriltag_rgb.launch
-roslaunch robotac_servo servo.launch
-roslaunch robotac_bringup full_system.launch enable_mavros:=false
-roslaunch robotac_flight path_a_vision_pose.launch enable_mavros_output:=false
-roslaunch robotac_flight local_flight_preflight.launch require_vision_output:=false
-roslaunch robotac_flight local_waypoint_flight.launch enable_control:=false
-roslaunch robotac_bringup payload_drop_box_test.launch live_flight:=false
-roslaunch robotac_flight active_flight_observer.launch
-```
-
-For a read-only FCU telemetry session, use
-`full_system.launch enable_mavros:=true` with the intended `fcu_url`; it does
-not enable vision output, mode changes, arming, or setpoint transmission. The
-two `robotac_flight` launches are passive by default. The vision bridge
-publishes only `/robotac/fastlio_vision/path_a_pose_preview`; the waypoint node
-publishes only `/robotac/flight/setpoint_preview`. Nothing is sent to MAVROS
-until the corresponding output gate is explicitly enabled, and the flight
-state machine still requires a separate `/robotac/flight/start` service call.
-
-For the staged path from offline checks to read-only aircraft observation, run:
+### 4. 分级验证流程
 
 ```bash
 ./scripts/flight_test_ladder.sh
 ```
 
-This helper is offline by default: it runs `verify_workspace.sh`, previews the
-configured local route, prints the deployment-gate status, and then prints the
-next read-only aircraft commands. It never starts ROS nodes, opens serial
-devices, sends setpoints, changes modes, arms, or calls MAVROS services. Active
-flight commands are hidden unless `--show-active` is supplied, and even then the
-script refuses to print them until all of the following pass: the active-flight
-deployment gates in `config/deployment.yaml`, the `active_local_flight`
-readiness report, preview-only FAST-LIO frame-alignment evidence supplied via
-`--frame-alignment-evidence-dir`, and the read-only MAVROS/PX4 evidence bundle
-supplied via `--evidence-dir`. That read-only bundle must include both
-subscriber-only topic evidence and the `ev_acceptance_observer.json` result
-proving PX4/MAVROS local position moved in the same direction and scale as the
-FAST-LIO vision-pose input while the vehicle was connected, disarmed, and on the
-ground. The final payload mission block is hidden separately until
-`payload_local_flight` readiness passes. Use
-`--skip-verify` only when you are iterating on the printed route/command ladder
-and have just run the full workspace verification separately.
-When this script is run from the Mac source checkout, its validation still reads
-local files, but the copy/paste aircraft commands default to the deployed
-workspace path `${HOME}/robotac_ws`. Override that printed target with
-`--deploy-workspace /path/to/robotac_ws` or `--deploy-route-file /path/to/route.yaml`
-if the aircraft checkout lives somewhere else.
+该脚本默认仅执行离线检查并打印后续阶段说明，不会启动 ROS、打开串口、改变模式、
+解锁飞控或调用任务启动服务。进入实机阶段前，须依据
+[安全与验证](docs/06-safety-and-validation.md) 完成逐级审核。
 
-To inspect the same evidence matrix directly, run the offline readiness report:
+## 配置前置要求
 
-```bash
-rosrun robotac_flight local_flight_readiness.py \
-  --config-root ~/robotac_ws/config \
-  --route-file ~/robotac_ws/config/flight/local_waypoints.yaml
-```
+项目配置不得跨飞机直接复用。至少须现场确认：
 
-It reports separate readiness for `vision_output`, `active_local_flight`, and
-`payload_local_flight`. By default it only reports; add
-`--require-phase vision_output`, `--require-phase active_local_flight`, or
-`--require-phase payload_local_flight` when you want the command to fail closed
-until that stage is truly ready.
+- MID360 与机载计算机的网络地址、网卡和数据端口。
+- PX4 串口设备、波特率、权限和稳定设备别名。
+- RGB 相机设备、内参、畸变参数和图像方向。
+- 雷达、IMU、机体、相机之间的外参和坐标轴方向。
+- PX4 外部视觉融合、时间同步和 Offboard 失联保护。
+- 舵机设备、关舱角度、开舱角度和机械限位。
+- 最新正式规则中的场地尺寸、Tag 编号、任务时间和判分条件。
 
-To check the source/configuration contract for the whole local-flight goal
-without ROS or aircraft access, run:
+对应文件与门禁说明见 [硬件与配置](docs/03-hardware-and-configuration.md)。禁止将
+`camera_extrinsics.launch` 的零值、FAST-LIO 的单位外参或示例航线当作实机标定值。
+
+## 运行边界
+
+本仓库对“数据可观测”和“飞行输出”实行隔离：
+
+- FAST-LIO 和外部视觉节点默认只发布预览话题。
+- `full_system.launch` 默认不启用 MAVROS。
+- 航点和竞赛任务 launch 默认 `enable_control:=false`。
+- 自动切换模式、自动解锁、自动降落和投放均有独立开关，默认关闭。
+- 外部视觉输出和飞行控制还受 `config/deployment.yaml` 门禁约束。
+- 飞行状态机启动前将检查数据新鲜度、坐标系、消费者、时间同步和飞控状态。
+
+上述门禁属于强制安全约束，用于阻止不完整配置进入控制路径，不得绕过。本文档不提供
+绕过标定、伪造检查结果或无人监管起飞的方法。
+
+## 当前验证状态
+
+| 层级 | 当前证据 | 结论边界 |
+| --- | --- | --- |
+| 源码与构建 | 工作空间构建、静态契约和离线测试已有记录 | 说明代码可构建，不说明硬件适配完成 |
+| 被动实机链路 | MAVROS 被动连接、MID360 数据、FAST-LIO 输出已有记录 | 说明通信和定位链路曾工作，不说明可控飞行 |
+| 仿真 | 任务状态流转、航点、投放指令和异常门禁有覆盖 | 说明软件闭环可测试，不等同真实动力学和环境 |
+| 完整实飞 | 尚无足够公开证据 | 不声明完成赛道自主飞行或重复投放精度 |
+| 规则适配 | 参数来自历史开发阶段 | 不声明与当前最终规则完全一致 |
+
+详细验证矩阵和证据要求见 [安全与验证](docs/06-safety-and-validation.md)。正式比赛始终以
+组委会最新规则、技术通知、现场裁判解释和安全要求为准。
+
+## 文档导航
+
+| 文档 | 内容 |
+| --- | --- |
+| [文档索引](docs/README.md) | 文档目录与阅读顺序 |
+| [项目总览](docs/01-project-overview.md) | Repo 定位、系统组成与数据流 |
+| [环境与构建](docs/02-environment-and-build.md) | Ubuntu 20.04 环境准备与构建流程 |
+| [硬件与配置](docs/03-hardware-and-configuration.md) | 单机设备、标定与部署门禁要求 |
+| [架构与接口](docs/04-architecture-and-interfaces.md) | launch、节点、话题、服务与坐标系定义 |
+| [竞赛任务](docs/05-competition-mission.md) | C 组任务状态机与参数复核要求 |
+| [安全与验证](docs/06-safety-and-validation.md) | 离线检查至受控实飞的分级验证要求 |
+| [部署与运维](docs/07-deployment-and-operations.md) | 同步、构建、取证与进程清理流程 |
+| [故障排查](docs/08-troubleshooting.md) | 常见故障的安全定位方法 |
+| [开发与上游](docs/09-development-and-upstream.md) | 脚本、测试、版本和第三方边界 |
+
+## 开发规范
+
+- 修改任务逻辑前，应复现离线检查和仿真结果。
+- 参数变更必须记录依据、单位、坐标系、测量方法和回退值。
+- 实机日志须标注软件版本、配置版本、验证级别和现场条件。
+- 仓库中不得提交密码、真实设备地址、个人绝对路径、飞控 UID 或现场人员信息。
+- 不得通过修改第三方源码掩盖项目配置问题；确需修改时，须记录原因和上游差异。
+- 构建成功、话题存在、数据有频率、任务仿真通过和实机飞行成功是五种不同证据。
+
+## 许可证与贡献
+
+各第三方组件按其目录中的许可证使用。本仓库的来源锁定和本地修改边界见
+[开发与上游](docs/09-development-and-upstream.md)。提交变更前至少执行：
 
 ```bash
 ./scripts/check_flight_contract.py
+./scripts/verify_workspace.sh
+git diff --check
 ```
 
-It verifies that MAVROS remains local-only, the configured mission is local and
-relative, the controller cannot publish raw setpoints before explicit control
-enable plus `/robotac/flight/start`, Sunray Path A FAST-LIO vision output is
-gated before `/mavros/vision_pose/pose`, the legacy covariance bridge remains
-available, and the read-only/active evidence tools still cover target reach,
-landing, and payload evidence.
-
-## FAST-LIO vision input
-
-Default external vision now follows Sunray Path A:
-
-```text
-FAST-LIO /Odometry
-  -> fast_lio transform_odom_pointCloud
-  -> /sunray/odometry
-  -> robotac_flight/local_odom_to_vision_pose.py
-  -> /mavros/vision_pose/pose
-```
-
-The Path A node copies the local odometry pose into `geometry_msgs/PoseStamped`,
-preserves the FAST-LIO/Sunray timestamp, and normalizes the outgoing frame to
-`odom` so it matches the MAVROS `vision_pose` configuration. It is still gated:
-`enable_mavros_output:=false` is the default, `frame_alignment_approved` must be
-true before output can be enabled, and the same deployment gates are required
-before any FCU-bound vision pose is published. Preview is always local-only.
-
-Interfaces for the default Path A bridge:
-
-```text
-/sunray/odometry                           nav_msgs/Odometry (input)
-/robotac/fastlio_vision/path_a_pose_preview geometry_msgs/PoseStamped
-/robotac/fastlio_vision/healthy             std_msgs/Bool
-/robotac/fastlio_vision/status              std_msgs/String
-/robotac/fastlio_vision/output_enabled      std_msgs/Bool
-/mavros/vision_pose/pose                    geometry_msgs/PoseStamped (opt-in)
-```
-
-Start preview-only Path A with:
-
-```bash
-roslaunch robotac_flight path_a_vision_pose.launch enable_mavros_output:=false
-```
-
-Only after frame alignment, PX4 EKF external-vision configuration, MAVROS
-consumer checks, and deployment gates are reviewed should the MAVROS output gate
-be enabled deliberately:
-
-```bash
-roslaunch robotac_flight path_a_vision_pose.launch enable_mavros_output:=true
-rostopic hz /mavros/vision_pose/pose
-```
-
-The older covariance bridge remains available for comparison or rollback:
-
-`fastlio_vision_bridge.py` converts `/Odometry` from
-`camera_init -> body` into a `PoseWithCovarianceStamped` with local ENU and
-implicit `base_link` semantics. `PoseWithCovarianceStamped` can name only its
-parent frame, so `input_child_to_output_child_*` is the sole place to describe
-the measured `body -> base_link` transform. MAVROS then performs the ENU-to-NED
-and FLU-to-FRD conversion and sends `VISION_POSITION_ESTIMATE`; do not perform
-that conversion again in project code. The bridge preserves the LiDAR timestamp, rejects stale,
-backward, non-finite, low-rate, or jumping poses, captures the first valid
-FAST-LIO pose as the local origin by default (`zero_origin_on_start: true`),
-rejects output that exceeds the configured local radius, repairs invalid
-covariance with conservative configured values, and reports unhealthy on
-timeout. When using this legacy bridge, the flight controller can be launched
-with `vision_output_type:=pose_cov` and then requires all three live signals
-before active control: an `ok ...` bridge status, a fresh healthy signal, and a
-fresh valid message on `/mavros/vision_pose/pose_cov` with frame `odom`. A latched
-`output_enabled` value alone is never treated as proof that MAVROS is still
-receiving vision data. Before `/robotac/flight/start` accepts an active
-mission, it also checks that `/mavros` is subscribed to that exact vision-pose
-topic, which confirms the MAVROS vision-pose plugin is loaded. Active control
-also requires `/mavros` to subscribe to `/mavros/setpoint_raw/local`; this
-confirms the MAVROS setpoint_raw plugin is present before the controller tries
-to stream OFFBOARD setpoints. During the active mission, those MAVROS consumer
-checks are repeated at the configured `consumer_check_interval`; losing either
-required consumer enters `ABORT` and closes the raw setpoint transmission gate.
-The active-flight observer can also compare relative motion from
-`/mavros/local_position/odom` against the configured vision pose topic; for
-Path A this is `/mavros/vision_pose/pose`.
-
-Interfaces:
-
-```text
-/Odometry                                  nav_msgs/Odometry (input)
-/robotac/fastlio_vision/pose_preview       PoseWithCovarianceStamped
-/robotac/fastlio_vision/healthy            std_msgs/Bool
-/robotac/fastlio_vision/status             std_msgs/String
-/mavros/vision_pose/pose_cov               PoseWithCovarianceStamped (opt-in)
-```
-
-First run preview only and inspect position/orientation while moving the
-aircraft along each positive body/local axis. The preview-only frame-alignment
-observer records JSON evidence from `/robotac/fastlio_vision/path_a_pose_preview` while
-requiring `/robotac/fastlio_vision/output_enabled` to stay false, so it does not
-feed PX4 external vision:
-
-```bash
-evidence_dir=~/robotac_ws/logs/frame_alignment/$(date +%Y%m%d_%H%M%S)
-mkdir -p "${evidence_dir}"
-
-# Move the disarmed aircraft slowly in the expected +X preview direction.
-roslaunch robotac_flight fastlio_frame_alignment_observer.launch \
-  motion_name:=preview_positive_x expected_x:=1 expected_y:=0 expected_z:=0 \
-  min_translation_m:=0.30 \
-  evidence_file:="${evidence_dir}/preview_positive_x.json"
-
-# Repeat with expected_y:=1 for +Y, expected_z:=1 for +Z, and use
-# motion_type:=yaw expected_yaw_sign:=1 for a positive yaw check if needed.
-./scripts/analyze_frame_alignment_evidence.py "${evidence_dir}"
-```
-
-Treat these JSON files as evidence for the human review that sets
-`fastlio_axes_validated` and `frame_alignment_approved`; the observer never
-edits `deployment.yaml` or `path_a_vision_pose.yaml` by itself. After the
-transform and PX4 EKF configuration are confirmed, set
-`frame_alignment_approved: true` in `config/fastlio/path_a_vision_pose.yaml`:
-
-```bash
-rosrun robotac_flight check_px4_vision_config.py _check_px4_offboard_failsafe_params:=true
-roslaunch robotac_flight path_a_vision_pose.launch enable_mavros_output:=true
-rostopic hz /mavros/vision_pose/pose
-```
-
-The PX4 checker only reads parameters. Newer PX4 uses `EKF2_EV_CTRL`; older
-firmware may use `EKF2_AID_MASK`. With
-`_check_px4_offboard_failsafe_params:=true`, it also verifies that PX4 exposes
-`COM_OF_LOSS_T` and an OFFBOARD-loss action parameter (`COM_OBL_RC_ACT` or
-legacy `COM_OBL_ACT`) without changing either value. Parameter changes must be
-made deliberately for the installed firmware and are never written by this
-workspace.
-
-## Local relative flight
-
-Waypoints are metres relative to the MAVROS local position captured by the
-explicit start request. The default `robotac_start_body` frame uses the captured
-aircraft FLU axes: `x` forward, `y` left, and `z` up. The controller converts
-those fixed start-heading offsets into local ENU before publishing the MAVROS
-setpoint. Use `yaw_deg` for degrees or `yaw` for radians; either one is
-relative to the captured takeoff heading, and a waypoint must not define both.
-`robotac_local_enu` remains available for clients that deliberately want fixed
-ENU axes. No GPS, latitude, longitude, global mission item, or `CommandTOL`
-takeoff/land service is used. The estimator gate requires relative horizontal
-position and either absolute or AGL vertical validity; it does not require a
-global position fix.
-
-The state machine is:
-
-```text
-IDLE -> PAYLOAD_PREPARE -> PRESTREAM -> WAIT_OFFBOARD -> WAIT_ARMED -> TAKEOFF
-     -> WAYPOINTS -> WAIT_LAND/LANDING -> COMPLETE
-```
-
-Any connection, local-pose, FAST-LIO, estimator, mode, bounds, or timeout
-failure enters `ABORT`. During `TAKEOFF`, `WAYPOINTS`, and `WAIT_LAND`, the FCU
-must continuously report `OFFBOARD`; `LANDING` permits either `OFFBOARD` or the
-configured `AUTO.LAND` mode. MAVROS `State` and `ExtendedState` have freshness
-limits, and `COMPLETE` is reached only after fresh confirmation of
-`ON_GROUND && !armed`.
-
-Automatic health, estimator, payload, MAVROS, and OFFBOARD faults use
-`critical_fault_action: release` by default: the controller closes its raw
-MAVROS transmission gate immediately and publishes only its preview topic.
-PX4's already verified Offboard-loss behavior is then authoritative. An
-operator-triggered `/robotac/flight/abort` defaults to `release` and can only
-use a separately configured `operator_abort_action` (`hold`, `release`, or
-best-effort `land`). The `land` option never arms the aircraft and does not
-resume raw setpoints if the mode request fails or MAVROS is disconnected.
-
-Setpoints use `/mavros/setpoint_raw/local` at 20 Hz with ROS ENU values; MAVROS
-performs the NED conversion. Landing descends vertically at the configured rate
-and changes to `AUTO.LAND` near the captured local ground height. A missing
-mode change or landing confirmation times out into the same critical release
-path. It never automatically disarms.
-
-Runtime interfaces:
-
-```text
-/robotac/flight/waypoints          geometry_msgs/PoseArray (IDLE only)
-/robotac/flight/start              std_srvs/Trigger
-/robotac/flight/land               std_srvs/Trigger
-/robotac/flight/abort              std_srvs/Trigger
-/robotac/flight/reset              std_srvs/Trigger
-/robotac/flight/status             std_msgs/String
-/robotac/flight/setpoint_preview   mavros_msgs/PositionTarget
-/robotac/flight/route_manifest     std_msgs/String (JSON, latched)
-/mavros/setpoint_raw/local         mavros_msgs/PositionTarget (opt-in)
-/robotac_servo/control             std_msgs/Bool (payload opt-in only)
-/robotac_servo/status              std_msgs/String (serial-write feedback)
-```
-
-To replace the configured route at runtime, publish a `PoseArray` only while
-the controller is `IDLE`. Its `header.frame_id` must exactly match
-`robotac_start_body` (or the configured `waypoint_frame`); a missing or other
-frame is rejected. Each pose position is metres in that frame and its yaw is
-relative to the heading captured at `/robotac/flight/start`. The controller
-locks the accepted route once a mission starts; call reset before replacing it.
-`PoseArray` can carry only position and yaw, so it is for position-only routes.
-Routes with per-waypoint hold times or `payload_action` should be loaded at
-launch through `route_file` / `flight_route_file`; the default remains
-`config/flight/local_waypoints.yaml`. Use
-`config/flight/local_waypoints_simple_box.yaml` as a no-payload full-mission
-template when you want to provide a new route file without using the runtime
-`PoseArray` API.
-Every accepted route is also published on `/robotac/flight/route_manifest` as
-latched JSON. After `/robotac/flight/start`, that manifest includes the captured
-local origin, route source (`configured` or `posearray`), fingerprint, waypoint
-count, and absolute local ENU targets used for takeoff and each waypoint.
-
-To generate a full route file from a simple local waypoint list before going to
-the field, use the offline route generator. It writes only YAML: it starts no
-ROS node, opens no serial device, calls no MAVROS service, never arms, and never
-sends setpoints. The generated file keeps `require_auto_land: true` and carries
-the same FAST-LIO vision, MAVROS consumer, timesync, local-frame, fault-release,
-and landing safety fields as the checked-in templates. It also rejects GPS or
-global mission keys such as latitude, longitude, GPS, global mission, or global
-altitude fields.
-
-Example route for the planned payload test: take off to 1 m, fly forward/left/
-right/rear relative to the captured start heading, open the payload servo at the
-rear point, return home, then land:
-
-```bash
-rosrun robotac_flight create_route_file.py \
-  --output ~/robotac_ws/config/flight/my_payload_route.yaml \
-  --point 1,0,1,0 \
-  --point 0,0,1,0 \
-  --point 0,1,1,0 \
-  --point 0,0,1,0 \
-  --point 0,-1,1,0 \
-  --point 0,0,1,0 \
-  --point=-1,0,1,0 \
-  --payload-open-index 6 \
-  --append-return-home
-```
-
-Then inspect the exact controller/MAVLink route offline before loading it into
-the launch:
-
-```bash
-rosrun robotac_flight audit_local_mission.py \
-  --file ~/robotac_ws/config/flight/my_payload_route.yaml \
-  --require-payload-open
-
-rosrun robotac_flight preview_local_route.py \
-  --file ~/robotac_ws/config/flight/my_payload_route.yaml \
-  --origin-x 0 --origin-y 0 --origin-z 0 --origin-yaw-deg 0
-```
-
-For a handwritten simple YAML/JSON input, provide a `waypoints` or `points`
-list with `x`, `y`, `z`, and optional `yaw_deg`, then run:
-
-```bash
-rosrun robotac_flight create_route_file.py \
-  --input simple_points.yaml \
-  --output ~/robotac_ws/config/flight/my_route.yaml \
-  --append-return-home
-```
-
-To publish a position-only waypoint file without starting the mission or
-touching MAVROS, first dry-run the parser, then publish while the controller is
-idle:
-
-```bash
-rosrun robotac_flight audit_local_mission.py \
-  --file ~/robotac_ws/config/flight/local_waypoints.yaml \
-  --origin-x 0 --origin-y 0 --origin-z 0 --origin-yaw-deg 0 \
-  --require-payload-open
-
-rosrun robotac_flight preview_local_route.py \
-  --file ~/robotac_ws/config/flight/local_waypoints_simple_box.yaml \
-  --origin-x 0 --origin-y 0 --origin-z 0 --origin-yaw-deg 0
-
-roslaunch robotac_flight local_waypoint_flight.launch \
-  route_file:=~/robotac_ws/config/flight/local_waypoints_simple_box.yaml \
-  enable_control:=false
-
-rosrun robotac_flight publish_waypoints.py \
-  --file ~/robotac_ws/config/flight/posearray_waypoints_example.yaml \
-  --dry-run
-
-rosrun robotac_flight publish_waypoints.py \
-  --file ~/robotac_ws/config/flight/posearray_waypoints_example.yaml
-```
-
-The helper intentionally refuses YAML containing fields `PoseArray` cannot
-carry, such as `hold` or `payload_action`, unless `--allow-metadata-drop` is
-explicitly supplied. GPS/global keys such as `latitude`, `longitude`, or
-`global_position` are always rejected even with `--allow-metadata-drop`; the
-runtime waypoint API is local-only. It publishes only
-`/robotac/flight/waypoints`; it never calls `/robotac/flight/start`, never
-requests OFFBOARD, never arms, and never sends MAVROS setpoints.
-
-`audit_local_mission.py` is the first check for a new route file. It is fully
-offline and fails if the mission contains GPS/global keys, lacks
-`require_auto_land: true`, violates the route limits, or, when requested,
-contains no payload-open action. `preview_local_route.py` is also fully offline
-and prints both the controller's local ENU targets and the MAVLink local-NED
-route after MAVROS conversion. Use them together to confirm
-front/left/right/rear directions, yaw units, landing return point, and payload
-event location before any armed test.
-
-Safe dry-run launch:
-
-```bash
-roslaunch robotac_flight local_waypoint_flight.launch \
-  enable_control:=false auto_mode:=false auto_arm:=false auto_land:=false
-```
-
-With `enable_control:=false`, the node registers only the preview publisher; it
-does not register a publisher on `/mavros/setpoint_raw/local`. This keeps
-read-only evidence bundles from showing a phantom control publisher.
-
-Dedicated payload drop-box test entry point:
-
-```bash
-roslaunch robotac_bringup payload_drop_box_test.launch live_flight:=false
-```
-
-That dry-run entry starts the route and Path A wrapper without FCU-bound
-control output, automatic mode changes, arming, landing requests, or servo
-commands. The actual field entry uses the same route with live gates enabled:
-
-```bash
-roslaunch robotac_bringup payload_drop_box_test.launch live_flight:=true
-```
-
-Even with `live_flight:=true`, the aircraft does not start the route at launch;
-the operator must explicitly call:
-
-```bash
-rosservice call /robotac/flight/start "{}"
-```
-
-The route file is `config/flight/payload_drop_box_test.yaml`: takeoff to 1 m,
-fly forward 1 m and home, left 1 m and home, right 1 m and home, backward 1 m,
-open `/robotac_servo/control`, return home, then `AUTO.LAND`.
-
-The following regression test is isolated from the aircraft: it starts a
-separate loopback ROS master, a MAVROS/PX4 contract simulator, and the
-controller. It uses a non-zero local start position and a 90 degree heading to
-verify the configured body-relative route, the ROS ENU to MAVLink local-NED
-conversion, the `AUTO.LAND` handoff, and the simulated `closed -> open` payload
-sequence. It uses `config/deployment_sim.yaml`, never reads the aircraft
-deployment gates, opens no serial device, and never starts MAVROS:
-
-```bash
-src/robotac_flight/test/run_closed_loop_sim.sh
-```
-
-The runtime `PoseArray` API has its own loopback regression. It uses the public
-`publish_waypoints.py` helper to load the position-only YAML route before
-mission start, then verifies the resulting ENU and MAVLink NED routes after a
-non-zero start position and 90 degree heading. It likewise opens no serial
-device or MAVROS node:
-
-```bash
-src/robotac_flight/test/run_dynamic_waypoints_sim.sh
-```
-
-The start gate also has an isolated MAVROS setpoint-consumer regression. It
-starts the same controller against a simulator that deliberately does not
-subscribe to `/mavros/setpoint_raw/local`, then verifies that
-`/robotac/flight/start` is rejected with
-`mavros_setpoint_raw_consumer_unavailable`. This protects against entering an
-active mission when the raw setpoint path is not actually being consumed; it
-opens no serial device and never starts MAVROS:
-
-```bash
-src/robotac_flight/test/run_setpoint_consumer_gate_sim.sh
-```
-
-The corresponding FAST-LIO bridge regression starts only a loopback ROS master
-and publishes simulated `camera_init -> body` odometry. It verifies that the
-bridge preserves the FAST-LIO timestamp, emits the configured local pose, and
-requires a new health window after an invalid input frame. It never starts
-MAVROS or opens a hardware device:
-
-```bash
-src/robotac_flight/test/run_vision_bridge_sim.sh
-```
-
-The controller also has an isolated FAST-LIO-health-loss regression. It
-deliberately stops the fake vision-health stream after OFFBOARD/arming, then
-verifies that the controller enters `ABORT` and sends no raw MAVROS setpoints
-whose source timestamp is later than the controller's abort-status timestamp.
-This covers the controller's health-timeout behavior; it is separate from the
-bridge regression above:
-
-```bash
-src/robotac_flight/test/run_flight_fault_sim.sh
-```
-
-The same regression can exercise loss of the actual MAVROS vision-pose stream
-while the bridge health signal remains true:
-
-```bash
-ROBOTAC_FLIGHT_FAULT=vision_output_loss \
-  src/robotac_flight/test/run_flight_fault_sim.sh
-```
-
-It can also exercise loss of MAVROS's raw-setpoint consumer after the mission
-has already entered OFFBOARD/armed simulation. The controller must enter
-`ABORT` with `mavros_setpoint_raw_consumer_lost` and stop raw setpoint output:
-
-```bash
-ROBOTAC_FLIGHT_FAULT=setpoint_consumer_loss \
-  src/robotac_flight/test/run_flight_fault_sim.sh
-```
-
-The same consumer-loss regression exists for the MAVROS vision-pose input:
-
-```bash
-ROBOTAC_FLIGHT_FAULT=vision_consumer_loss \
-  src/robotac_flight/test/run_flight_fault_sim.sh
-```
-
-Before any active test, run the read-only local-flight preflight against the
-existing ROS graph. It subscribes to MAVROS state, grounded/disarmed status,
-local `map -> base_link` odometry, estimator health, FAST-LIO
-`camera_init -> body` odometry, bridge preview/health/status and their matching
-timestamps, MAVROS time-sync status, and optionally the MAVROS vision-pose
-input. The launch starts only the preflight node: it creates no publishers,
-sends no setpoints, opens no serial device, and does not call flight-control
-services:
-
-```bash
-roslaunch robotac_flight local_flight_preflight.launch \
-  observe_seconds:=30 require_vision_output:=false
-```
-
-After the measured transforms, PX4 external-vision parameters, and deployment
-gates have been approved, repeat it with
-`require_vision_output:=true require_timesync:=true check_px4_vision_params:=true check_px4_offboard_failsafe_params:=true require_setpoint_consumer:=true`.
-This also checks that `/mavros` is subscribed to the exact vision-pose and
-setpoint_raw topics. The PX4 parameter query is read-only and, by default, also
-requires `EKF2_EV_POS_X/Y/Z` to be zero within 0.01 m; Robotac's bridge already
-outputs the airframe `base_link` pose, so non-zero PX4 EV offsets would apply
-the external-vision lever arm twice. The OFFBOARD failsafe check verifies
-`COM_OF_LOSS_T` is within the configured bounds and that PX4 exposes an
-OFFBOARD-loss action parameter; if you want to restrict the action value for a
-specific PX4 version, pass `allowed_offboard_loss_actions:=...`. After measuring
-the FAST-LIO to FCU timing chain, add
-`require_ev_delay:=true expected_ev_delay_ms:=...` with a suitable
-`ev_delay_tolerance_ms:=...` so `EKF2_EV_DELAY` is checked instead of merely
-printed. The following regression exercises that preflight against a loopback
-ROS graph; it opens no serial device and starts no MAVROS:
-
-For strict preflight, write the result into the same evidence directory used by
-EV acceptance and topic capture:
-
-```bash
-evidence_dir=~/robotac_ws/logs/read_only_evidence/$(date +%Y%m%d_%H%M%S)
-mkdir -p "${evidence_dir}"
-roslaunch robotac_flight local_flight_preflight.launch \
-  observe_seconds:=30 require_vision_output:=true require_timesync:=true \
-  check_px4_vision_params:=true check_px4_offboard_failsafe_params:=true \
-  require_setpoint_consumer:=true \
-  evidence_file:="${evidence_dir}/local_flight_preflight.json"
-```
-
-```bash
-src/robotac_flight/test/run_flight_preflight_sim.sh
-```
-
-After the read-only preflight passes with MAVROS vision output enabled, run the
-read-only EV acceptance observer on the ground before any armed test. Keep the
-vehicle disarmed and on the ground, then slowly move it by at least the
-configured `min_motion_m` so the script can compare PX4/MAVROS
-`/mavros/local_position/odom` motion against the FAST-LIO vision input on
-`/mavros/vision_pose/pose`. It publishes nothing, calls no services, and
-does not open the FCU serial device:
-
-```bash
-# Reuse the evidence_dir created by the strict preflight step above.
-roslaunch robotac_flight ev_acceptance_observer.launch \
-  observe_seconds:=20 min_motion_m:=0.30 \
-  evidence_file:="${evidence_dir}/ev_acceptance_observer.json"
-```
-
-This observer is an acceptance evidence step, not a flight controller. It
-checks that local-position motion follows the external-vision input direction
-and scale while MAVROS is connected, disarmed, on ground, and the bridge reports
-healthy output.
-
-To capture the read-only evidence bundle for later review, run:
-
-```bash
-./scripts/collect_readonly_flight_evidence.sh \
-  --duration 8 --bag-seconds 0 \
-  --output-dir "${evidence_dir}"
-./scripts/analyze_readonly_flight_evidence.py "${evidence_dir}"
-frame_alignment_evidence_dir=~/robotac_ws/logs/frame_alignment/<timestamp_from_preview_step>
-./scripts/flight_goal_audit.py \
-  --frame-alignment-evidence "${frame_alignment_evidence_dir}" \
-  --readonly-evidence "${evidence_dir}"
-```
-
-The collector only subscribes and inspects the existing ROS graph. It records
-topic lists, topic info, one-message samples, short `rostopic hz` windows, and,
-only when requested with `--bag-seconds`, a rosbag of the relevant MAVROS,
-FAST-LIO, Livox, and vision topics. Use `--output-dir` to append this topic
-evidence to the same directory that contains `ev_acceptance_observer.json`. It
-never launches ROS nodes, publishes
-topics, calls services, changes PX4 mode, arms, or sends setpoints. The analyzer
-reads that bundle offline and reports whether `mavros_safe_state`,
-`vision_to_mavros`, and `active_preflight_evidence` are ready. Its default
-required phase is `active_preflight_evidence`, so it exits non-zero until MAVROS
-is connected, disarmed, on ground, FAST-LIO vision is healthy, MAVROS consumes
-`/mavros/vision_pose/pose`, MAVROS consumes `/mavros/setpoint_raw/local`,
-no node publishes `/mavros/setpoint_raw/local` during this read-only evidence
-window, `local_flight_preflight.json` confirms the read-only PX4 external-vision
-parameter check passed, EV acceptance passed from the same directory, and the required
-local-position, vision-pose, FAST-LIO odometry, and time-sync streams meet the
-configured rate thresholds.
-
-For a controlled test, `enable_control`, `auto_mode`, `auto_arm`, and
-`auto_land` are independent gates. Keep all automatic gates false for the first
-connected test. The checked-in route has `require_auto_land: true`, so an active
-mission start is refused unless `auto_land:=true` was explicitly supplied; this
-prevents the specified route from silently ending in a 1 m hover. Switching to
-OFFBOARD or arming manually still requires the explicit start request and all
-health checks to pass.
-
-The default route is: take off to 1 m, forward 1 m and return, left 1 m and
-return, right 1 m and return, rearward 1 m, open the payload servo, return to
-the start point, then enter `AUTO.LAND`. Payload motion has its own explicit
-gate and cannot occur unless `enable_payload:=true` is supplied together with
-`enable_control:=true`. Start `robotac_servo` separately; the flight node
-requires an active subscriber on `/robotac_servo/control`, commands it closed at
-mission start, waits for the servo node's successful serial-write acknowledgement,
-and only commands it open after the rear waypoint's hold time. The status topic
-confirms a USB serial write, not a measured servo angle or a physical payload lock.
-The flight node must receive an initial latched
-`state=... success=... seq=... boot=...` status before it accepts a start
-request; each mission command then requires a strictly newer sequence number
-from the same servo process instance.
-
-During any active local-flight test, start the read-only active-flight observer
-in a separate terminal before calling `/robotac/flight/start`:
-
-```bash
-flight_evidence_dir=~/robotac_ws/logs/active_flight_evidence/$(date +%Y%m%d_%H%M%S)
-mkdir -p "${flight_evidence_dir}"
-roslaunch robotac_flight active_flight_observer.launch \
-  evidence_file:="${flight_evidence_dir}/active_flight_observer.json"
-```
-
-The observer subscribes only to `/robotac/flight/status`,
-`/robotac/flight/setpoint_preview`, `/robotac/flight/route_manifest`,
-`/mavros/setpoint_raw/local`,
-`/mavros/local_position/odom`, `/mavros/vision_pose/pose`,
-`/robotac/fastlio_vision/output_enabled`, `/robotac/fastlio_vision/status`,
-`/mavros/state`, `/mavros/extended_state`, and servo status. It never publishes
-setpoints, calls services, arms, changes mode, or commands landing. A passing
-`active_flight_observer.json` requires the controller to reach `COMPLETE`, all
-waypoints to be consumed, controller `TAKEOFF` and `LANDING` states to appear,
-`/robotac/flight/route_manifest` to contain the `mission_started` target route,
-relative airborne altitude to have been observed, MAVROS to finish
-disarmed/on-ground, and every `TAKEOFF`/`WAYPOINTS` setpoint target to have been
-observed within the configured `waypoint_reach_tolerance` by
-`/mavros/local_position/odom` for at least `min_target_dwell_s` continuous
-seconds. `WAYPOINTS` records include the corresponding `waypoint_index`, and the
-analyzer rejects evidence that lacks a reached-and-dwelled record for any
-configured waypoint. The standalone active-evidence analyzer also requires
-actual `/mavros/setpoint_raw/local` samples and at least two unique raw
-setpoint targets, so a preview-only dry run cannot satisfy active-flight
-evidence. Those raw setpoints must cover every `target_route` item in the
-mission manifest in order. The same route coverage is also required inside the
-real connected/armed/`OFFBOARD` mission window (`active_raw_setpoint_count` and
-`active_unique_raw_setpoints`), so pre-streamed setpoints alone cannot satisfy
-flight evidence. The observer must see `/local_waypoint_flight` as the raw
-setpoint publisher. It also checks that
-the manifest target route matches the observed active setpoint targets and that
-the controller status `route_revision` / `route_fingerprint` matches the
-manifest, so stale manifests from an earlier run cannot satisfy a new flight. It also
-requires active-flight `/mavros/vision_pose/pose` samples, a seen
-`fastlio_vision/output_enabled=True`, and an `ok` FAST-LIO vision status by
-default. It then checks paired local-position / vision-pose relative
-motion samples; by default at least 5 pairs must exist and their maximum relative
-displacement disagreement must stay within `max_active_vision_local_delta_m`
-(`0.75 m`). Active evidence must also show MAVROS connected, armed, and in
-`OFFBOARD` during the mission window before ending disarmed/on-ground. If
-`require_payload_open:=true`, it additionally requires a successful payload-open
-acknowledgement.
-
-After the observer exits, analyze the evidence offline:
-
-```bash
-./scripts/analyze_active_flight_evidence.py "${flight_evidence_dir}"
-./scripts/analyze_active_flight_evidence.py \
-  "${flight_evidence_dir}" --require-phase payload_local_flight
-```
-
-The first command proves the local waypoint/takeoff/landing contract. The
-payload phase additionally requires a successful servo open acknowledgement.
-Like the read-only evidence analyzer, it only reads JSON and never interacts
-with ROS, MAVROS, or the aircraft.
-
-To roll up the whole objective after a test, use the top-level audit:
-
-```bash
-./scripts/flight_goal_audit.py \
-  --route-file ~/robotac_ws/config/flight/local_waypoints.yaml \
-  --frame-alignment-evidence ~/robotac_ws/logs/frame_alignment/YYYYMMDD_HHMMSS \
-  --readonly-evidence ~/robotac_ws/logs/read_only_evidence/YYYYMMDD_HHMMSS \
-  --active-evidence ~/robotac_ws/logs/active_flight_evidence/YYYYMMDD_HHMMSS
-```
-
-It reports configuration gates, read-only FAST-LIO→MAVROS/PX4 evidence, and
-active local-flight evidence together. The default required phase is
-`active_local_flight`; add `--require-phase payload_local_flight` for the final
-payload mission. By default it also requires the active-flight evidence waypoint
-count and target coordinates to match the configured route file; pass
-`--route-file ...` whenever the launch used `flight_route_file:=...`. For a
-configured route, the audit requires the observer to have captured
-`/robotac/flight/route_manifest` with `event=mission_started` and
-`route_source=configured`, then matches both the manifest `target_route` and the
-observed setpoint/reach `target_records` against the route file. This proves the
-aircraft flew the exact local relative route supplied by the operator, not
-merely a route with the same waypoint count. Use `--allow-dynamic-active-route`
-only when the mission was intentionally replaced through
-`/robotac/flight/waypoints` before `/robotac/flight/start`. In that mode the
-audit requires `route_source=posearray` and validates the dynamic manifest
-targets instead of the configured route file. Start the active observer before
-`/robotac/flight/start`: its initial MAVROS local pose is used as independent
-evidence that the route targets were generated relative to the actual local
-takeoff pose.
-
-The default camera launch is intentionally minimal: it publishes only
-`/camera/rgb/image_raw` and `/camera/rgb/camera_info`. The tested profile is
-MJPEG 1920x1080 at 30 Hz; YUYV at this resolution is only 5 Hz on the tested
-camera. This camera's MJPEG stream decodes as YUV422, so the driver profile uses
-`color_format: yuv422p`. Optional image transports (`compressed`,
-`compressedDepth`, `theora`) are disabled for the raw RGB topic to keep the ROS
-graph clean. Rectified image topics are opt-in:
-
-```bash
-roslaunch robotac_bringup camera_rgb.launch enable_rectify:=true
-```
-
-AprilTag consumes `/camera/rgb/image_raw` plus `/camera/rgb/camera_info` by
-default and publishes only `/tag_detections` plus TF. The annotated
-`/tag_detections_image` topic is opt-in for visual debugging:
-
-```bash
-roslaunch robotac_bringup apriltag_rgb.launch publish_debug_image:=true
-```
-
-The checked-in 1920x1080 calibration has 30 valid samples and 0.1000 px RMS
-reprojection error. The original calibration is retained as
-`config/camera/rgb_640x480.yaml`. AprilTag defaults to `tag36h11` and loads
-standalone IDs `0` and `1` from `config/apriltag/tags.yaml`. Each tag uses
-`0.15 m` for pose estimation; the print's total outer size is recorded as
-`0.25 m`. To temporarily test one different tag without editing the config, use
-`use_config_tags:=false tag_id:=N tag_size:=S`.
-
-Servo switch examples (with a running `roscore`):
-
-```bash
-rostopic pub -1 /robotac_servo/control std_msgs/Bool "data: true"
-rostopic pub -1 /robotac_servo/control std_msgs/Bool "data: false"
-rosrun robotac_servo servo_cycle_test.py
-```
-
-The camera and AprilTag chain can be observed without MAVROS:
-
-```bash
-rostopic hz /camera/rgb/image_raw
-rostopic echo -n 1 /tag_detections
-```
-
-`camera_extrinsics.launch` is intentionally standalone and defaults to a zero
-transform. Pass measured values before using its TF for navigation, for example
-`roslaunch robotac_bringup camera_extrinsics.launch x:=... y:=... z:=...`.
-
-## AprilTag payload mission
-
-The dedicated AprilTag payload mission is implemented by
-`robotac_flight/scripts/tag_payload_mission.py`. It is separate from the older
-local waypoint box mission and keeps the same safety model: launching the node
-does not arm, switch modes, send FCU setpoints, land, or open the payload until
-the explicit start service succeeds.
-
-Mission frame and route are configured in `config/flight/tag_payload_mission.yaml`:
-
-- Mission frame is captured when `/robotac/tag_payload_mission/start` is called.
-- `+x` is aircraft nose/front, `+y` is aircraft right, `+z` is up.
-- Route: take off to `0.30 m`, fly to `(x=2, y=2, z=0.30)`, fly to
-  `(x=4, y=0, z=0.80)`, wait `2 s`, confirm drop tag ID `1` with 15 stable
-  detections, overfly it at `0.30 m`, wait `1 s`, open payload, return through
-  `(x=2, y=2, z=0.30)` and `(x=0, y=0, z=0.30)`, confirm landing tag ID `0`
-  with 15 stable detections, overfly it at `0.30 m`, then command `AUTO.LAND`.
-- Tag stability uses `tag_stable_samples: 15` and `tag_jump_threshold: 0.05 m`.
-
-Safe launch for code/graph inspection:
-
-```bash
-roslaunch robotac_bringup tag_payload_mission_full.launch live_flight:=false
-```
-
-Live launch template, only after camera TF, AprilTag, local position, MAVROS,
-payload status, and PX4 mode/arming checks are confirmed:
-
-```bash
-roslaunch robotac_bringup tag_payload_mission_full.launch \
-  live_flight:=true \
-  fcu_url:=serial:///dev/ttyTHS0:921600 \
-  camera_extrinsics_enabled:=true \
-  camera_x:=... camera_y:=... camera_z:=... \
-  camera_roll:=... camera_pitch:=... camera_yaw:=...
-```
-
-Start/abort/status interfaces:
-
-```bash
-rosservice call /robotac/tag_payload_mission/start "{}"
-rosservice call /robotac/tag_payload_mission/abort "{}"
-rostopic echo /robotac/tag_payload_mission/status
-rostopic echo /robotac/tag_payload_mission/confirmed_tag_pose
-rostopic echo /robotac/tag_payload_mission/setpoint_preview
-```
-
-The full mission requires a valid TF chain from the local odometry frame
-usually `map` to the AprilTag detection frame, typically through
-`map -> base_link -> camera_rgb_optical_frame`. Do not enable
-`camera_extrinsics_enabled` with placeholder zero extrinsics on the aircraft.
-
-Hardware-isolated integration test on Ubuntu/ROS Noetic after a catkin build:
-
-```bash
-src/robotac_flight/test/run_tag_payload_mission_sim.sh
-```
-
-The test starts a private `roscore`, simulates MAVROS/local odometry/AprilTag
-ID `1` and `0`/payload acknowledgement, calls the mission start service, and
-expects the mission to complete with OFFBOARD, one payload open command, the
-configured route, and AUTO.LAND.
-
-## macOS to Ubuntu sync
-
-From macOS:
-
-```bash
-./scripts/sync_to_ubuntu.sh user@ubuntu-host
-```
-
-Pass `user@ubuntu-host:/path` to select a different remote destination. The
-sync intentionally does not use `--delete`.
+涉及飞行接口、坐标系、门禁或任务参数的变更，还应补充相应仿真和分级验证证据。
