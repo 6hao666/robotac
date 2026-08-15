@@ -1,12 +1,13 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam stateBackgroundColor #F8FAFC
+skinparam stateBackgroundColor #FFFFFF
 skinparam stateBorderColor #24528C
+left to right direction
 title 示例 07：相对位移状态机
 [*] --> IDLE
 IDLE --> TAKEOFF : ~start + 记录起点与航向

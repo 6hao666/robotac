@@ -1,28 +1,29 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam componentBackgroundColor #F8FAFC
+skinparam componentBackgroundColor #FFFFFF
 skinparam componentBorderColor #24528C
+left to right direction
 title 编号教程的风险等级与学习顺序
-package "只读" #E8F3EC {
+package "只读" #FFFFFF {
   [01 FCU 状态] --> [02 本地位姿]
   [02 本地位姿] --> [03 Tag 检测]
   [03 Tag 检测] --> [04 Tag 本地位姿]
 }
-package "预览" #E8F0FA {
+package "预览" #FFFFFF {
   [05 位置目标预览]
   [09 Tag 对准预览]
 }
-package "受控飞行" #FFF4CC {
+package "受控飞行" #FFFFFF {
   [06 定高悬停] --> [07 相对位移]
   [07 相对位移] --> [08 简短航点]
   [09 Tag 对准预览] --> [10 Tag 对准飞行]
 }
-package "拆桨地面机构" #F4EAF7 {
+package "拆桨地面机构" #FFFFFF {
   [11 投放机构动作]
 }
 [04 Tag 本地位姿] --> [05 位置目标预览]

@@ -1,28 +1,30 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam activityBackgroundColor #F8FAFC
-skinparam activityBorderColor #24528C
-skinparam activityDiamondBackgroundColor #FFF4CC
-skinparam activityDiamondBorderColor #B7791F
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #24528C
+left to right direction
 title 安装、构建与验证流程
-start
-:Ubuntu 20.04 + ROS Noetic;
-:install_ubuntu20.sh\n安装依赖与第三方库;
-:test_02_build.sh\n完整 catkin 构建;
-if (项目包均可发现?) then (是)
-  :source devel/setup.bash;
-  :test_01_source.sh;
-  :test_03_unit.sh;
-  :test_04_simulation.sh;
-else (否)
-  :检查 rosdep、SDK、缓存目录;
-  stop
-endif
-:修改后 build.sh 增量构建;
-stop
+circle "开始" as start
+rectangle "Ubuntu 20.04\nROS Noetic" as environment
+rectangle "install_ubuntu20.sh\n安装依赖与第三方库" as install
+rectangle "test_02_build.sh\n完整 catkin 构建" as build
+rectangle "项目包\n均可发现?" as discover
+rectangle "source devel/setup.bash\n源码 / 单元 / 仿真检查" as tests
+rectangle "修改后 build.sh\n增量构建" as incremental
+circle "完成" as done
+rectangle "检查 rosdep、SDK\n与缓存目录" as repair
+start --> environment
+environment --> install
+install --> build
+build --> discover
+discover --> tests : 是
+tests --> incremental
+incremental --> done
+discover -down-> repair : 否
+repair --> build
 @enduml

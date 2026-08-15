@@ -1,33 +1,34 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam activityBackgroundColor #F8FAFC
-skinparam activityBorderColor #24528C
-skinparam activityDiamondBackgroundColor #FFF4CC
-skinparam activityDiamondBorderColor #B7791F
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #24528C
+left to right direction
 title 示例 08：简短航点执行流程
-start
-:解析 YAML 航点;
-if (字段与范围合法?) then (是)
-  :IDLE 等待 ~start;
-else (否)
-  :拒绝启动;
-  stop
-endif
-:起飞到安全高度;
-repeat
-  :发布下一个相对航点;
-  if (越界、超时或 ~stop?) then (是)
-    :ABORT;
-    :请求降落;
-    stop
-  endif
-  :到达并保持;
-repeat while (仍有航点?) is (是)
-:LANDING -> COMPLETE;
-stop
+rectangle "解析 YAML\n航点" as parse
+rectangle "字段与范围\n合法?" as validGate
+rectangle "IDLE 等待\n~start" as idle
+rectangle "起飞到\n安全高度" as takeoff
+rectangle "发布下一个\n相对航点" as publish
+rectangle "越界、超时\n或 ~stop?" as abortGate
+rectangle "到达并保持" as hold
+rectangle "仍有航点?" as moreGate
+rectangle "LANDING\n-> COMPLETE" as complete
+rectangle "拒绝启动" as reject
+rectangle "ABORT\n请求降落" as abort
+parse --> validGate
+validGate --> idle : 是
+idle --> takeoff
+takeoff --> publish
+publish --> abortGate
+abortGate --> hold : 否
+hold --> moreGate
+moreGate --> publish : 是
+moreGate --> complete : 否
+validGate -down-> reject : 否
+abortGate -down-> abort : 是
 @enduml

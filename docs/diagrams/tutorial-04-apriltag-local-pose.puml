@@ -1,11 +1,11 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam componentBackgroundColor #F8FAFC
+skinparam componentBackgroundColor #FFFFFF
 skinparam componentBorderColor #24528C
 title 示例 04：AprilTag 本地坐标转换
 queue "/tag_detections" as detections

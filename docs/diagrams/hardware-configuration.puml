@@ -1,11 +1,11 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam nodeBackgroundColor #F8FAFC
+skinparam nodeBackgroundColor #FFFFFF
 skinparam nodeBorderColor #24528C
 title 机载硬件连接与数据边界
 node "机载 Ubuntu" as onboard {

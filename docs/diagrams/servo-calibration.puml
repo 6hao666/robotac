@@ -1,32 +1,32 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam activityBackgroundColor #F8FAFC
-skinparam activityBorderColor #24528C
-skinparam activityDiamondBackgroundColor #FFF4CC
-skinparam activityDiamondBorderColor #B7791F
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #24528C
+left to right direction
 title 舵机安全标定流程
-start
-:断开飞行动力、拆桨、卸下传动附件;
-:检查供电、设备、软件限位与断电手段;
-:裸舵机小步点动;
-if (转向与范围正常?) then (是)
-  :断电并重新安装机构;
-else (否)
-  :断电排查;
-  stop
-endif
-:标定 blocked_angle;
-:标定 released_angle;
-:独立 SetBool 服务检查;
-if (无卡滞、顶死或压降?) then (是)
-  :拆桨带载台架检查;
-else (否)
-  :断电检查机械与供电;
-endif
-stop
+rectangle "断开飞行动力、拆桨\n卸下传动附件" as isolate
+rectangle "检查供电、设备、限位\n与断电手段" as inspect
+rectangle "裸舵机\n小步点动" as jog
+rectangle "转向与范围\n正常?" as directionGate
+rectangle "断电并\n重新安装机构" as reinstall
+rectangle "标定 blocked_angle\n与 released_angle" as calibrate
+rectangle "独立 SetBool\n服务检查" as service
+rectangle "无卡滞、顶死\n或压降?" as loadGate
+rectangle "拆桨带载\n台架检查" as bench
+rectangle "断电排查机械、\n供电与参数" as repair
+isolate --> inspect
+inspect --> jog
+jog --> directionGate
+directionGate --> reinstall : 是
+reinstall --> calibrate
+calibrate --> service
+service --> loadGate
+loadGate --> bench : 是
+directionGate -down-> repair : 否
+loadGate -down-> repair : 否
 @enduml

@@ -55,7 +55,7 @@ main p:has(> span img[alt^='PlantUML：']) {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--robotac-accent) 20%, transparent);
   border-radius: 6px;
-  background: #f8fafc;
+  background: #f4f6f8;
   box-sizing: border-box;
   padding: 20px;
   text-align: center;
@@ -70,8 +70,8 @@ main p:has(> span img[alt^='PlantUML：']) > span[data-rmiz] {
 
 main p:has(> span img[alt^='PlantUML：']) span[data-rmiz-content] {
   display: block;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 main p:has(> span img[alt^='PlantUML：']) span[data-rmiz-ghost] {
@@ -82,15 +82,15 @@ main p:has(> span img[alt^='PlantUML：']) span[data-rmiz-ghost] {
 
 main img[alt^='PlantUML：'] {
   display: block;
-  min-width: min(680px, 100%);
-  width: auto;
-  max-width: none;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   height: auto;
   margin: 0 auto;
 }
 
 .dark main p:has(> span img[alt^='PlantUML：']) {
-  background: #f1f5f9;
+  background: #f4f6f8;
 }
 
 @media (max-width: 640px) {
@@ -113,5 +113,12 @@ main img[alt^='PlantUML：'] {
 
   main img[alt^='PlantUML：'] {
     min-width: min(620px, 100%);
+    width: auto;
+    max-width: none;
+  }
+
+  main p:has(> span img[alt^='PlantUML：']) span[data-rmiz-content] {
+    width: max-content;
+    min-width: 100%;
   }
 }

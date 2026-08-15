@@ -1,12 +1,13 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam stateBackgroundColor #F8FAFC
+skinparam stateBackgroundColor #FFFFFF
 skinparam stateBorderColor #24528C
+left to right direction
 title C1 至 C5 比赛任务流程
 [*] --> C1
 state "C1 起飞与状态建立" as C1

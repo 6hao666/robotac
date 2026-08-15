@@ -1,12 +1,13 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam stateBackgroundColor #F8FAFC
+skinparam stateBackgroundColor #FFFFFF
 skinparam stateBorderColor #24528C
+left to right direction
 title 示例 10：Tag 对准飞行状态机
 [*] --> IDLE
 IDLE --> PRESTREAM : ~start + 稳定 Tag + 安全检查

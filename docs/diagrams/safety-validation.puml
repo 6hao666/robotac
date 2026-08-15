@@ -1,37 +1,36 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam activityBackgroundColor #F8FAFC
-skinparam activityBorderColor #24528C
-skinparam activityDiamondBackgroundColor #FFF4CC
-skinparam activityDiamondBorderColor #B7791F
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #24528C
+left to right direction
 title 从离线检查到受控实飞的安全门禁
-start
-:1 源码与单元测试;
-if (通过?) then (是)
-  :2 简化仿真;
-else (否)
-  stop
-endif
-if (正常与故障路径通过?) then (是)
-  :3 真实设备只读;
-else (否)
-  stop
-endif
-if (连接、时间、坐标正常?) then (是)
-  :4 拆桨地面联调;
-else (否)
-  stop
-endif
-if (接管与中止均确认?) then (是)
-  :5 封闭场地受控实飞;
-else (否)
-  stop
-endif
-:持续保留人工接管;
-stop
+rectangle "1 源码与\n单元测试" as source
+rectangle "通过?" as sourceGate
+rectangle "2 简化仿真" as simulation
+rectangle "正常与故障\n路径通过?" as simulationGate
+rectangle "3 真实设备\n只读" as readonly
+rectangle "连接、时间、\n坐标正常?" as readonlyGate
+rectangle "4 拆桨\n地面联调" as bench
+rectangle "接管与中止\n均确认?" as benchGate
+rectangle "5 封闭场地\n受控实飞" as flight
+rectangle "持续保留\n人工接管" as takeover
+rectangle "停止并修复\n当前门禁" as stop
+source --> sourceGate
+sourceGate --> simulation : 是
+simulation --> simulationGate
+simulationGate --> readonly : 是
+readonly --> readonlyGate
+readonlyGate --> bench : 是
+bench --> benchGate
+benchGate --> flight : 是
+flight --> takeover
+sourceGate -down-> stop : 否
+simulationGate -down-> stop : 否
+readonlyGate -down-> stop : 否
+benchGate -down-> stop : 否
 @enduml

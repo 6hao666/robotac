@@ -6,7 +6,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const requiredVersion = '1.2026.6'
-const expectedDiagramCount = 23
+const expectedDiagramCount = 22
+const requiredBackground = '#F4F6F8'
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const workspace = path.resolve(scriptDir, '../..')
 const sourceDir = path.join(workspace, 'docs/diagrams')
@@ -86,6 +87,9 @@ function verifySource(name, source) {
   for (const [pattern, label] of forbidden) {
     if (pattern.test(source)) fail(`${name} 包含禁止的 ${label}`)
   }
+  if (!new RegExp(`^\\s*skinparam\\s+backgroundColor\\s+${requiredBackground}\\s*$`, 'im').test(source)) {
+    fail(`${name} 必须使用统一灰白背景 ${requiredBackground}`)
+  }
 }
 
 function verifySvg(name, svg) {
@@ -102,6 +106,13 @@ function verifySvg(name, svg) {
   if (/\/(?:Users|home)\/|\b(?:10|127|192\.168)\.(?:\d{1,3}\.){2}\d{1,3}\b/.test(text)) {
     fail(`${name} 包含机器相关路径或地址`)
   }
+  const rootSvg = text.match(/<svg\b[^>]*>/i)?.[0]
+  const width = Number(rootSvg?.match(/\bwidth="([\d.]+)px"/i)?.[1])
+  const height = Number(rootSvg?.match(/\bheight="([\d.]+)px"/i)?.[1])
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    fail(`${name} 缺少可校验的 SVG 宽高`)
+  }
+  if (!(width > height)) fail(`${name} 必须为横向布局，当前为 ${width} x ${height}`)
 }
 
 function runPlantuml(args) {

@@ -11,6 +11,8 @@ const diagramsDir = path.join(docsDir, 'diagrams')
 const diagramAssetsDir = path.join(docsDir, 'assets/plantuml')
 const outDir = path.join(siteDir, 'out')
 const basePath = '/robotac'
+const expectedMarkdownCount = 23
+const expectedDiagramCount = 22
 
 async function walk(directory, extension) {
   const entries = await fs.readdir(directory, { withFileTypes: true })
@@ -57,8 +59,8 @@ function fail(message) {
 }
 
 const markdownFiles = await walk(docsDir, '.md')
-if (markdownFiles.length !== 23) {
-  fail(`预期 23 篇 Markdown，实际 ${markdownFiles.length} 篇`)
+if (markdownFiles.length !== expectedMarkdownCount) {
+  fail(`预期 ${expectedMarkdownCount} 篇 Markdown，实际 ${markdownFiles.length} 篇`)
 }
 
 const sourceDiagramAssets = new Set()
@@ -66,9 +68,10 @@ for (const source of markdownFiles) {
   const markdown = await fs.readFile(source, 'utf8')
   if (/```mermaid\b/i.test(markdown)) fail(`${path.relative(workspace, source)} 仍包含 Mermaid`)
   const images = [...markdown.matchAll(/!\[[^\]]+\]\(([^\s)]+)\s+"PlantUML[^"]*"\)/g)]
-  if (images.length !== 1) {
+  const expectedImages = path.relative(docsDir, source) === 'README.md' ? 0 : 1
+  if (images.length !== expectedImages) {
     fail(`${path.relative(workspace, source)} 的 PlantUML 图片引用数量为 ${images.length}`)
-  } else {
+  } else if (expectedImages === 1) {
     const asset = path.resolve(path.dirname(source), images[0][1])
     sourceDiagramAssets.add(asset)
     if (!(await exists(asset))) fail(`${path.relative(workspace, asset)} 不存在`)
@@ -82,8 +85,14 @@ for (const source of markdownFiles) {
 
 const pumlFiles = await walk(diagramsDir, '.puml')
 const svgFiles = await walk(diagramAssetsDir, '.svg')
-if (pumlFiles.length !== 23 || svgFiles.length !== 23 || sourceDiagramAssets.size !== 23) {
-  fail(`预期 23 组独立图表，实际 puml=${pumlFiles.length} svg=${svgFiles.length} 引用=${sourceDiagramAssets.size}`)
+if (
+  pumlFiles.length !== expectedDiagramCount ||
+  svgFiles.length !== expectedDiagramCount ||
+  sourceDiagramAssets.size !== expectedDiagramCount
+) {
+  fail(
+    `预期 ${expectedDiagramCount} 组独立图表，实际 puml=${pumlFiles.length} svg=${svgFiles.length} 引用=${sourceDiagramAssets.size}`
+  )
 }
 if (await exists(path.join(outDir, '11-migration', 'index.html'))) {
   fail('旧版迁移页面仍存在于静态导出')
@@ -127,7 +136,10 @@ for (const htmlFile of htmlFiles) {
   }
   if (contentMapRoute(relativeHtml)) {
     const diagrams = $('img[alt^="PlantUML："]')
-    if (diagrams.length !== 1) fail(`${relativeHtml} 的 PlantUML 图数量为 ${diagrams.length}`)
+    const expectedImages = relativeHtml === 'index.html' ? 0 : 1
+    if (diagrams.length !== expectedImages) {
+      fail(`${relativeHtml} 的 PlantUML 图数量为 ${diagrams.length}，预期 ${expectedImages}`)
+    }
     const source = diagrams.first().attr('src')
     if (source) {
       const pathname = new URL(source, `https://docs.yundrone.cn${pagePath}`).pathname
@@ -138,7 +150,7 @@ for (const htmlFile of htmlFiles) {
   }
 }
 
-if (outputDiagramAssets.size !== 23) {
+if (outputDiagramAssets.size !== expectedDiagramCount) {
   fail(`静态导出只引用了 ${outputDiagramAssets.size} 个独立 PlantUML SVG`)
 }
 

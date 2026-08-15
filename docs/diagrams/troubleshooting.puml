@@ -1,36 +1,31 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam activityBackgroundColor #F8FAFC
-skinparam activityBorderColor #24528C
-skinparam activityDiamondBackgroundColor #FFF4CC
-skinparam activityDiamondBorderColor #B7791F
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #24528C
+left to right direction
 title 分层故障诊断决策树
-start
-:停止控制动作并读取日志;
-if (设备存在且权限正常?) then (是)
-else (否)
-  :检查 udev、串口、网卡与占用;
-  stop
-endif
-if (传感器话题连续?) then (是)
-else (否)
-  :检查 MID360、相机、时间戳;
-  stop
-endif
-if (定位与 TF 健康?) then (是)
-else (否)
-  :检查 FAST-LIO、外参、坐标方向;
-  stop
-endif
-if (MAVROS 与启动前检查通过?) then (是)
-  :仅在批准后重试;
-else (否)
-  :按 ~start 拒绝原因逐项修复;
-endif
-stop
+rectangle "停止控制动作\n并读取日志" as stop
+rectangle "设备与权限\n正常?" as deviceGate
+rectangle "传感器话题\n连续?" as sensorGate
+rectangle "定位与 TF\n健康?" as poseGate
+rectangle "MAVROS 与启动前\n检查通过?" as mavrosGate
+rectangle "仅在批准后\n重试" as retry
+rectangle "检查 udev、串口\n网卡与占用" as deviceRepair
+rectangle "检查 MID360、相机\n与时间戳" as sensorRepair
+rectangle "检查 FAST-LIO、外参\n与坐标方向" as poseRepair
+rectangle "按 ~start 拒绝原因\n逐项修复" as mavrosRepair
+stop --> deviceGate
+deviceGate --> sensorGate : 是
+sensorGate --> poseGate : 是
+poseGate --> mavrosGate : 是
+mavrosGate --> retry : 是
+deviceGate -down-> deviceRepair : 否
+sensorGate -down-> sensorRepair : 否
+poseGate -down-> poseRepair : 否
+mavrosGate -down-> mavrosRepair : 否
 @enduml

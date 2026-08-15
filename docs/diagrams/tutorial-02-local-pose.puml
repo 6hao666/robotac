@@ -1,11 +1,11 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam sequenceParticipantBackgroundColor #F8FAFC
+skinparam sequenceParticipantBackgroundColor #FFFFFF
 skinparam sequenceParticipantBorderColor #24528C
 title 示例 02：本地位姿只读检查链路
 participant "PX4 estimator" as estimator

@@ -6,6 +6,8 @@ import { load } from 'cheerio'
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const siteDir = path.resolve(scriptDir, '..')
 const timeout = 20_000
+const expectedMarkdownCount = 23
+const expectedDiagramCount = 22
 
 function fail(message) {
   throw new Error(`公网检查失败：${message}`)
@@ -79,7 +81,7 @@ if (basicCheck) {
 const contentMap = JSON.parse(
   await fs.readFile(path.join(siteDir, '.content-map.json'), 'utf8')
 )
-if (contentMap.markdownCount !== 23) fail(`内容映射页数为 ${contentMap.markdownCount}`)
+if (contentMap.markdownCount !== expectedMarkdownCount) fail(`内容映射页数为 ${contentMap.markdownCount}`)
 
 const diagramUrls = new Set()
 for (const outputPath of Object.keys(contentMap.sourceMap).sort()) {
@@ -91,13 +93,19 @@ for (const outputPath of Object.keys(contentMap.sourceMap).sort()) {
   if (html.includes('旧版迁移说明')) fail(`${pageUrl.href} 仍包含旧版迁移说明`)
   const $ = load(html)
   const images = $('img[alt^="PlantUML："]')
-  if (images.length !== 1) fail(`${pageUrl.href} 的 PlantUML 图数量为 ${images.length}`)
+  const expectedImages = outputPath === 'index.md' ? 0 : 1
+  if (images.length !== expectedImages) {
+    fail(`${pageUrl.href} 的 PlantUML 图数量为 ${images.length}，预期 ${expectedImages}`)
+  }
+  if (!expectedImages) continue
   const source = images.first().attr('src')
   if (!source) fail(`${pageUrl.href} 的 PlantUML 图没有 src`)
   diagramUrls.add(new URL(source, pageUrl).href)
 }
 
-if (diagramUrls.size !== 23) fail(`公网页面只引用了 ${diagramUrls.size} 个独立 SVG`)
+if (diagramUrls.size !== expectedDiagramCount) {
+  fail(`公网页面只引用了 ${diagramUrls.size} 个独立 SVG`)
+}
 for (const url of diagramUrls) {
   const response = await request(url)
   if (!response.ok) fail(`${url} 返回 ${response.status}`)
@@ -113,4 +121,6 @@ for (const required of ['_pagefind/pagefind.js']) {
 const removed = await request(new URL('11-migration/', siteBase), { redirect: 'manual' })
 if (removed.status !== 404) fail(`旧迁移路由应返回 404，实际 ${removed.status}`)
 
-console.log(`公网检查通过：23 页、23 个 PlantUML SVG，版本 ${release.releaseId}。`)
+console.log(
+  `公网检查通过：${expectedMarkdownCount} 页、${expectedDiagramCount} 个 PlantUML SVG，版本 ${release.releaseId}。`
+)

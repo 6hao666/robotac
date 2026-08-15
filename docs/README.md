@@ -1,7 +1,5 @@
 # Robotac 文档索引
 
-![PlantUML：Robotac 文档阅读与验证路径](./assets/plantuml/docs-index.svg "PlantUML：文档阅读与验证路径")
-
 本文档适用于参赛选手、指导老师和现场安全负责人。建议先完成只读示例，再进入预览、
 仿真、地面联调和受控实飞。
 

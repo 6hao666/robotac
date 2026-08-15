@@ -1,11 +1,11 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam sequenceParticipantBackgroundColor #F8FAFC
+skinparam sequenceParticipantBackgroundColor #FFFFFF
 skinparam sequenceParticipantBorderColor #24528C
 title 从开发机同步到运行记录的部署时序
 actor "开发人员" as operator

@@ -1,11 +1,11 @@
 @startuml
 !theme plain
-skinparam backgroundColor transparent
+skinparam backgroundColor #F4F6F8
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
-skinparam packageBackgroundColor #F8FAFC
+skinparam packageBackgroundColor #FFFFFF
 skinparam packageBorderColor #24528C
 title 项目自有代码、第三方上游与验证边界
 package "优先修改" {
