@@ -1,0 +1,21 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam componentBackgroundColor #F8FAFC
+skinparam componentBorderColor #24528C
+title 示例 09：Tag 对准预览边界
+queue "/robotac_examples/tag/pose" as tag
+queue "/mavros/local_position/pose" as local
+component "09_tag_centering_preview" as example
+queue "/robotac_examples/\ntag_centering_preview/target" as preview
+queue "/mavros/\nsetpoint_position/local" as mavros
+tag --> example
+local --> example
+example --> preview : 保持高度与航向\n仅修正水平位置
+example -[#B91C1C,dashed]x mavros : 禁止发布
+note bottom of example : active=false，状态可为 WAITING_TAG
+@enduml

@@ -1,5 +1,7 @@
 # 示例 11：投放机构动作
 
+![PlantUML：投放机构单次动作状态机](../assets/plantuml/tutorial-11-payload-release.svg "PlantUML：投放机构单次动作状态机")
+
 ## 目的
 
 手动启动后调用一次舵机服务，完成阻挡或释放动作，不与飞行示例联动。

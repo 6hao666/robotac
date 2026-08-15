@@ -1,0 +1,26 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam sequenceParticipantBackgroundColor #F8FAFC
+skinparam sequenceParticipantBorderColor #24528C
+title 从开发机同步到运行记录的部署时序
+actor "开发人员" as operator
+participant "开发机" as dev
+participant "机载 Ubuntu" as onboard
+participant "ROS 基础组件" as ros
+participant "编号示例" as example
+operator -> dev : 源码检查与单元测试
+dev -> onboard : sync_workspace.sh
+operator -> onboard : 构建、加载环境、仿真
+operator -> ros : 启动 sensors / perception / flight_base
+operator -> ros : 只读检查数据与状态
+operator -> example : 启动 launch（保持 IDLE）
+operator -> example : 现场批准后调用 ~start
+example --> operator : ~state / ~active / ~target
+operator -> example : 必要时 ~stop
+operator -> onboard : 保存日志并执行结束检查
+@enduml

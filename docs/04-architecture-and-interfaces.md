@@ -1,5 +1,7 @@
 # 架构与接口
 
+![PlantUML：Robotac ROS 组件、话题与服务](./assets/plantuml/architecture-interfaces.svg "PlantUML：ROS 组件、话题与服务")
+
 ## bringup 入口
 
 | launch | 作用 | 输出 |

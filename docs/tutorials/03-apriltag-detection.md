@@ -1,5 +1,7 @@
 # 示例 03：AprilTag 原始检测
 
+![PlantUML：AprilTag 原始检测数据流](../assets/plantuml/tutorial-03-apriltag-detection.svg "PlantUML：AprilTag 原始检测数据流")
+
 ## 目的
 
 显示检测到的 Tag ID、相机坐标系位置和检测消息时间。

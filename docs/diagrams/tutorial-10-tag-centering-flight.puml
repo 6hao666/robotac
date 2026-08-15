@@ -1,0 +1,23 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam stateBackgroundColor #F8FAFC
+skinparam stateBorderColor #24528C
+title 示例 10：Tag 对准飞行状态机
+[*] --> IDLE
+IDLE --> PRESTREAM : ~start + 稳定 Tag + 安全检查
+PRESTREAM --> TAKEOFF : OFFBOARD + 解锁
+TAKEOFF --> TAG_CENTERING : 到达安全高度
+TAG_CENTERING --> TAG_CENTERING : 按 max_step 修正目标
+TAG_CENTERING --> LANDING : 稳定对准达到 hold
+LANDING --> COMPLETE : 确认落地
+COMPLETE --> [*]
+PRESTREAM --> ABORT : ~stop / 检查失败
+TAKEOFF --> ABORT : ~stop / 数据异常
+TAG_CENTERING --> ABORT : Tag 超时 / 越界 / ~stop
+ABORT --> LANDING : 停止更新并请求降落
+@enduml

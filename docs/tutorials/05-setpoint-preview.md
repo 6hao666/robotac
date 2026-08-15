@@ -1,5 +1,7 @@
 # 示例 05：位置目标预览
 
+![PlantUML：位置目标仅发布到预览话题](../assets/plantuml/tutorial-05-setpoint-preview.svg "PlantUML：位置目标预览边界")
+
 ## 目的
 
 生成一个 `PoseStamped` 目标，说明位置设定点结构，但不向 MAVROS 发布。

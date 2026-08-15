@@ -1,7 +1,6 @@
 import { Footer, LastUpdated, Layout, Navbar } from 'nextra-theme-docs'
 import { Head, Search } from 'nextra/components'
 import { getPageMap } from 'nextra/page-map'
-import { MermaidRenderer } from '../components/mermaid-renderer'
 import 'nextra-theme-docs/style.css'
 import './site.css'
 
@@ -65,7 +64,6 @@ export default async function RootLayout({ children }) {
         >
           {children}
         </Layout>
-        <MermaidRenderer />
       </body>
     </html>
   )

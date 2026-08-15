@@ -40,6 +40,7 @@ usage() {
 
 命令：
   preview                 启动本地预览并打开浏览器
+  diagrams                更新已提交的 PlantUML SVG
   build                   生成并验证静态站
   check                   检查现有构建；过期时重新构建
   deploy                  增量上传并原子发布
@@ -50,6 +51,7 @@ usage() {
   DOCS_ENV_FILE           配置文件路径，默认 docs-site/.env
   DOCS_OPEN_BROWSER=0     本地预览时不自动打开浏览器
   DOCS_PORT=3000          本地预览端口
+  DOCS_PLANTUML_BIN       PlantUML 命令，默认 plantuml
   DOCS_DEPLOY_TARGET      SSH config 中的发布目标，部署和回滚时必填
   DOCS_REMOTE_BASE        远端发布根目录
   DOCS_PUBLIC_BASE        公网站点根 URL
@@ -103,9 +105,14 @@ build_site() {
 
 ensure_current_build() {
   ensure_dependencies
-  if node "${site_dir}/scripts/write-release.mjs" --check >/dev/null 2>&1 \
+  if node "${site_dir}/scripts/write-release.mjs" --check-content >/dev/null 2>&1 \
     && pnpm --dir "${site_dir}" check >/dev/null 2>&1; then
-    echo "复用内容摘要一致的现有构建。"
+    if node "${site_dir}/scripts/write-release.mjs" --check-release >/dev/null 2>&1; then
+      echo "复用内容与版本信息一致的现有构建。"
+    else
+      node "${site_dir}/scripts/write-release.mjs"
+      echo "复用静态构建，仅刷新 Git 版本信息。"
+    fi
   else
     build_site
   fi
@@ -122,29 +129,17 @@ release_value() {
 
 health_check() {
   local expected_release=${1:-}
-  local home tutorial release asset http_headers root_headers
-  http_headers=$(curl -sS -o /dev/null -D - --max-time 20 \
-    "${public_base/https:/http:}/robotac/")
-  grep -Eq '^HTTP/(1\.1|2) 301' <<<"${http_headers}"
-  grep -qi "^location: ${public_base}/robotac/" <<<"${http_headers}"
-  root_headers=$(curl -sS -o /dev/null -D - --max-time 20 "${public_base}/")
-  grep -Eq '^HTTP/(1\.1|2) 302' <<<"${root_headers}"
-  grep -qi '^location: .*/robotac/' <<<"${root_headers}"
-  home=$(curl -fsS --max-time 20 "${public_base}/robotac/")
-  grep -q 'Robotac 文档索引' <<<"${home}"
-  tutorial=$(curl -fsS --max-time 20 "${public_base}/robotac/tutorials/")
-  grep -q '编号示例教程' <<<"${tutorial}"
-  curl -fsS --max-time 20 "${public_base}/robotac/_pagefind/pagefind.js" >/dev/null
-  asset=$(grep -Eo '/robotac/_next/static/[^"[:space:]]+\.(css|js)' <<<"${home}" | head -n 1 || true)
-  if [[ -z "${asset}" ]]; then
-    echo "线上首页没有静态资源引用。" >&2
-    return 1
+  local mode=${2:-current}
+  if [[ "${mode}" == "rollback" ]]; then
+    node "${site_dir}/scripts/check-public.mjs" --basic "${public_base}" "${expected_release}"
+  else
+    node "${site_dir}/scripts/check-public.mjs" "${public_base}" "${expected_release}"
   fi
-  curl -fsS --max-time 20 "${public_base}${asset}" >/dev/null
-  if [[ -n "${expected_release}" ]]; then
-    release=$(curl -fsS --max-time 20 "${public_base}/robotac/release.json")
-    grep -q "\"releaseId\": \"${expected_release}\"" <<<"${release}"
-  fi
+}
+
+update_diagrams() {
+  ensure_node
+  node "${site_dir}/scripts/render-diagrams.mjs"
 }
 
 preview_site() {
@@ -173,7 +168,7 @@ preview_site() {
 
 deploy_site() {
   local release_id release_root staging release_path previous
-  local -a rsync_args=(-az --delete)
+  local -a rsync_args=(-azc --delete --itemize-changes --stats)
   require_command rsync
   require_command ssh
   require_command curl
@@ -184,6 +179,13 @@ deploy_site() {
   if [[ ! "${release_id}" =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "非法发布版本：${release_id}" >&2
     exit 1
+  fi
+
+  if node "${site_dir}/scripts/check-public.mjs" \
+    --matches-local "${public_base}" "${site_dir}/out/release.json"; then
+    health_check "${release_id}"
+    echo "线上已是相同内容与 Git 版本：${release_id}"
+    return 0
   fi
 
   release_root="${remote_base}/releases/robotac"
@@ -251,7 +253,7 @@ rollback_site() {
   release_path="${remote_base}/releases/robotac/${release_id}"
   previous=$(ssh "${remote_target}" "readlink '${remote_base}/robotac' 2>/dev/null || true")
   ssh "${remote_target}" "set -eu; test -d '${release_path}'; ln -sfn 'releases/robotac/${release_id}' '${remote_base}/.robotac.next'; mv -Tf '${remote_base}/.robotac.next' '${remote_base}/robotac'"
-  if ! health_check "${release_id}"; then
+  if ! health_check "${release_id}" rollback; then
     echo "回滚目标健康检查失败，恢复原版本。" >&2
     if [[ -n "${previous}" ]]; then
       ssh "${remote_target}" "set -eu; ln -sfn '${previous}' '${remote_base}/.robotac.next'; mv -Tf '${remote_base}/.robotac.next' '${remote_base}/robotac'"
@@ -265,6 +267,7 @@ docs_site_main() {
   local command=${1:-}
   case "${command}" in
     preview) preview_site ;;
+    diagrams) update_diagrams ;;
     build) build_site ;;
     check) ensure_current_build ;;
     deploy) deploy_site ;;

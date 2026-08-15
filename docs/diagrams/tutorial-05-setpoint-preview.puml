@@ -1,0 +1,22 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam componentBackgroundColor #F8FAFC
+skinparam componentBorderColor #24528C
+title 示例 05：位置目标预览边界
+component "launch 参数\nx / y / z" as params
+component "05_setpoint_preview" as example
+queue "/robotac_examples/\nsetpoint_preview/target" as preview
+queue "/mavros/\nsetpoint_position/local" as mavros
+params --> example
+example --> preview : PoseStamped(map)
+example -[#B91C1C,dashed]x mavros : 禁止发布
+note bottom of example
+  state = PREVIEW
+  active = false
+end note
+@enduml

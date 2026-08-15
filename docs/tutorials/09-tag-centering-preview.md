@@ -1,5 +1,7 @@
 # 示例 09：Tag 对准预览
 
+![PlantUML：Tag 对准目标仅进入预览话题](../assets/plantuml/tutorial-09-tag-centering-preview.svg "PlantUML：Tag 对准预览边界")
+
 ## 目的
 
 根据本地 Tag 位置计算水平对准目标，只发布预览，不控制飞机。

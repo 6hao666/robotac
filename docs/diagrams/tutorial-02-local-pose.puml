@@ -1,0 +1,20 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam sequenceParticipantBackgroundColor #F8FAFC
+skinparam sequenceParticipantBorderColor #24528C
+title 示例 02：本地位姿只读检查链路
+participant "PX4 estimator" as estimator
+participant "MAVROS" as mavros
+participant "02_local_pose" as example
+actor "操作员" as operator
+estimator -> mavros : 本地位置与姿态
+mavros -> example : /mavros/local_position/pose
+example -> example : 计算频率与消息年龄
+example --> operator : x / y / z / 姿态 / 频率 / 年龄
+note over example : 只读，不发布控制命令
+@enduml

@@ -1,5 +1,7 @@
 # 故障排查
 
+![PlantUML：Robotac 分层故障诊断决策树](./assets/plantuml/troubleshooting.svg "PlantUML：分层故障诊断决策树")
+
 ## 串口权限或设备名变化
 
 现象：PX4 或舵机节点无法打开设备。

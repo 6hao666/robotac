@@ -1,0 +1,33 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam activityBackgroundColor #F8FAFC
+skinparam activityBorderColor #24528C
+skinparam activityDiamondBackgroundColor #FFF4CC
+skinparam activityDiamondBorderColor #B7791F
+title 示例 08：简短航点执行流程
+start
+:解析 YAML 航点;
+if (字段与范围合法?) then (是)
+  :IDLE 等待 ~start;
+else (否)
+  :拒绝启动;
+  stop
+endif
+:起飞到安全高度;
+repeat
+  :发布下一个相对航点;
+  if (越界、超时或 ~stop?) then (是)
+    :ABORT;
+    :请求降落;
+    stop
+  endif
+  :到达并保持;
+repeat while (仍有航点?) is (是)
+:LANDING -> COMPLETE;
+stop
+@enduml

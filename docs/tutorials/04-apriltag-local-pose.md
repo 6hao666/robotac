@@ -1,5 +1,7 @@
 # 示例 04：AprilTag 本地位姿
 
+![PlantUML：AprilTag 从相机坐标转换到本地坐标](../assets/plantuml/tutorial-04-apriltag-local-pose.svg "PlantUML：AprilTag 本地坐标转换")
+
 ## 目的
 
 将 ID 0 检测从相机坐标系转换到 `map`，发布目标位置和相对飞机的水平偏差。

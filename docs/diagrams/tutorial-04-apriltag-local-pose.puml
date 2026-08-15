@@ -1,0 +1,23 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam componentBackgroundColor #F8FAFC
+skinparam componentBorderColor #24528C
+title 示例 04：AprilTag 本地坐标转换
+queue "/tag_detections" as detections
+queue "map -> camera optical TF" as tf
+queue "/mavros/local_position/pose" as local
+component "04_apriltag_local_pose" as example
+queue "/robotac_examples/tag/pose" as pose
+queue "/robotac_examples/tag/error" as error
+detections --> example
+tf --> example
+local --> example
+example --> pose : Tag 在 map 中的位置
+example --> error : 相对飞机的水平偏差
+note bottom of example : TF 缺失、超时或跳变时不输出
+@enduml

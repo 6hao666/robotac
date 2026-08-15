@@ -1,0 +1,29 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam nodeBackgroundColor #F8FAFC
+skinparam nodeBorderColor #24528C
+title 机载硬件连接与数据边界
+node "机载 Ubuntu" as onboard {
+  component "Livox / FAST-LIO" as lidarstack
+  component "相机 / AprilTag" as visionstack
+  component "MAVROS" as mavros
+  component "robotac_servo" as servo
+}
+node "MID360" as lidar
+node "USB RGB 相机" as camera
+node "PX4 飞控" as px4
+node "USB PWM 控制器" as pwm
+lidar --> lidarstack : 点云 + IMU
+camera --> visionstack : 图像 + CameraInfo
+lidarstack --> mavros : 外部视觉位姿
+mavros <--> px4 : 串口 / MAVLink
+servo --> pwm : 串口控制帧
+note bottom of onboard
+  地址、设备名和外参只保存在目标机配置中
+end note
+@enduml

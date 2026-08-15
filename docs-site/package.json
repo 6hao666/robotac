@@ -9,14 +9,14 @@
   },
   "scripts": {
     "sync:content": "node scripts/sync-content.mjs",
-    "release:prepare": "node scripts/write-release.mjs",
+    "diagrams": "node scripts/render-diagrams.mjs",
+    "diagrams:check": "node scripts/render-diagrams.mjs --check",
     "dev": "next dev --webpack",
-    "build": "pnpm sync:content && pnpm release:prepare && next build --webpack && pagefind --site out --output-subdir _pagefind",
-    "check": "node scripts/check-output.mjs"
+    "build": "pnpm diagrams:check && pnpm sync:content && next build --webpack && pagefind --site out --output-subdir _pagefind && node scripts/write-release.mjs",
+    "check": "pnpm diagrams:check && node scripts/check-output.mjs"
   },
   "dependencies": {
     "next": "16.3.1",
-    "mermaid": "11.16.1",
     "nextra": "4.6.1",
     "nextra-theme-docs": "4.6.1",
     "react": "19.1.0",

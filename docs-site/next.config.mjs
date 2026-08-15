@@ -1,15 +1,11 @@
 import nextra from 'nextra'
 import { fileURLToPath } from 'node:url'
-import { rehypeMermaidPre } from './scripts/rehype-mermaid-pre.mjs'
 
 const withNextra = nextra({
   contentDirBasePath: '/',
   defaultShowCopyCode: true,
   search: {
     codeblocks: false
-  },
-  mdxOptions: {
-    rehypePlugins: [rehypeMermaidPre]
   }
 })
 

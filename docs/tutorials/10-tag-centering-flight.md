@@ -1,5 +1,7 @@
 # 示例 10：Tag 对准飞行
 
+![PlantUML：Tag 对准飞行状态机与失锁降落路径](../assets/plantuml/tutorial-10-tag-centering-flight.svg "PlantUML：Tag 对准飞行状态机")
+
 ## 目的
 
 从地面起飞，对准 ID 0，在默认 3 秒稳定时间后请求降落。

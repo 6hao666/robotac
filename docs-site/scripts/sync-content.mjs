@@ -84,13 +84,45 @@ async function walk(directory) {
   return files
 }
 
-await fs.rm(contentDir, { force: true, recursive: true })
 await fs.mkdir(contentDir, { recursive: true })
+await fs.rm(path.join(siteDir, 'public/release.json'), { force: true })
 
 const sourceFiles = await walk(sourceDir)
 let markdownCount = 0
 const sourceMap = {}
 const folderTitles = {}
+const expectedContentFiles = new Set()
+
+async function writeIfChanged(filename, content) {
+  const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content)
+  try {
+    if (Buffer.compare(await fs.readFile(filename), buffer) === 0) return false
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+  await fs.mkdir(path.dirname(filename), { recursive: true })
+  await fs.writeFile(filename, buffer)
+  return true
+}
+
+async function writeContent(relativePath, content) {
+  const filename = path.join(contentDir, relativePath)
+  expectedContentFiles.add(filename)
+  await writeIfChanged(filename, content)
+}
+
+async function pruneGenerated(directory) {
+  const entries = await fs.readdir(directory, { withFileTypes: true })
+  for (const entry of entries) {
+    const absolute = path.join(directory, entry.name)
+    if (entry.isDirectory()) {
+      await pruneGenerated(absolute)
+      if ((await fs.readdir(absolute)).length === 0) await fs.rmdir(absolute)
+    } else if (!expectedContentFiles.has(absolute)) {
+      await fs.rm(absolute)
+    }
+  }
+}
 
 function addSidebarEntry(destinationRelative, title) {
   if (path.basename(destinationRelative).toLowerCase() !== 'index.md') return
@@ -100,12 +132,11 @@ function addSidebarEntry(destinationRelative, title) {
 
 for (const sourcePath of sourceFiles) {
   const relativePath = path.relative(sourceDir, sourcePath)
+  if (relativePath.split(path.sep)[0] === 'diagrams') continue
   const destinationRelative = outputRelativePath(relativePath)
-  const destinationPath = path.join(contentDir, destinationRelative)
-  await fs.mkdir(path.dirname(destinationPath), { recursive: true })
 
   if (path.extname(sourcePath).toLowerCase() !== '.md') {
-    await fs.copyFile(sourcePath, destinationPath)
+    await writeContent(destinationRelative, await fs.readFile(sourcePath))
     continue
   }
 
@@ -119,7 +150,7 @@ for (const sourcePath of sourceFiles) {
     .map(encodeURIComponent)
     .join('/')}`
   const frontMatter = `---\ntitle: ${JSON.stringify(title)}\nsidebarTitle: ${JSON.stringify(title)}\nsourceFileUrl: ${JSON.stringify(sourceFileUrl)}\n---\n\n`
-  await fs.writeFile(destinationPath, frontMatter + transformed, 'utf8')
+  await writeContent(destinationRelative, frontMatter + transformed)
 
   markdownCount += 1
   addSidebarEntry(destinationRelative, title)
@@ -128,16 +159,16 @@ for (const sourcePath of sourceFiles) {
     .join('/')
 }
 
-await fs.writeFile(
-  path.join(contentDir, '_meta.js'),
+await writeContent(
+  '_meta.js',
   `export default ${JSON.stringify(folderTitles, null, 2)}\n`,
-  'utf8'
 )
 
-await fs.writeFile(
+await writeIfChanged(
   path.join(siteDir, '.content-map.json'),
-  `${JSON.stringify({ markdownCount, sourceMap }, null, 2)}\n`,
-  'utf8'
+  `${JSON.stringify({ markdownCount, sourceMap }, null, 2)}\n`
 )
+
+await pruneGenerated(contentDir)
 
 console.log(`已生成 ${markdownCount} 篇 Nextra 文档。`)

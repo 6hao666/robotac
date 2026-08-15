@@ -1,5 +1,7 @@
 # 示例 02：本地位姿
 
+![PlantUML：本地位姿只读检查链路](../assets/plantuml/tutorial-02-local-pose.svg "PlantUML：本地位姿只读检查链路")
+
 ## 目的
 
 只读检查 MAVROS 本地位置、姿态、接收频率和消息年龄。

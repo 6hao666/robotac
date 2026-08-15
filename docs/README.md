@@ -1,5 +1,7 @@
 # Robotac 文档索引
 
+![PlantUML：Robotac 文档阅读与验证路径](./assets/plantuml/docs-index.svg "PlantUML：文档阅读与验证路径")
+
 本文档适用于参赛选手、指导老师和现场安全负责人。建议先完成只读示例，再进入预览、
 仿真、地面联调和受控实飞。
 
@@ -27,7 +29,6 @@
 | [08 故障排查](08-troubleshooting.md) | 常见故障和拒绝启动的原因 |
 | [09 开发与上游](09-development-and-upstream.md) | 可修改的代码、工具、测试和第三方版本 |
 | [10 舵机标定](10-servo-release-calibration.md) | 投放机构地面点动和参数记录 |
-| [11 旧版迁移](11-migration.md) | 删除的包、launch、接口和替代关系 |
 
 ## 教程
 

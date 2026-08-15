@@ -50,37 +50,46 @@ html {
   gap: 16px;
 }
 
-pre.mermaid {
-  display: flex;
-  min-height: 180px;
-  align-items: center;
-  justify-content: center;
-  overflow-x: auto;
+main p:has(> span img[alt^='PlantUML：']) {
+  max-width: 100%;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--robotac-accent) 20%, transparent);
   border-radius: 6px;
   background: #f8fafc;
+  box-sizing: border-box;
   padding: 20px;
+  text-align: center;
 }
 
-pre.mermaid svg {
+main p:has(> span img[alt^='PlantUML：']) > span[data-rmiz] {
   display: block;
-  width: auto;
-  max-width: 100%;
-  height: auto;
-}
-
-main div:has(> svg[aria-roledescription]) {
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
 }
 
-main svg[aria-roledescription^='flowchart'] {
-  width: 1800px !important;
-  max-width: none !important;
+main p:has(> span img[alt^='PlantUML：']) span[data-rmiz-content] {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+}
+
+main p:has(> span img[alt^='PlantUML：']) span[data-rmiz-ghost] {
+  left: 0 !important;
+  width: 100% !important;
+  max-width: 100%;
+}
+
+main img[alt^='PlantUML：'] {
+  display: block;
+  min-width: min(680px, 100%);
+  width: auto;
+  max-width: none;
   height: auto;
+  margin: 0 auto;
 }
 
-.dark pre.mermaid {
+.dark main p:has(> span img[alt^='PlantUML：']) {
   background: #f1f5f9;
 }
 
@@ -98,8 +107,11 @@ main svg[aria-roledescription^='flowchart'] {
     font-size: 13px;
   }
 
-  pre.mermaid {
-    min-height: 140px;
+  main p:has(> span img[alt^='PlantUML：']) {
     padding: 12px;
+  }
+
+  main img[alt^='PlantUML：'] {
+    min-width: min(620px, 100%);
   }
 }

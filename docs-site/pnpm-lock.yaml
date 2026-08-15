@@ -11,9 +11,6 @@ importers:
 
   .:
     dependencies:
-      mermaid:
-        specifier: 11.16.1
-        version: 11.16.1
       next:
         specifier: 16.3.1
         version: 16.3.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)

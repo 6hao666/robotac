@@ -1,0 +1,28 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam activityBackgroundColor #F8FAFC
+skinparam activityBorderColor #24528C
+skinparam activityDiamondBackgroundColor #FFF4CC
+skinparam activityDiamondBorderColor #B7791F
+title 安装、构建与验证流程
+start
+:Ubuntu 20.04 + ROS Noetic;
+:install_ubuntu20.sh\n安装依赖与第三方库;
+:test_02_build.sh\n完整 catkin 构建;
+if (项目包均可发现?) then (是)
+  :source devel/setup.bash;
+  :test_01_source.sh;
+  :test_03_unit.sh;
+  :test_04_simulation.sh;
+else (否)
+  :检查 rosdep、SDK、缓存目录;
+  stop
+endif
+:修改后 build.sh 增量构建;
+stop
+@enduml

@@ -1,5 +1,7 @@
 # 示例 01：FCU 状态
 
+![PlantUML：FCU 状态只读数据流](../assets/plantuml/tutorial-01-fcu-state.svg "PlantUML：FCU 状态只读数据流")
+
 ## 目的
 
 只读确认 MAVROS 与 PX4 的连接、模式、解锁状态和落地状态。

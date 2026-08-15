@@ -1,5 +1,7 @@
 # 开发与上游
 
+![PlantUML：项目自有代码、第三方上游与验证边界](./assets/plantuml/development-upstream.svg "PlantUML：开发与上游边界")
+
 ## 修改范围
 
 参赛开发优先修改：

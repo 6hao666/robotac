@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "renderer": "PlantUML 1.2026.6",
+  "files": {
+    "architecture-interfaces.puml": {
+      "sourceSha256": "7899d6ce35dde9c1ae092eef9568be5216394501dabb0fc1026dc94c0bdf1e1a",
+      "svg": "../assets/plantuml/architecture-interfaces.svg",
+      "svgSha256": "34b8c8c9efad858b06715143307c4b68c05d7eca2d2fe53ebef0649dd2efffb2"
+    },
+    "competition-examples.puml": {
+      "sourceSha256": "38c6b0f8a4c0b2b640133a8e66d6445e0b10af601b658860c0d6595f3948e85a",
+      "svg": "../assets/plantuml/competition-examples.svg",
+      "svgSha256": "673303b2bb633df8a7d70dc38ac12b9aeb9fd2f1c2085609b2ec8bcea4a0f553"
+    },
+    "deployment-operations.puml": {
+      "sourceSha256": "547b149eb597024c2cb223f270e2fd48b5dd4ad6e1b900a470af950b2cda2ea8",
+      "svg": "../assets/plantuml/deployment-operations.svg",
+      "svgSha256": "5ec78d96886bacf00d88611006a2e9bbb7e1605b2cec21a45809d2a063d674cd"
+    },
+    "development-upstream.puml": {
+      "sourceSha256": "4caa2701d4448f0b75bd364d0765c8f9c23d0b59fa1bc4aaf7ad4cfcf22f6a7e",
+      "svg": "../assets/plantuml/development-upstream.svg",
+      "svgSha256": "f08440b3dc75ceea72a96d8916d34d3320276db315e1c1599545216f9b4614fa"
+    },
+    "docs-index.puml": {
+      "sourceSha256": "39b7583c8944638b434cafe004290d9d9e76d6af082b1fc657df8c46137e6b68",
+      "svg": "../assets/plantuml/docs-index.svg",
+      "svgSha256": "10e320c15f81b8379265cc8b828a5894c2b39102e86356b5bb9930ed53896a36"
+    },
+    "environment-build.puml": {
+      "sourceSha256": "51212697d645e0e59fbb34b34293414a301959b021795b036d08da5e35a60176",
+      "svg": "../assets/plantuml/environment-build.svg",
+      "svgSha256": "9ace7d8d6011f1488ac13ad85d4dc3e1a2c2c96a6bfc8b33f91bc1c920bef592"
+    },
+    "hardware-configuration.puml": {
+      "sourceSha256": "ebc26294648442a4ecd3e4cea490dc9130a883dc3c83c7abc7cda8bb4440fbe2",
+      "svg": "../assets/plantuml/hardware-configuration.svg",
+      "svgSha256": "a63e6249e29a6949199f82400daa894301a5d01df7520308fc3341499cd59185"
+    },
+    "project-overview.puml": {
+      "sourceSha256": "589fef4411576ab0c233748bfe912b874aa0d0bda5d0e7074d7887afa63aea1c",
+      "svg": "../assets/plantuml/project-overview.svg",
+      "svgSha256": "f9fad96e79eeb22d19a5a87606cf20cf34694b96060040bd0e1c75979aa9cc67"
+    },
+    "safety-validation.puml": {
+      "sourceSha256": "542d5df0ffc2f88cdf19600b7cc85d966e54595cf23b29d420c370f66da633e7",
+      "svg": "../assets/plantuml/safety-validation.svg",
+      "svgSha256": "e5a9d28f3e33cc7142d5c56486b759cb21b93cab1553cd63de34a080f5c40371"
+    },
+    "servo-calibration.puml": {
+      "sourceSha256": "619c2f3e59185f21d7b20081ad0463404ce0b49ae36e9b610f890b84a9e20663",
+      "svg": "../assets/plantuml/servo-calibration.svg",
+      "svgSha256": "ed0f6d8289007267d1e3f621d51c9b933f0563d77dd486a821adcfcf845cdf64"
+    },
+    "troubleshooting.puml": {
+      "sourceSha256": "54db86d15b6d95430a8f7d495fa1f9e747b7828e305bfd0fa543c1104d6ce76e",
+      "svg": "../assets/plantuml/troubleshooting.svg",
+      "svgSha256": "f0c2933fd9500c79499d4b96909587551c62c74be1e9b6fd2174ecd54f56f44d"
+    },
+    "tutorial-01-fcu-state.puml": {
+      "sourceSha256": "6f244b806e4a496b19bf5e7016e9c1f1518e7938719df1c6df84af68ba00d38d",
+      "svg": "../assets/plantuml/tutorial-01-fcu-state.svg",
+      "svgSha256": "6ca694b309b54505f84e0129505404107283a2ab2b43df093d64e7afed507eb1"
+    },
+    "tutorial-02-local-pose.puml": {
+      "sourceSha256": "0ca8845c4257914866492a5ebcf5111c4eab46818b89490de3fe339d73a3ad83",
+      "svg": "../assets/plantuml/tutorial-02-local-pose.svg",
+      "svgSha256": "b292f36c12fe064f84b9eac86d6b52032efaa59e5e79064f1359d0b3c62a6a52"
+    },
+    "tutorial-03-apriltag-detection.puml": {
+      "sourceSha256": "fbcd010e9685e47de0da0259d9051b3d3a866960a1356e78ab11381d5ea0d1fd",
+      "svg": "../assets/plantuml/tutorial-03-apriltag-detection.svg",
+      "svgSha256": "fcd700964e6f5bbf7ffd1758384500f05b987fd60a86cd01a700881ac268519f"
+    },
+    "tutorial-04-apriltag-local-pose.puml": {
+      "sourceSha256": "25d5706aef4753bb7a69d7e73d939d4359148b9cfbe7b20b4de536587b29a4ed",
+      "svg": "../assets/plantuml/tutorial-04-apriltag-local-pose.svg",
+      "svgSha256": "39ba445aa0bf6355a9f837366824943545dcabceab5aefca98a66eed5856b4ed"
+    },
+    "tutorial-05-setpoint-preview.puml": {
+      "sourceSha256": "284bbe48ca03b1e0a0f40d1186ac05eda7e23ad239b0a901d4506c60b76b83e8",
+      "svg": "../assets/plantuml/tutorial-05-setpoint-preview.svg",
+      "svgSha256": "fe94126ae7025e586f567b66ce21366623b19c29a5e4e65aa3505cc5be1fed76"
+    },
+    "tutorial-06-hover.puml": {
+      "sourceSha256": "e0a944118b643e1cb8112754a4132a3c25fd9da16ae4d96ad8e56927906d4e69",
+      "svg": "../assets/plantuml/tutorial-06-hover.svg",
+      "svgSha256": "e94be64a34adc252558c12d2c12b89649ac7b23d72e5bf5eee32969473940f7f"
+    },
+    "tutorial-07-move-relative.puml": {
+      "sourceSha256": "2fca22acfc11a7d5f430346b75d8c27f5a61e92200708a74575b86435500a3e1",
+      "svg": "../assets/plantuml/tutorial-07-move-relative.svg",
+      "svgSha256": "b464cd5a825b407f45829a987c9021cec42113f0bf4f3eed205dfb4bb3c3229b"
+    },
+    "tutorial-08-waypoints.puml": {
+      "sourceSha256": "9da08bf033db4fe91bb3b8fa5dba53e8bffd62f8af363cdaeea2669dafe4e9b1",
+      "svg": "../assets/plantuml/tutorial-08-waypoints.svg",
+      "svgSha256": "1669e1c7f88c48fcd1a62abf343a1ed4b08d1c5fa0aa28898d3a6ddbbb9e2c11"
+    },
+    "tutorial-09-tag-centering-preview.puml": {
+      "sourceSha256": "3768575b098382613065f8c4458d45cfe1a0a289aa504bc396859197962c9ed6",
+      "svg": "../assets/plantuml/tutorial-09-tag-centering-preview.svg",
+      "svgSha256": "77a04aeec9b8f2629de6a8e15babebb2747d8cc461604305fd97a24fe5a3d18e"
+    },
+    "tutorial-10-tag-centering-flight.puml": {
+      "sourceSha256": "29d7138c5e8891d62fffc538afad57d4cfd5235eafc1324b78ffcb57e69bc458",
+      "svg": "../assets/plantuml/tutorial-10-tag-centering-flight.svg",
+      "svgSha256": "a21517428a34014b6917360d46c6aee1639b29729773eef54d086b08f4b750b9"
+    },
+    "tutorial-11-payload-release.puml": {
+      "sourceSha256": "5f12cfda80de7a74ad7e4763259983916a329c21a0d912527e03da3b964d8247",
+      "svg": "../assets/plantuml/tutorial-11-payload-release.svg",
+      "svgSha256": "008e665d8b7903d8ffdd1ab93079a56be452337d05a98a1defb9c7d74474cde3"
+    },
+    "tutorial-index.puml": {
+      "sourceSha256": "52bff87153afd6336b2cc7a61776ca462e9d883f145f9e076d1d05c4894b4cc3",
+      "svg": "../assets/plantuml/tutorial-index.svg",
+      "svgSha256": "7a19b44f5acbd8a667ad3df894123c4c1d6aec5678b632661e6996dca5e30713"
+    }
+  }
+}

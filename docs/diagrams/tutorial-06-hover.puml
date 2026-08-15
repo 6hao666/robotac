@@ -1,0 +1,23 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam stateBackgroundColor #F8FAFC
+skinparam stateBorderColor #24528C
+title 示例 06：定高悬停状态机
+[*] --> IDLE
+IDLE --> PRESTREAM : ~start 且启动前检查通过
+PRESTREAM --> TAKEOFF : OFFBOARD + 解锁
+TAKEOFF --> HOVER : 到达目标高度
+HOVER --> LANDING : hold 完成
+LANDING --> COMPLETE : 确认落地
+COMPLETE --> [*]
+PRESTREAM --> ABORT : 失败或 ~stop
+TAKEOFF --> ABORT : 数据异常或 ~stop
+HOVER --> ABORT : 漂移、模式丢失或 ~stop
+ABORT --> LANDING : 请求降落
+note right of IDLE : launch 后不会自动起飞
+@enduml

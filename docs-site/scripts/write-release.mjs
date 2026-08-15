@@ -108,20 +108,27 @@ if (command === '--show') {
   process.exit(0)
 }
 
-if (command === '--check') {
+if (command === '--check-content' || command === '--check-release' || command === '--check') {
   try {
     const existing = JSON.parse(
       await fs.readFile(path.join(siteDir, 'out', 'release.json'), 'utf8')
     )
-    process.exit(existing.inputDigest === release.inputDigest ? 0 : 1)
+    const contentMatches = existing.inputDigest === release.inputDigest
+    const releaseMatches =
+      contentMatches &&
+      existing.gitSha === release.gitSha &&
+      existing.dirty === release.dirty
+    process.exit(
+      (command === '--check-content' ? contentMatches : releaseMatches) ? 0 : 1
+    )
   } catch {
     process.exit(1)
   }
 }
 
-await fs.mkdir(path.join(siteDir, 'public'), { recursive: true })
+await fs.mkdir(path.join(siteDir, 'out'), { recursive: true })
 await fs.writeFile(
-  path.join(siteDir, 'public', 'release.json'),
+  path.join(siteDir, 'out', 'release.json'),
   `${JSON.stringify(release, null, 2)}\n`,
   'utf8'
 )

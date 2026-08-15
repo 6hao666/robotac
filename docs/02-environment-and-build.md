@@ -1,5 +1,7 @@
 # 环境与构建
 
+![PlantUML：Robotac 安装、构建与验证流程](./assets/plantuml/environment-build.svg "PlantUML：安装、构建与验证流程")
+
 ## 基线环境
 
 | 项目 | 要求 |

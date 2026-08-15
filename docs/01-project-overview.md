@@ -37,25 +37,7 @@ MAVROS 位置控制、AprilTag 目标处理和投放机构控制，并据此安�
 
 ## 数据流向
 
-```mermaid
-flowchart LR
-    L["MID360 与 IMU"] --> D["livox_ros_driver2"]
-    D --> F["FAST-LIO"]
-    F --> O["/sunray/odometry"]
-    O --> V["robotac_localization"]
-    V --> P["/mavros/vision_pose/pose"]
-    P --> X["PX4 estimator"]
-    X --> M["MAVROS 本地位置"]
-
-    C["RGB 相机"] --> A["apriltag_ros"]
-    A --> T["robotac_examples Tag 处理"]
-    M --> E["编号飞行示例"]
-    T --> E
-    E --> S["/mavros/setpoint_position/local"]
-
-    R["投放示例"] --> Q["/robotac_servo/set_released"]
-    Q --> H["USB PWM 控制器"]
-```
+![PlantUML：Robotac ROS 数据流与控制边界](./assets/plantuml/project-overview.svg "PlantUML：ROS 数据流与控制边界")
 
 定位预览 launch 不向 PX4 发布。`flight_base.launch` 会把外部视觉位姿发送给 PX4，但不会
 控制飞机。需要飞行的示例必须另行调用 `~start`。

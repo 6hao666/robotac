@@ -1,0 +1,24 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam stateBackgroundColor #F8FAFC
+skinparam stateBorderColor #24528C
+title 示例 11：投放机构单次动作状态机
+[*] --> IDLE
+IDLE --> RUNNING : ~start
+RUNNING --> COMPLETE : SetBool 成功且 command_ok
+RUNNING --> ABORT : 串口、限位或服务失败
+COMPLETE --> [*]
+ABORT --> [*]
+IDLE --> IDLE : launch 后保持无动作
+COMPLETE -[#B91C1C,dashed]-> COMPLETE : 重复动作被拒绝
+note right of RUNNING
+  released=true：释放
+  released=false：阻挡
+end note
+note bottom of IDLE : 拆桨、断开飞行动力、地面台架
+@enduml

@@ -1,0 +1,32 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam activityBackgroundColor #F8FAFC
+skinparam activityBorderColor #24528C
+skinparam activityDiamondBackgroundColor #FFF4CC
+skinparam activityDiamondBorderColor #B7791F
+title 舵机安全标定流程
+start
+:断开飞行动力、拆桨、卸下传动附件;
+:检查供电、设备、软件限位与断电手段;
+:裸舵机小步点动;
+if (转向与范围正常?) then (是)
+  :断电并重新安装机构;
+else (否)
+  :断电排查;
+  stop
+endif
+:标定 blocked_angle;
+:标定 released_angle;
+:独立 SetBool 服务检查;
+if (无卡滞、顶死或压降?) then (是)
+  :拆桨带载台架检查;
+else (否)
+  :断电检查机械与供电;
+endif
+stop
+@enduml

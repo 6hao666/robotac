@@ -1,5 +1,7 @@
 # 硬件与配置
 
+![PlantUML：机载硬件连接与数据边界](./assets/plantuml/hardware-configuration.svg "PlantUML：机载硬件连接与数据边界")
+
 ## 硬件组成
 
 本工作空间面向 MID360、PX4、USB RGB 相机和 USB PWM 舵机控制器。实际设备型号、固件、

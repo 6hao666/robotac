@@ -1,5 +1,7 @@
 # 示例 07：相对位移
 
+![PlantUML：相对位移状态机与中止降落路径](../assets/plantuml/tutorial-07-move-relative.svg "PlantUML：相对位移状态机")
+
 ## 目的
 
 起飞后沿起始航向前方完成一次相对位移，返回起点上方并降落。

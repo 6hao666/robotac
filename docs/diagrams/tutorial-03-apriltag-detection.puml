@@ -1,0 +1,20 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam sequenceParticipantBackgroundColor #F8FAFC
+skinparam sequenceParticipantBorderColor #24528C
+title 示例 03：AprilTag 原始检测数据流
+participant "RGB 相机" as camera
+participant "apriltag_ros" as detector
+participant "03_apriltag_detection" as example
+actor "操作员" as operator
+camera -> detector : image + camera_info
+detector -> example : /tag_detections
+example -> example : 筛选 Tag36h11 ID 0
+example --> operator : ID、相机 frame、三轴位置、时间
+note over example : 只读原始检测，不执行坐标转换
+@enduml

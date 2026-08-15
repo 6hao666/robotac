@@ -1,5 +1,7 @@
 # 舵机投放机构标定
 
+![PlantUML：舵机拆卸、点动、标定与带载验证流程](./assets/plantuml/servo-calibration.svg "PlantUML：舵机安全标定流程")
+
 ## 适用范围
 
 本流程用于地面标定阻挡位置和释放位置。标定期间禁止安装桨叶、挂载模拟货物或启动飞行

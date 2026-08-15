@@ -1,0 +1,33 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam packageBackgroundColor #F8FAFC
+skinparam packageBorderColor #24528C
+title 项目自有代码、第三方上游与验证边界
+package "优先修改" {
+  [robotac_examples]
+  [robotac_localization]
+  [robotac_servo]
+  [robotac_bringup]
+  [docs]
+}
+package "固定上游版本" {
+  [MAVROS]
+  [AprilTag]
+  [Livox]
+  [FAST-LIO]
+  [web_cam]
+}
+[新增功能] --> [纯函数测试]
+[纯函数测试] --> [离线仿真]
+[离线仿真] --> [只读实机]
+[只读实机] --> [受控实飞记录]
+[固定上游版本] ..> [优先修改] : 通过公开接口依赖
+note bottom of [固定上游版本]
+  修改时单独记录来源、提交与差异
+end note
+@enduml

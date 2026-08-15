@@ -1,0 +1,41 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam componentBackgroundColor #F8FAFC
+skinparam componentBorderColor #24528C
+title Robotac ROS 数据流与控制边界
+component "MID360 + IMU" as lidar
+component "livox_ros_driver2" as livox
+component "FAST-LIO" as fastlio
+queue "/sunray/odometry" as odom
+component "robotac_localization" as localization
+queue "/mavros/vision_pose/pose" as vision
+component "PX4 estimator" as px4
+queue "MAVROS 本地位置" as local
+component "RGB 相机" as camera
+component "apriltag_ros" as tag
+component "编号示例" as examples
+queue "/mavros/setpoint_position/local" as setpoint
+component "投放示例" as payload
+component "robotac_servo" as servo
+lidar --> livox
+livox --> fastlio
+fastlio --> odom
+odom --> localization
+localization --> vision
+vision --> px4
+px4 --> local
+camera --> tag
+tag --> examples
+local --> examples
+examples --> setpoint
+payload --> servo : SetBool
+note right of examples
+  必须显式调用 ~start
+  预览示例不发布 MAVROS
+end note
+@enduml

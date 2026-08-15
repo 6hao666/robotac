@@ -1,0 +1,22 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam stateBackgroundColor #F8FAFC
+skinparam stateBorderColor #24528C
+title 示例 07：相对位移状态机
+[*] --> IDLE
+IDLE --> TAKEOFF : ~start + 记录起点与航向
+TAKEOFF --> MOVE : 到达安全高度
+MOVE --> RETURN : 到达前向目标
+RETURN --> LANDING : 返回起点上方
+LANDING --> COMPLETE : 确认落地
+COMPLETE --> [*]
+TAKEOFF --> ABORT : ~stop / 数据异常
+MOVE --> ABORT : 越界 / 超时 / ~stop
+RETURN --> ABORT : 误差超限 / ~stop
+ABORT --> LANDING : 请求降落
+@enduml

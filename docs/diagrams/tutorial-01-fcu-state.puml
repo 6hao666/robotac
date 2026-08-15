@@ -1,0 +1,23 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam sequenceParticipantBackgroundColor #F8FAFC
+skinparam sequenceParticipantBorderColor #24528C
+title 示例 01：FCU 状态只读数据流
+participant "PX4" as px4
+participant "MAVROS" as mavros
+participant "01_fcu_state" as example
+actor "操作员" as operator
+px4 -> mavros : 心跳、模式、解锁、落地状态
+mavros -> example : /mavros/state
+mavros -> example : /mavros/extended_state
+example --> operator : 仅在状态变化时打印
+note over example
+  不解锁
+  不发布设定点
+end note
+@enduml

@@ -225,6 +225,8 @@ def check_markdown_links():
         source = path.read_text(encoding="utf-8")
         for target in pattern.findall(source):
             target = target.strip().strip("<>").split("#", 1)[0]
+            target = re.sub(r'\s+(?:"[^"]*"|\'[^\']*\'|\([^)]*\))\s*$',
+                            "", target)
             if not target or re.match(r"^[a-z]+://", target):
                 continue
             if not (path.parent / target).resolve().exists():

@@ -1,5 +1,7 @@
 # 安全与验证
 
+![PlantUML：从离线检查到受控实飞的安全门禁](./assets/plantuml/safety-validation.svg "PlantUML：受控实飞安全门禁")
+
 ## 基本要求
 
 飞行软件必须按顺序检查。源码没有错误、构建成功、仿真通过、真实设备有数据，都不能说明

@@ -1,0 +1,36 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam activityBackgroundColor #F8FAFC
+skinparam activityBorderColor #24528C
+skinparam activityDiamondBackgroundColor #FFF4CC
+skinparam activityDiamondBorderColor #B7791F
+title 分层故障诊断决策树
+start
+:停止控制动作并读取日志;
+if (设备存在且权限正常?) then (是)
+else (否)
+  :检查 udev、串口、网卡与占用;
+  stop
+endif
+if (传感器话题连续?) then (是)
+else (否)
+  :检查 MID360、相机、时间戳;
+  stop
+endif
+if (定位与 TF 健康?) then (是)
+else (否)
+  :检查 FAST-LIO、外参、坐标方向;
+  stop
+endif
+if (MAVROS 与启动前检查通过?) then (是)
+  :仅在批准后重试;
+else (否)
+  :按 ~start 拒绝原因逐项修复;
+endif
+stop
+@enduml

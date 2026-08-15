@@ -1,5 +1,7 @@
 # 示例 06：定高悬停
 
+![PlantUML：定高悬停状态机与中止降落路径](../assets/plantuml/tutorial-06-hover.svg "PlantUML：定高悬停状态机")
+
 ## 目的
 
 从地面请求 OFFBOARD、解锁、定高悬停，并在保持结束后请求降落。

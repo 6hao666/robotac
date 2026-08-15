@@ -1,5 +1,7 @@
 # 部署与运行
 
+![PlantUML：从开发机同步到运行记录的部署时序](./assets/plantuml/deployment-operations.svg "PlantUML：部署与运行时序")
+
 ## 同步
 
 从开发机同步到机载 Ubuntu 主机：

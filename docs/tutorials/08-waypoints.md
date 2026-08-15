@@ -1,5 +1,7 @@
 # 示例 08：简短航点
 
+![PlantUML：航点加载、执行与越界中止流程](../assets/plantuml/tutorial-08-waypoints.svg "PlantUML：简短航点执行流程")
+
 ## 目的
 
 读取 YAML 中的相对航点，按顺序到达并保持，最后请求降落。

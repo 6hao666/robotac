@@ -1,0 +1,37 @@
+@startuml
+!theme plain
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #4B5563
+skinparam componentBackgroundColor #F8FAFC
+skinparam componentBorderColor #24528C
+title ROS 组件、话题与服务
+package "bringup" {
+  component "sensors.launch" as sensors
+  component "perception.launch" as perception
+  component "flight_base.launch" as base
+}
+package "robotac_examples" {
+  component "只读与预览 01-05、09" as preview
+  component "飞行 06-08、10" as flight
+  component "投放 11" as release
+}
+queue "/sunray/odometry" as odom
+queue "/robotac_examples/tag/*" as tag
+queue "/mavros/setpoint_position/local" as target
+queue "/robotac_servo/set_released" as setreleased
+sensors --> perception
+perception --> odom
+odom --> base
+perception --> tag
+tag --> preview
+base --> flight
+flight --> target
+release --> setreleased
+note bottom of flight
+  ~start / ~stop
+  ~state / ~active / ~target
+end note
+@enduml
