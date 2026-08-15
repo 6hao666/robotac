@@ -1,0 +1,34 @@
+{
+  "name": "robotac-docs-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "sync:content": "node scripts/sync-content.mjs",
+    "release:prepare": "node scripts/write-release.mjs",
+    "dev": "next dev --webpack",
+    "build": "pnpm sync:content && pnpm release:prepare && next build --webpack && pagefind --site out --output-subdir _pagefind",
+    "check": "node scripts/check-output.mjs"
+  },
+  "dependencies": {
+    "next": "16.3.1",
+    "mermaid": "11.16.1",
+    "nextra": "4.6.1",
+    "nextra-theme-docs": "4.6.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "remark-stringify": "11.0.0",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.0.0"
+  },
+  "devDependencies": {
+    "cheerio": "1.1.2",
+    "pagefind": "1.5.2"
+  }
+}

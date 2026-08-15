@@ -1,0 +1,105 @@
+:root {
+  --robotac-accent: #24528c;
+  --robotac-accent-strong: #173f73;
+}
+
+html {
+  letter-spacing: 0;
+}
+
+.robotac-brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.robotac-brand img {
+  display: block;
+  width: 112px;
+  height: 29px;
+  object-fit: contain;
+}
+
+.robotac-brand-divider {
+  width: 1px;
+  height: 18px;
+  background: color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.robotac-brand strong {
+  color: var(--robotac-accent-strong);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.dark .robotac-brand img {
+  filter: brightness(1.75) saturate(0.8);
+}
+
+.dark .robotac-brand strong {
+  color: #a9c7e8;
+}
+
+.robotac-footer {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+pre.mermaid {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--robotac-accent) 20%, transparent);
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 20px;
+}
+
+pre.mermaid svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+main div:has(> svg[aria-roledescription]) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+main svg[aria-roledescription^='flowchart'] {
+  width: 1800px !important;
+  max-width: none !important;
+  height: auto;
+}
+
+.dark pre.mermaid {
+  background: #f1f5f9;
+}
+
+@media (max-width: 640px) {
+  .robotac-brand {
+    gap: 7px;
+  }
+
+  .robotac-brand img {
+    width: 82px;
+    height: 24px;
+  }
+
+  .robotac-brand strong {
+    font-size: 13px;
+  }
+
+  pre.mermaid {
+    min-height: 140px;
+    padding: 12px;
+  }
+}

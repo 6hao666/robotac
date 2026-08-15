@@ -1,0 +1,9 @@
+.next/
+.env
+content/
+node_modules/
+out/
+test-artifacts/
+public/release.json
+.build-state.json
+.content-map.json
