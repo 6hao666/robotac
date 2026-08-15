@@ -33,6 +33,7 @@
 | `test_03_unit.sh` | 纯单元测试 |
 | `test_04_simulation.sh` | 简化假飞控 rostest |
 | `test_05_hardware_readonly.sh` | 真实设备只读检查 |
+| `sensor_setup.py` | 发现 Livox 地址、识别相机并验证现场配置 |
 | `sync_workspace.sh` | 不删除远端文件的工作空间同步 |
 
 工具之间不自动串联硬件或实飞步骤。

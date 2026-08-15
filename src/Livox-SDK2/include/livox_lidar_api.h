@@ -46,6 +46,13 @@ void GetLivoxLidarSdkVer(LivoxLidarSdkVer *version);
 bool LivoxLidarSdkInit(const char* path, const char* host_ip = "", const LivoxLidarLoggerCfgInfo* log_cfg_info = nullptr);
 
 /**
+ * Limit host-IP initialization to read-only device discovery.
+ * Call before LivoxLidarSdkInit(nullptr, host_ip). Discovery-only mode reports
+ * identity information without querying firmware or changing lidar data ports.
+ */
+void EnableLivoxLidarDiscoveryOnly();
+
+/**
  * Start the device scanning routine which runs on a separate thread.
  * @return true if successfully started, otherwise false.
  */

@@ -102,6 +102,9 @@ class DeviceManager : public IOLoop::IOLoopDelegate {
 
   bool Init(const std::string& host_ip, const LivoxLidarLoggerCfgInfo* log_cfg_info);
 
+  void EnableDiscoveryOnly() { discovery_only_ = true; }
+  bool IsDiscoveryOnly() const { return discovery_only_; }
+
   bool Init(std::shared_ptr<std::vector<LivoxLidarCfg>>& lidars_cfg_ptr,
       std::shared_ptr<std::vector<LivoxLidarCfg>>& custom_lidars_cfg_ptr,
       std::shared_ptr<LivoxLidarLoggerCfg> lidar_logger_cfg_ptr,
@@ -189,6 +192,7 @@ class DeviceManager : public IOLoop::IOLoopDelegate {
   std::map<uint32_t, uint16_t> lidars_dev_type_;
 
   bool is_view_;
+  bool discovery_only_;
   std::string detection_host_ip_;
   
   std::mutex view_device_mutex_;
@@ -204,4 +208,3 @@ class DeviceManager : public IOLoop::IOLoopDelegate {
 } // namespace livox
 
 #endif // LIVOX_DEVICE_MANAGER_H_
-

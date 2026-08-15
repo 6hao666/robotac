@@ -3,6 +3,7 @@ cmake
 ffmpeg
 geographiclib-tools
 git
+iputils-arping
 libapr1-dev
 libeigen3-dev
 libgeographic-dev
@@ -10,6 +11,7 @@ libopencv-dev
 libpcl-dev
 libv4l-dev
 libxml2-utils
+v4l-utils
 python3-catkin-tools
 python3-nose
 python3-numpy

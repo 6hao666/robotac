@@ -33,6 +33,44 @@ source devel/setup.bash
 
 构建和仿真阶段不连接设备，不启动真实硬件 launch。
 
+## 单独验证传感器
+
+首次配置或排障时，先分别启动低层节点。雷达终端执行：
+
+```bash
+# 发现并比较现场地址；需要时按提示确认写入配置。
+./tools/sensor_setup.py lidar --interface <雷达网卡>
+# 只启动 Livox 驱动，不启动相机或 FAST-LIO。
+roslaunch robotac_bringup lidar_mid360s.launch
+```
+
+在另一个已加载工作空间环境的终端检查：
+
+```bash
+# 确认 FAST-LIO 所需的自定义点云类型。
+rostopic type /livox/lidar
+# 分别观察点云与 IMU 接收频率。
+rostopic hz /livox/lidar
+rostopic hz /livox/imu
+# 读取一帧 IMU，检查时间戳和 frame。
+rostopic echo -n 1 /livox/imu
+```
+
+`/livox/lidar` 必须为 `livox_ros_driver2/CustomMsg`，`/livox/imu` 必须为
+`sensor_msgs/Imu`。两者稳定后才能启动 FAST-LIO。
+
+相机终端执行：
+
+```bash
+# 确认采集节点、目标模式和稳定别名。
+./tools/sensor_setup.py camera
+# 只启动 RGB 相机。
+roslaunch robotac_bringup camera_rgb.launch
+```
+
+另一个终端检查 `/camera/rgb/image_raw` 和 `/camera/rgb/camera_info` 的类型、频率、
+`frame_id`、宽高以及标定尺寸。不要把相机 metadata 节点传给 `video_device`。
+
 ## 启动基础组件
 
 分别在已加载工作空间环境的终端启动：
@@ -47,6 +85,7 @@ roslaunch robotac_bringup flight_base.launch
 ```
 
 排障时只启动对应的低层 launch。不要用多个终端重复启动同一设备节点。
+`sensors.launch` 会同时启动 MID360 和 RGB 相机；它不负责发现地址或安装 udev 规则。
 
 ## 只读检查
 

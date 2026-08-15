@@ -6,3 +6,4 @@ export PYTHONPATH="${workspace}/src/robotac_examples/src:${workspace}/src/robota
 python3 -m unittest discover -s "${workspace}/src/robotac_examples/test" -p 'test_*.py'
 python3 -m unittest discover -s "${workspace}/src/robotac_localization/test" -p 'test_*.py'
 python3 -m unittest discover -s "${workspace}/src/robotac_servo/test" -p 'test_*.py'
+python3 -m unittest discover -s "${workspace}/tools/test" -p 'test_*.py'

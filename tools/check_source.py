@@ -36,8 +36,10 @@ def require_paths():
         "src/robotac_bringup/launch/sensors.launch",
         "src/robotac_bringup/launch/perception.launch",
         "src/robotac_bringup/launch/flight_base.launch",
+        "src/robotac_bringup/tools/livox_lidar_discover.cpp",
         "src/robotac_localization/launch/vision_preview.launch",
         "src/robotac_localization/launch/vision_to_px4.launch",
+        "tools/sensor_setup.py",
     ]
     expected_scripts = set()
     for number, name in enumerate(EXAMPLE_NAMES, 1):
@@ -86,8 +88,10 @@ def check_python():
     files = []
     for package in OWN_PACKAGES:
         files.extend(package.rglob("*.py"))
-    files.append(ROOT / "tools/check_source.py")
-    for path in sorted(files):
+    files.extend((ROOT / "tools").glob("*.py"))
+    files.extend((ROOT / "tools/test").glob("*.py"))
+    files = sorted(set(files))
+    for path in files:
         source = path.read_text(encoding="utf-8")
         try:
             tree = ast.parse(source, filename=str(path))
@@ -172,6 +176,21 @@ def check_hardware_defaults():
     lidar_ip = lidar["lidar_configs"][0]["ip"]
     if host_ip != "<机载网卡地址>" or lidar_ip != "<雷达地址>":
         fail("MID360 配置必须保留现场填写的地址占位符")
+
+    discover_path = (
+        ROOT / "src/robotac_bringup/tools/livox_lidar_discover.cpp")
+    discover_source = discover_path.read_text(encoding="utf-8")
+    required_discovery = ["EnableLivoxLidarDiscoveryOnly",
+                          "LivoxLidarSdkInit(nullptr", "LivoxLidarSdkUninit",
+                          "SetLivoxLidarInfoChangeCallback"]
+    for value in required_discovery:
+        if value not in discover_source:
+            fail("Livox 发现器缺少只读发现接口：%s" % value)
+    forbidden_discovery = ["SetLivoxLidarWorkMode", "SetLivoxLidarIp",
+                           "SetLivoxLidarPointCloudCallBack"]
+    for value in forbidden_discovery:
+        if value in discover_source:
+            fail("Livox 发现器包含设备修改或数据流接口：%s" % value)
 
     mavros_launch = (ROOT / "src/robotac_bringup/launch/mavros_px4.launch")
     mavros_source = mavros_launch.read_text(encoding="utf-8")

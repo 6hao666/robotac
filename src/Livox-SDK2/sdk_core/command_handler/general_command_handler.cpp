@@ -351,6 +351,9 @@ void GeneralCommandHandler::HandleDetectionData(uint32_t handle, uint16_t lidar_
 
   if (devices_.find(handle) != devices_.end()) {
     DeviceInfo& device_info = devices_[handle];
+    if (device_manager_ && device_manager_->IsDiscoveryOnly()) {
+      return;
+    }
     if (!(device_info.is_update_cfg.load()) && (device_info.is_get_loader_mode.load()) && !(device_info.is_loader_mode.load())) {
       if (!is_view_) {
         UpdateLidarCfg(detection_data->dev_type, handle, detection_data->cmd_port);
@@ -388,6 +391,10 @@ void GeneralCommandHandler::HandleDetectionData(uint32_t handle, uint16_t lidar_
   device_info.is_get_loader_mode.store(false);
   device_info.is_update_cfg.store(false);
   device_info.is_callback.store(false);
+  if (device_manager_ && device_manager_->IsDiscoveryOnly()) {
+    LivoxLidarInfoChange(handle);
+    return;
+  }
   GetFirmwareType(handle, device_info);
 }
 
@@ -548,7 +555,8 @@ void GeneralCommandHandler::LivoxLidarInfoChange(const uint32_t handle) {
 
   }
 
-  if (device_manager_ && is_view_ && !is_loader_mode) {
+  if (device_manager_ && is_view_ && !is_loader_mode &&
+      !device_manager_->IsDiscoveryOnly()) {
     device_manager_->UpdateViewLidarCfgCallback(handle);
   }
 
@@ -810,4 +818,3 @@ void GeneralCommandHandler::CommandsHandle(TimePoint now) {
 
 }  // namespace livox
 } // namespace lidar
-

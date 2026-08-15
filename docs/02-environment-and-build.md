@@ -119,3 +119,8 @@ rosdep update
 
 `build/` 和 `devel/` 不应跨机器同步。删除本机生成目录后重新构建；该操作不得影响 `src/`
 和未提交源码。
+
+## 下一步
+
+首次连接真实硬件时，不要直接启动整套 bringup。先按[硬件与配置](03-hardware-and-configuration.md)
+运行 `sensor_setup.py`，确认机载网卡地址、雷达地址和相机稳定设备名，再分别启动传感器节点。

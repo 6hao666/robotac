@@ -57,6 +57,7 @@ DeviceManager::DeviceManager()
       is_stop_detection_(false),
       detection_thread_(nullptr),
       is_view_(false),
+      discovery_only_(false),
       detection_host_ip_(""),
       enable_save_log_(false) {
 }
@@ -892,6 +893,7 @@ void DeviceManager::Destory() {
   }
 
   is_view_ = false;
+  discovery_only_ = false;
   detection_host_ip_ = "";
   
   {

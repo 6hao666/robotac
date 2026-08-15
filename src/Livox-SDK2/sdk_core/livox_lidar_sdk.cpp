@@ -105,6 +105,10 @@ bool LivoxLidarSdkInit(const char* path, const char* host_ip, const LivoxLidarLo
   return true;
 }
 
+void EnableLivoxLidarDiscoveryOnly() {
+  DeviceManager::GetInstance().EnableDiscoveryOnly();
+}
+
 void LivoxLidarSdkUninit() {
   if (!is_initialized) {
     return;
