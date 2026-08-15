@@ -17,16 +17,26 @@ Ubuntu 20.04 上完成。
 
 ## 首次安装
 
+目标机须预先安装 Ubuntu 20.04 和 ROS Noetic。Orin Nano Super 的标准软件部署入口为：
+
 ```bash
 # 进入工作空间目录。
 cd ~/robotac_ws
-# 安装系统依赖并构建第三方库。
-./tools/install_ubuntu20.sh
+# 完成平台预检、依赖和定制 SDK 安装、比赛构建及离线测试。
+./tools/setup_orin_nano_super.sh
+# 加载构建后的工作空间环境。
+source devel/setup.bash
 ```
 
-该脚本安装 apt 与 rosdep 依赖，并构建系统级 `Livox-SDK2` 和 `apriltag`。比赛构建使用系统
-预编译的 MAVROS、MAVROS Extras 和 AprilTag ROS，该脚本会一并安装对应的 Noetic 包。脚本
-不会启动 ROS 节点，不连接飞机，也不修改 PX4 参数。第三方库和 catkin 默认使用
+一条龙脚本只接受 ARM64 的 Jetson Orin Nano、Ubuntu 20.04 和 ROS Noetic 环境，并要求由
+工作空间所有者以普通用户身份运行。它不会启动 ROS 节点、不连接飞机、不安装硬件 udev、
+不写雷达持久网络，也不修改 PX4 参数。脚本成功仅表示软件就绪，完成后仍须按硬件配置文档
+执行现场确认。
+
+底层 `install_ubuntu20.sh` 安装 apt 与 rosdep 依赖，并构建系统级 `Livox-SDK2` 和 `apriltag`。
+比赛构建使用系统预编译的 MAVROS、MAVROS Extras 和 AprilTag ROS，安装脚本会一并安装对应
+的 Noetic 包。项目不下载 GeographicLib 数据集，当前 MAVROS 白名单也不启用全局定位插件。
+第三方库和 catkin 默认使用
 `nproc - 1` 个并行任务
 （单核主机使用 1 个），为系统和 ROS 进程保留一个逻辑 CPU。内存受限时可显式降低
 `ROBOTAC_BUILD_JOBS`，资源充足时也可按需覆盖：
@@ -34,6 +44,8 @@ cd ~/robotac_ws
 ```bash
 # 使用 4 个并行任务安装依赖。
 ROBOTAC_BUILD_JOBS=4 ./tools/install_ubuntu20.sh
+# 使用 4 个并行任务完成一条龙软件部署。
+ROBOTAC_BUILD_JOBS=4 ./tools/setup_orin_nano_super.sh
 # 使用 4 个并行任务执行 catkin 构建。
 ROBOTAC_BUILD_JOBS=4 ./tools/test_02_build.sh
 ```

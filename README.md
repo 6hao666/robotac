@@ -49,13 +49,14 @@ OFFBOARD、解锁和降落；`11` 会操作投放机构。
 ```bash
 # 进入工作空间目录。
 cd ~/robotac_ws
-# 安装 Ubuntu 20.04、ROS Noetic 和项目依赖。
-./tools/install_ubuntu20.sh
-# 执行默认比赛构建并检查项目包。
-./tools/test_02_build.sh
+# 在已安装 ROS Noetic 的 Orin Nano Super 上完成预检、安装、比赛构建和离线测试。
+./tools/setup_orin_nano_super.sh
 # 加载当前工作空间的 ROS 环境。
 source devel/setup.bash
 ```
+
+目标机必须预先安装 Ubuntu 20.04 和 ROS Noetic。一条龙脚本不会配置真实硬件，也不会启动
+ROS 节点；脚本成功仅表示软件就绪，雷达网络、稳定设备别名和机械标定仍须按现场文档确认。
 
 默认比赛模式的增量构建执行：
 
@@ -67,7 +68,8 @@ source devel/setup.bash
 需要验证仓库中包含的全部第三方源码时执行 `./tools/build_full.sh`，并按需加载
 `devel_full/setup.bash`。日常比赛运行继续加载 `devel/setup.bash`。
 
-依赖安装和构建的详细条件见[环境与构建](docs/02-environment-and-build.md)。
+需要分步排障时，仍可单独执行 `install_ubuntu20.sh`、`test_02_build.sh` 和其他测试脚本。
+详细条件见[环境与构建](docs/02-environment-and-build.md)。
 
 ## 示例顺序
 
