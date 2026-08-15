@@ -1,7 +1,7 @@
 # 旧版迁移说明
 
-本次重整删除完整比赛任务实现和旧接口，不提供兼容层。旧代码仍可从 Git 历史查阅，但不应
-复制回当前教学工作空间继续使用。
+本次重整将旧任务代码拆分为定位、示例和设备驱动，旧代码仍可从 Git 历史查阅。当前工作
+空间使用新的包结构和接口。
 
 ## 包与目录
 
@@ -22,7 +22,7 @@
 | `tag_payload_mission.launch`、`tag_payload_mission_full.launch` | 03、04、09、10、11 独立示例 |
 | `payload_drop_box_test.launch` | `11_payload_release.launch`，与飞行分开 |
 
-完整任务 launch、历史比赛航线、观察器和证据分析器已经删除。
+旧任务 launch、历史比赛航线、观察器和证据分析器已经移出当前工作空间。
 
 ## ROS 接口
 
@@ -43,7 +43,7 @@
 - 外部视觉参数放在 `robotac_localization`。
 - 教学航点放在 `robotac_examples`。
 - 舵机参数放在 `robotac_servo`。
-- 历史比赛航线和完整任务参数不迁移。
+- 比赛相关航线和参数应根据当前规则重新整理。
 
 ## 行为变化
 

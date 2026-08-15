@@ -35,5 +35,5 @@ rosservice call /robotac_examples/tag_centering_flight/start "{}"
 
 ## 下一步
 
-保存识别状态、目标位置或中心偏差记录。完整比赛任务流程由参赛选手自行实现。投放机构
+保存识别状态、目标位置或中心偏差记录。后续任务流程由参赛选手根据规则安排。投放机构
 单独按[示例 11](11-payload-release.md)检查。
