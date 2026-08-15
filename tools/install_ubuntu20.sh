@@ -39,9 +39,7 @@ if [[ ${ROBOTAC_SKIP_SYSTEM_PACKAGES:-0} != 1 ]]; then
   done
   "${sudo_cmd[@]}" apt-get update
   "${sudo_cmd[@]}" apt-get install -y "${packages[@]}"
-  if ! rosdep db >/dev/null 2>&1; then
-    "${sudo_cmd[@]}" rosdep init
-  fi
+  "${sudo_cmd[@]}" rosdep init || true
   rosdep update
   rosdep install --from-paths "${workspace}/src" --ignore-src -r -y \
     --skip-keys=apriltag
