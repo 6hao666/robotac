@@ -17,8 +17,10 @@
 释放动作：
 
 ```bash
+# 启动投放机构示例并选择释放位置。
 roslaunch robotac_examples 11_payload_release.launch \
   released:=true servo_port:=<舵机设备>
+# 请求示例执行一次释放动作。
 rosservice call /robotac_examples/payload_release/start "{}"
 ```
 

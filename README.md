@@ -47,15 +47,20 @@ OFFBOARD、解锁和降落；`11` 会操作投放机构。
 ## 安装与构建
 
 ```bash
+# 进入工作空间目录。
 cd ~/robotac_ws
+# 安装 Ubuntu 20.04、ROS Noetic 和项目依赖。
 ./tools/install_ubuntu20.sh
+# 执行 catkin 构建并检查项目包。
 ./tools/test_02_build.sh
+# 加载当前工作空间的 ROS 环境。
 source devel/setup.bash
 ```
 
 增量构建执行：
 
 ```bash
+# 执行一次增量构建。
 ./tools/build.sh
 ```
 
@@ -82,8 +87,11 @@ source devel/setup.bash
 ## 离线验证
 
 ```bash
+# 检查源码、接口和文档链接。
 ./tools/test_01_source.sh
+# 运行不连接硬件的单元测试。
 ./tools/test_03_unit.sh
+# 运行简化假飞控仿真。
 ./tools/test_04_simulation.sh
 ```
 

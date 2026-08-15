@@ -16,7 +16,9 @@ Ubuntu 20.04 上完成。
 ## 首次安装
 
 ```bash
+# 进入工作空间目录。
 cd ~/robotac_ws
+# 安装系统依赖并构建第三方库。
 ./tools/install_ubuntu20.sh
 ```
 
@@ -25,30 +27,40 @@ cd ~/robotac_ws
 内存受限的主机上触发 OOM。资源充足时可显式设置 `ROBOTAC_BUILD_JOBS`：
 
 ```bash
+# 使用 4 个并行任务安装依赖。
 ROBOTAC_BUILD_JOBS=4 ./tools/install_ubuntu20.sh
+# 使用 4 个并行任务执行 catkin 构建。
 ROBOTAC_BUILD_JOBS=4 ./tools/test_02_build.sh
 ```
 
 ## 首次构建
 
 ```bash
+# 执行完整 catkin 构建。
 ./tools/test_02_build.sh
+# 加载构建后的工作空间环境。
 source devel/setup.bash
 ```
 
 构建成功后应能发现以下项目包：
 
 ```bash
+# 查找硬件启动包。
 rospack find robotac_bringup
+# 查找定位包。
 rospack find robotac_localization
+# 查找教学示例包。
 rospack find robotac_examples
+# 查找舵机驱动包。
 rospack find robotac_servo
 ```
 
 ## 增量构建
 
 ```bash
+# 执行 catkin 增量构建。
 ./tools/build.sh
+# 重新加载工作空间环境。
 source devel/setup.bash
 ```
 
@@ -58,8 +70,11 @@ source devel/setup.bash
 ## 离线测试
 
 ```bash
+# 检查源码、接口和文档链接。
 ./tools/test_01_source.sh
+# 运行纯单元测试。
 ./tools/test_03_unit.sh
+# 运行简化假飞控仿真。
 ./tools/test_04_simulation.sh
 ```
 
@@ -85,7 +100,9 @@ source devel/setup.bash
 ### rosdep 未初始化
 
 ```bash
+# 初始化 rosdep（仅在系统尚未初始化时执行）。
 sudo rosdep init
+# 更新 rosdep 依赖索引。
 rosdep update
 ```
 

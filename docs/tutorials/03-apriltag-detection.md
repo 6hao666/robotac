@@ -13,6 +13,7 @@
 ## 启动命令
 
 ```bash
+# 启动 AprilTag 原始检测示例。
 roslaunch robotac_examples 03_apriltag_detection.launch
 ```
 

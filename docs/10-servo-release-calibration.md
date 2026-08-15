@@ -40,7 +40,9 @@
 ## 点动工具
 
 ```bash
+# 加载工作空间环境。
 source devel/setup.bash
+# 启动裸舵机角度点动工具。
 rosrun robotac_servo servo_angle_tuner.py
 ```
 
@@ -78,20 +80,25 @@ ROS 参数，不要把一长串临时参数写进固定操作命令。
 启动驱动：
 
 ```bash
+# 启动舵机驱动节点。
 roslaunch robotac_servo servo.launch port:=<舵机设备>
 ```
 
 启动过程不应产生机械动作。读取状态：
 
 ```bash
+# 读取舵机串口连接状态。
 rostopic echo -n 1 /robotac_servo/connected
+# 读取舵机当前状态。
 rostopic echo -n 1 /robotac_servo/state
 ```
 
 在现场负责人确认后，分别调用阻挡和释放：
 
 ```bash
+# 请求舵机回到阻挡位置。
 rosservice call /robotac_servo/set_released "data: false"
+# 请求舵机转到释放位置。
 rosservice call /robotac_servo/set_released "data: true"
 ```
 

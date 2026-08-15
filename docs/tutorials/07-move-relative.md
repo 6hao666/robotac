@@ -13,7 +13,9 @@
 ## 启动命令
 
 ```bash
+# 启动相对位移示例；此时不会自动起飞。
 roslaunch robotac_examples 07_move_relative.launch height:=0.6 forward:=0.5
+# 请求示例开始执行相对位移。
 rosservice call /robotac_examples/move_relative/start "{}"
 ```
 

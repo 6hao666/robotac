@@ -46,7 +46,9 @@ MAVROS 显示连接成功，只表示已经收到飞控心跳。还需要单独�
 读取：
 
 ```bash
+# 读取外部视觉桥接的当前状态。
 rostopic echo -n 1 /vision_pose_bridge/state
+# 读取外部视觉是否健康。
 rostopic echo -n 1 /vision_pose_bridge/healthy
 ```
 

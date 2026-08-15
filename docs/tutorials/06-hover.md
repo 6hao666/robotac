@@ -14,18 +14,21 @@
 ## 启动命令
 
 ```bash
+# 启动定高悬停示例；此时不会自动起飞。
 roslaunch robotac_examples 06_hover.launch height:=0.6 hold:=3.0
 ```
 
 launch 启动后应保持 `IDLE`。现场负责人批准后执行：
 
 ```bash
+# 请求示例开始起飞和悬停。
 rosservice call /robotac_examples/hover/start "{}"
 ```
 
 中止：
 
 ```bash
+# 请求示例中止并降落。
 rosservice call /robotac_examples/hover/stop "{}"
 ```
 

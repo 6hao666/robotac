@@ -12,12 +12,14 @@
 ## 启动命令
 
 ```bash
+# 生成一个位置目标预览，不向 MAVROS 发布。
 roslaunch robotac_examples 05_setpoint_preview.launch x:=0.5 y:=0.0 z:=0.6
 ```
 
 ## 预期输出
 
 ```bash
+# 查看位置目标预览。
 rostopic echo /robotac_examples/setpoint_preview/target
 ```
 

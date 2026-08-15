@@ -13,6 +13,7 @@
 ## 启动命令
 
 ```bash
+# 启动本地位姿只读示例。
 roslaunch robotac_examples 02_local_pose.launch
 ```
 

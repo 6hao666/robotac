@@ -5,6 +5,7 @@
 从开发机同步到机载 Ubuntu 主机：
 
 ```bash
+# 将工作空间同步到机载 Ubuntu 主机。
 ./tools/sync_workspace.sh <用户>@<飞机地址>:<工作空间目录>
 ```
 
@@ -14,11 +15,17 @@
 ## 机载构建
 
 ```bash
+# 进入机载工作空间。
 cd <工作空间目录>
+# 检查源码和文档链接。
 ./tools/test_01_source.sh
+# 构建项目并检查包发现情况。
 ./tools/test_02_build.sh
+# 加载构建后的 ROS 环境。
 source devel/setup.bash
+# 运行纯单元测试。
 ./tools/test_03_unit.sh
+# 运行简化仿真。
 ./tools/test_04_simulation.sh
 ```
 
@@ -29,8 +36,11 @@ source devel/setup.bash
 分别在已加载工作空间环境的终端启动：
 
 ```bash
+# 启动 MID360 和 RGB 相机。
 roslaunch robotac_bringup sensors.launch
+# 启动 FAST-LIO 和 AprilTag。
 roslaunch robotac_bringup perception.launch
+# 启动 MAVROS 和外部视觉输出。
 roslaunch robotac_bringup flight_base.launch
 ```
 
@@ -41,15 +51,20 @@ roslaunch robotac_bringup flight_base.launch
 基础组件全部启动后执行：
 
 ```bash
+# 读取真实设备和 ROS 数据，不发送控制命令。
 ./tools/test_05_hardware_readonly.sh
 ```
 
 随后人工检查：
 
 ```bash
+# 查看 FAST-LIO 里程计频率。
 rostopic hz /sunray/odometry
+# 查看 MAVROS 本地位姿频率。
 rostopic hz /mavros/local_position/pose
+# 读取外部视觉桥接状态。
 rostopic echo -n 1 /vision_pose_bridge/state
+# 读取飞控连接状态。
 rostopic echo -n 1 /mavros/state
 ```
 
@@ -60,18 +75,21 @@ rostopic echo -n 1 /mavros/state
 以悬停示例为例：
 
 ```bash
+# 启动定高悬停示例；此时不会自动起飞。
 roslaunch robotac_examples 06_hover.launch
 ```
 
 launch 启动后保持 `IDLE`。现场检查完成并获得开始指令后，另行调用：
 
 ```bash
+# 请求悬停示例开始执行。
 rosservice call /robotac_examples/hover/start "{}"
 ```
 
 需要中止时：
 
 ```bash
+# 请求当前示例中止并降落。
 rosservice call /robotac_examples/hover/stop "{}"
 ```
 

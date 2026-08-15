@@ -13,13 +13,16 @@
 ## 启动命令
 
 ```bash
+# 启动 Tag 对准预览示例，不控制飞机。
 roslaunch robotac_examples 09_tag_centering_preview.launch tag_id:=0
 ```
 
 ## 预期输出
 
 ```bash
+# 查看视觉对准目标预览。
 rostopic echo /robotac_examples/tag_centering_preview/target
+# 查看 Tag 相对飞机的水平偏差。
 rostopic echo /robotac_examples/tag/error
 ```
 

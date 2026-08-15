@@ -20,9 +20,13 @@
 ## 离线检查
 
 ```bash
+# 检查源码、配置、接口和文档链接。
 ./tools/test_01_source.sh
+# 执行 catkin 构建。
 ./tools/test_02_build.sh
+# 运行纯单元测试。
 ./tools/test_03_unit.sh
+# 运行假飞控仿真。
 ./tools/test_04_simulation.sh
 ```
 
@@ -40,6 +44,7 @@
 ## 只读实机
 
 ```bash
+# 读取真实设备和 ROS 数据，不发送控制命令。
 ./tools/test_05_hardware_readonly.sh
 ```
 

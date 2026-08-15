@@ -14,8 +14,10 @@
 ## 启动命令
 
 ```bash
+# 启动简短航点示例并指定航点文件。
 roslaunch robotac_examples 08_waypoints.launch \
   route_file:=$(rospack find robotac_examples)/config/waypoints.yaml
+# 请求示例开始执行航点。
 rosservice call /robotac_examples/waypoints/start "{}"
 ```
 

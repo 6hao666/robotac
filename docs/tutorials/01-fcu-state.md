@@ -13,6 +13,7 @@
 ## 启动命令
 
 ```bash
+# 启动 FCU 状态只读示例。
 roslaunch robotac_examples 01_fcu_state.launch
 ```
 

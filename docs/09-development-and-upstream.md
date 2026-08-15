@@ -66,7 +66,9 @@
 ## 提交前检查
 
 ```bash
+# 检查源码、接口和文档链接。
 ./tools/test_01_source.sh
+# 运行纯单元测试。
 ./tools/test_03_unit.sh
 ```
 

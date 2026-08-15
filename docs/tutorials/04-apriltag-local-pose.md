@@ -13,13 +13,16 @@
 ## 启动命令
 
 ```bash
+# 启动 AprilTag 本地位姿转换示例。
 roslaunch robotac_examples 04_apriltag_local_pose.launch tag_id:=0
 ```
 
 ## 预期输出
 
 ```bash
+# 查看 Tag 在 map 中的位置。
 rostopic echo /robotac_examples/tag/pose
+# 查看 Tag 相对飞机的水平偏差。
 rostopic echo /robotac_examples/tag/error
 ```
 
