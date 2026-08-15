@@ -51,18 +51,21 @@ OFFBOARD、解锁和降落；`11` 会操作投放机构。
 cd ~/robotac_ws
 # 安装 Ubuntu 20.04、ROS Noetic 和项目依赖。
 ./tools/install_ubuntu20.sh
-# 执行 catkin 构建并检查项目包。
+# 执行默认比赛构建并检查项目包。
 ./tools/test_02_build.sh
 # 加载当前工作空间的 ROS 环境。
 source devel/setup.bash
 ```
 
-增量构建执行：
+默认比赛模式的增量构建执行：
 
 ```bash
 # 执行一次增量构建。
 ./tools/build.sh
 ```
+
+需要验证仓库中包含的全部第三方源码时执行 `./tools/build_full.sh`，并按需加载
+`devel_full/setup.bash`。日常比赛运行继续加载 `devel/setup.bash`。
 
 依赖安装和构建的详细条件见[环境与构建](docs/02-environment-and-build.md)。
 

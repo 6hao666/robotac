@@ -6,7 +6,13 @@ package_files=(
   "${workspace}/tools/ubuntu20_packages.txt"
   "${workspace}/tools/ubuntu20_direct_ros_packages.txt"
 )
-build_jobs=${ROBOTAC_BUILD_JOBS:-2}
+cpu_count=$(nproc)
+default_build_jobs=$((cpu_count > 1 ? cpu_count - 1 : 1))
+build_jobs=${ROBOTAC_BUILD_JOBS:-${default_build_jobs}}
+if [[ ! "$build_jobs" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ROBOTAC_BUILD_JOBS 必须是正整数。" >&2
+  exit 64
+fi
 if [[ ! -f /opt/ros/noetic/setup.bash ]]; then
   echo "请在 Ubuntu 20.04 与 ROS Noetic 环境中执行。" >&2
   exit 1

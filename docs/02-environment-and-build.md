@@ -24,9 +24,12 @@ cd ~/robotac_ws
 ./tools/install_ubuntu20.sh
 ```
 
-该脚本安装 apt 与 rosdep 依赖，并构建系统级 `Livox-SDK2` 和 `apriltag`。脚本不会启动 ROS
-节点，不连接飞机，也不修改 PX4 参数。第三方库和 catkin 默认使用 2 个并行任务，避免在
-内存受限的主机上触发 OOM。资源充足时可显式设置 `ROBOTAC_BUILD_JOBS`：
+该脚本安装 apt 与 rosdep 依赖，并构建系统级 `Livox-SDK2` 和 `apriltag`。比赛构建使用系统
+预编译的 MAVROS、MAVROS Extras 和 AprilTag ROS，该脚本会一并安装对应的 Noetic 包。脚本
+不会启动 ROS 节点，不连接飞机，也不修改 PX4 参数。第三方库和 catkin 默认使用
+`nproc - 1` 个并行任务
+（单核主机使用 1 个），为系统和 ROS 进程保留一个逻辑 CPU。内存受限时可显式降低
+`ROBOTAC_BUILD_JOBS`，资源充足时也可按需覆盖：
 
 ```bash
 # 使用 4 个并行任务安装依赖。
@@ -35,16 +38,18 @@ ROBOTAC_BUILD_JOBS=4 ./tools/install_ubuntu20.sh
 ROBOTAC_BUILD_JOBS=4 ./tools/test_02_build.sh
 ```
 
-## 首次构建
+## 默认比赛构建
 
 ```bash
-# 执行完整 catkin 构建。
+# 只编译比赛运行需要的本地包，并检查系统 ROS 包没有被源码遮蔽。
 ./tools/test_02_build.sh
 # 加载构建后的工作空间环境。
 source devel/setup.bash
 ```
 
-构建成功后应能发现以下项目包：
+默认模式编译 `livox_ros_driver2`、`fast_lio`、`web_cam` 和四个 Robotac 自有包。
+`libmavconn`、`mavros_msgs`、`mavros`、`mavros_extras` 和 `apriltag_ros` 直接使用
+`/opt/ros/noetic` 的二进制包。构建成功后应能发现以下项目包：
 
 ```bash
 # 查找硬件启动包。
@@ -57,17 +62,30 @@ rospack find robotac_examples
 rospack find robotac_servo
 ```
 
-## 增量构建
+## 比赛模式增量构建
 
 ```bash
-# 执行 catkin 增量构建。
+# 执行比赛模式 catkin 增量构建。
 ./tools/build.sh
 # 重新加载工作空间环境。
 source devel/setup.bash
 ```
 
-修改 Python、launch 或配置后仍应重新执行源码检查。修改 `package.xml`、CMake 或消息依赖后，
-必须重新执行完整构建。
+修改 Python、launch 或配置后仍应重新执行源码检查。修改本地比赛包的 `package.xml`、CMake
+或消息依赖后，重新执行默认比赛构建。
+
+## 全源码构建
+
+需要验证仓库内 MAVROS、MAVROS Extras、AprilTag ROS 和上游测试包时执行：
+
+```bash
+# 在独立 build/full 和 devel_full 中构建全部源码包。
+./tools/build_full.sh
+# 仅在验证全源码构建结果时加载该环境。
+source devel_full/setup.bash
+```
+
+全源码构建不覆盖默认比赛环境 `devel`，日常运行仍应加载 `devel/setup.bash`。
 
 ## 离线测试
 
@@ -85,7 +103,7 @@ source devel/setup.bash
 | 工具 | 检查范围 |
 | --- | --- |
 | `test_01_source.sh` | Python 语法、行数、XML、YAML、JSON、路径、接口、文档链接 |
-| `test_02_build.sh` | catkin 构建和项目包发现 |
+| `test_02_build.sh` | 默认比赛构建、系统包来源和项目包发现 |
 | `test_03_unit.sh` | 坐标、Tag 筛选、航点解析、定位检查、舵机协议 |
 | `test_04_simulation.sh` | 假飞控下的启动前检查、飞行示例、停止和故障降落 |
 | `test_05_hardware_readonly.sh` | 真实设备与 ROS 数据只读检查 |

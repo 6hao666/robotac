@@ -14,6 +14,21 @@
 同步脚本排除 `.git`、`build`、`devel`、`install` 和 `log`，也不会删除远端已有的其他文件。
 同步前应确认目标目录，避免覆盖其他队伍的文件或系统服务使用的配置。
 
+需要用本地仓库完整替换已确认的机载工作空间时，先预演再执行镜像同步：
+
+```bash
+# 预览文件更新、旧源码删除、构建目录清理和环境文件初始化。
+./tools/sync_workspace.sh --mirror --dry-run \
+  <用户>@<飞机地址>:<工作空间绝对目录>
+# 执行完整镜像；该操作会同步 .git 并删除远端多余源码。
+./tools/sync_workspace.sh --mirror \
+  <用户>@<飞机地址>:<工作空间绝对目录>
+```
+
+镜像模式不会上传或删除已有的 `.env`、`.env.local`。仓库只同步 `.env.template`；使用
+`--init-env` 或 `--mirror` 时，仅在同目录 `.env` 不存在的情况下从模板初始化，并设置为
+`0600`。初始化后的占位值必须在目标主机上核对，不得将真实凭据回传仓库。
+
 ## 机载构建
 
 ```bash
@@ -21,7 +36,7 @@
 cd <工作空间目录>
 # 检查源码和文档链接。
 ./tools/test_01_source.sh
-# 构建项目并检查包发现情况。
+# 执行默认比赛构建并检查包发现情况。
 ./tools/test_02_build.sh
 # 加载构建后的 ROS 环境。
 source devel/setup.bash
@@ -32,6 +47,8 @@ source devel/setup.bash
 ```
 
 构建和仿真阶段不连接设备，不启动真实硬件 launch。
+默认比赛构建使用系统 MAVROS 和 AprilTag ROS。只有验证第三方源码时才执行
+`./tools/build_full.sh`；其环境位于 `devel_full/setup.bash`，不得替代日常比赛环境。
 
 ## 单独验证传感器
 
