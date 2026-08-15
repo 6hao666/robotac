@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>robotac_servo</name>
-  <version>0.1.0</version>
-  <description>Single Boolean switch for the Robotac PWM servo controller.</description>
+  <version>0.2.0</version>
+  <description>Robotac 投放机构串口驱动与地面标定工具。</description>
 
   <maintainer email="liyihan.xyz@gmail.com">Li Yihan</maintainer>
   <license>MIT</license>
@@ -10,4 +10,6 @@
   <buildtool_depend>catkin</buildtool_depend>
   <depend>rospy</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <test_depend>python3-nose</test_depend>
 </package>

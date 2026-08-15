@@ -1,0 +1,7 @@
+# 已知 RGB 相机为 Realtek 0bda:5858。设备会生成 index 0 的采集节点和
+# index 1 的元数据节点，以下规则只为 index 0 创建稳定名称。
+#
+# 更换相机后须替换 USB ID；设备提供序列号时还应增加 ATTRS{serial}。
+# 使用以下命令核对设备属性：
+#   udevadm info --attribute-walk --name=/dev/videoN
+SUBSYSTEM=="video4linux", KERNEL=="video[0-9]*", ATTR{index}=="0", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5858", SYMLINK+="robotac_rgb_camera", GROUP="video", MODE="0660"

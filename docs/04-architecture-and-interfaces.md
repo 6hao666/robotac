@@ -1,158 +1,83 @@
 # 架构与接口
 
-## 文档范围
+## bringup 入口
 
-本章列出 Robotac 自有的 19 个 launch 入口和主要公开 ROS 接口。第三方包包含独立 launch，
-不属于项目入口。所有实际名称来自当前源码；修改接口时必须同步更新契约检查和本文档。
-
-## `robotac_bringup` 启动矩阵
-
-| launch | 默认风险级别 | 用途 |
+| launch | 作用 | 输出 |
 | --- | --- | --- |
-| `apriltag_rgb.launch` | 被动 | 连接 RGB 图像和相机信息，启动 AprilTag 检测 |
-| `camera_extrinsics.launch` | 配置敏感 | 发布相机静态外参；默认零值为占位 |
-| `camera_rgb.launch` | 被动 | 启动 V4L2 RGB 相机及相机标定参数 |
-| `fastlio_mid360s.launch` | 被动 | 运行 MID360 配置的 FAST-LIO，可选 RViz |
-| `full_system.launch` | 被动默认 | 组合雷达、相机、FAST-LIO、Tag；MAVROS、视觉输出、控制器和舵机均需单独启用 |
-| `lidar_mid360s.launch` | 被动 | 启动 Livox MID360 驱动 |
-| `mapping_demo.launch` | 被动 | 组合雷达和 FAST-LIO，用于定位/建图观察 |
-| `mavros_px4.launch` | 遥测 | 使用项目插件和参数启动 MAVROS；打开 FCU 链路但不自动飞行 |
-| `payload_drop_box_test.launch` | 预览默认 | 组合通用航点投放测试；`live_flight` 默认关闭 |
-| `tag_payload_mission_full.launch` | 预览默认 | 组合完整 C 组任务栈；`live_flight` 默认关闭，外参发布也默认关闭 |
+| `sensors.launch` | 启动 MID360 与 RGB 相机 | 只产生传感器数据 |
+| `perception.launch` | 启动 FAST-LIO 与 AprilTag | 只产生定位和检测结果 |
+| `flight_base.launch` | 启动 MAVROS 与外部视觉 PX4 输出 | 不解锁、不发布飞行设定点 |
 
-`full_system.launch` 是通用组合入口，不构成自动飞行指令。其重要开关均默认为 `false`：
-`enable_mavros`、`enable_vision_bridge`、`vision_enable_output`、
-`enable_flight_controller`、`flight_enable_control`、`flight_auto_mode`、
-`flight_auto_arm`、`flight_auto_land`、`flight_enable_payload` 和 `enable_servo`。
+底层 launch 包括 `lidar_mid360s.launch`、`camera_rgb.launch`、`fastlio_mid360s.launch`、
+`apriltag_rgb.launch`、`camera_extrinsics.launch` 和 `mavros_px4.launch`。需要单独检查某个
+组件时，可直接启动相应的底层 launch。
 
-## `robotac_flight` 启动矩阵
+## 定位入口
 
-| launch | 用途 | 是否产生实机输出 |
+| launch | 输入 | 输出 |
 | --- | --- | --- |
-| `active_flight_observer.launch` | 采集受控实飞的航线、设定点、视觉和飞控证据 | 仅订阅 |
-| `ev_acceptance_observer.launch` | 比较外部视觉与 MAVROS 本地位置的方向、尺度和状态 | 仅订阅 |
-| `fastlio_frame_alignment_observer.launch` | 在输出关闭时检查 FAST-LIO 机体轴和手动运动方向 | 仅订阅 |
-| `fastlio_vision_bridge.launch` | 将 `/Odometry` 转为带协方差的外部视觉候选 | 默认只预览 |
-| `local_flight_preflight.launch` | 检查 MAVROS、估计器、视觉、时间同步、帧和消费者 | 仅订阅并读取参数 |
-| `local_waypoint_flight.launch` | 通用本地相对航点状态机 | `enable_control` 默认关闭 |
-| `path_a_vision_pose.launch` | 将 `/sunray/odometry` 转为 `PoseStamped` 外部视觉候选 | `enable_mavros_output` 默认关闭 |
-| `tag_payload_mission.launch` | C 组 Tag 投放任务状态机 | 控制、自动模式、解锁、降落、投放均默认关闭 |
+| `vision_preview.launch` | `/sunray/odometry` | `/robotac_localization/vision_pose_preview` |
+| `vision_to_px4.launch` | `/sunray/odometry` | 预览话题和 `/mavros/vision_pose/pose` |
 
-两条外部视觉路径用途不同：
+两者使用同一实现。输入时间戳、四元数、速度跳变和空间范围检查通过后才发布。
 
-- Path A：`/sunray/odometry` -> `PoseStamped`，正式候选输出为 `/mavros/vision_pose/pose`。
-- 协方差桥：`/Odometry` -> `PoseWithCovarianceStamped`，默认候选输出为
-  `/mavros/vision_pose/pose_cov`，主要用于比较或回退。
+## 编号示例
 
-两条路径不得同时作为未经核验的飞控输入。
-
-## `robotac_servo` 启动矩阵
-
-| launch | 用途 | 默认行为 |
-| --- | --- | --- |
-| `servo.launch` | 打开 USB PWM 控制器并提供布尔开关接口 | 115200 波特率、启动关闭、退出关闭 |
-
-## 核心节点
-
-| 节点/脚本 | 输入 | 输出或职责 |
-| --- | --- | --- |
-| `local_odom_to_vision_pose.py` | `/sunray/odometry` | 位姿预览、健康状态、可选 MAVROS 视觉输出 |
-| `fastlio_vision_bridge.py` | `/Odometry` | 带协方差预览、健康状态、可选 MAVROS 视觉输出 |
-| `local_flight_preflight.py` | MAVROS、FAST-LIO、视觉状态 | 飞行前只读验收结果与证据文件 |
-| `local_waypoint_flight.py` | 本地位置、视觉、飞控、航点、舵机状态 | 航点预览、状态和受门禁控制的设定点 |
-| `tag_payload_mission.py` | 本地位置、飞控、Tag、舵机状态 | 竞赛任务预览、状态和受门禁控制的设定点 |
-| `servo_node.py` | 布尔开关 | 串口 PWM 帧和写入状态 |
-
-## C 组任务服务
-
-以下服务类型均为 `std_srvs/Trigger`：
-
-| 服务 | 作用 | 前置条件 |
-| --- | --- | --- |
-| `/robotac/tag_payload_mission/start` | 在当前位置和航向建立任务帧并申请启动 | 状态为空闲、全部实时检查通过、现场授权 |
-| `/robotac/tag_payload_mission/abort` | 请求任务中止 | 操作员持续监督，并按现场预案接管 |
-| `/robotac/tag_payload_mission/reset` | 在安全终态后恢复为空闲 | 已停止任务、飞机状态适合复位 |
-
-`start` 服务可调用不代表启动条件成立。节点将拒绝缺少控制开关、飞控状态、位置、消费者、
-舵机回执或部署门禁的请求。服务调用应由现场操作流程或受审计的上位机完成，禁止将调用
-命令设计为跳过检查的快捷步骤。
-
-## 通用航点服务
-
-以下服务类型均为 `std_srvs/Trigger`：
-
-| 服务 | 作用 |
-| --- | --- |
-| `/robotac/flight/start` | 建立本地任务帧并启动已加载航线 |
-| `/robotac/flight/abort` | 中止当前航点任务 |
-| `/robotac/flight/land` | 请求进入已配置的降落流程 |
-| `/robotac/flight/reset` | 从终态复位到空闲 |
-
-## C 组任务话题
-
-| 话题 | 类型 | 方向 | 含义 |
+| 编号 | 节点脚本 | 主要输入 | 主要输出或动作 |
 | --- | --- | --- | --- |
-| `/robotac/tag_payload_mission/status` | `std_msgs/String` | 节点 -> 观察者 | 状态机状态、原因和检查信息 |
-| `/robotac/tag_payload_mission/active` | `std_msgs/Bool` | 节点 -> 观察者 | 任务是否活动，锁存 |
-| `/robotac/tag_payload_mission/route_manifest` | `std_msgs/String` | 节点 -> 观察者 | 当前配置航线清单，锁存 |
-| `/robotac/tag_payload_mission/confirmed_tag_pose` | `geometry_msgs/PoseStamped` | 节点 -> 观察者 | 稳定确认并变换后的 Tag 位姿 |
-| `/robotac/tag_payload_mission/setpoint_preview` | `mavros_msgs/PositionTarget` | 节点 -> 观察者 | 目标预览，不是 MAVROS 控制话题 |
+| 01 | `01_fcu_state.py` | FCU 与落地状态 | 只读日志 |
+| 02 | `02_local_pose.py` | 本地位姿 | 位置、姿态、频率、数据年龄 |
+| 03 | `03_apriltag_detection.py` | `/tag_detections` | Tag ID、相机坐标位置、检测时间 |
+| 04 | `04_apriltag_local_pose.py` | Tag、TF、本地位姿 | Tag 本地位置和水平偏差 |
+| 05 | `05_setpoint_preview.py` | 参数 | `~target`，不发往 MAVROS |
+| 06 | `06_hover.py` | 飞控与定位状态 | 起飞、悬停、降落 |
+| 07 | `07_move_relative.py` | 飞控与定位状态 | 相对位移、返回、降落 |
+| 08 | `08_waypoints.py` | YAML 航点 | 顺序航点和降落 |
+| 09 | `09_tag_centering_preview.py` | Tag 与本地位姿 | 对准 `~target`，不控制飞机 |
+| 10 | `10_tag_centering_flight.py` | Tag、飞控与定位状态 | 对准、稳定 3 秒、降落 |
+| 11 | `11_payload_release.py` | 舵机服务 | 单次阻挡或释放动作 |
 
-## 通用航点话题
+## 飞行服务与公共输出
 
-| 话题 | 类型 | 方向 | 含义 |
-| --- | --- | --- | --- |
-| `/robotac/flight/status` | `std_msgs/String` | 节点 -> 观察者 | 状态和门禁原因 |
-| `/robotac/flight/active` | `std_msgs/Bool` | 节点 -> 观察者 | 航点任务是否活动，锁存 |
-| `/robotac/flight/route_manifest` | `std_msgs/String` | 节点 -> 观察者 | 实际加载的航线清单，锁存 |
-| `/robotac/flight/setpoint_preview` | `mavros_msgs/PositionTarget` | 节点 -> 观察者 | 目标预览 |
-| `/robotac/flight/waypoints` | `geometry_msgs/PoseArray` | 路线发布者 -> 节点 | 运行时位置与航向航点 |
+会控制飞机的示例提供：
 
-`PoseArray` 仅承载位置与航向。停留时间、投放动作等任务元数据应写入 YAML 路线文件。
-
-## 定位与视觉话题
-
-| 话题 | 类型 | 作用 |
+| 接口 | 类型 | 含义 |
 | --- | --- | --- |
-| `/livox/lidar` | Livox 自定义点云 | MID360 点云输入 |
-| `/livox/imu` | `sensor_msgs/Imu` | MID360 IMU 输入 |
-| `/Odometry` | `nav_msgs/Odometry` | FAST-LIO 里程计 |
-| `/mavros/vision_pose/pose` | `geometry_msgs/PoseStamped` | Path A 实际外部视觉输出 |
-| `/robotac/fastlio_vision/path_a_pose_preview` | `geometry_msgs/PoseStamped` | Path A 预览 |
-| `/robotac/fastlio_vision/healthy` | `std_msgs/Bool` | 位姿输入是否满足健康阈值 |
-| `/robotac/fastlio_vision/status` | `std_msgs/String` | 健康、帧、频率和拒绝原因 |
-| `/robotac/fastlio_vision/output_enabled` | `std_msgs/Bool` | 是否实际向 MAVROS 输出，锁存 |
-| `/mavros/local_position/odom` | `nav_msgs/Odometry` | PX4/MAVROS 本地位置反馈 |
-| `/tag_detections` | `apriltag_ros/AprilTagDetectionArray` | AprilTag 检测结果 |
+| `~start` | `std_srvs/Trigger` | 完成启动前检查后接受一次启动请求 |
+| `~stop` | `std_srvs/Trigger` | 中止当前执行并请求降落 |
+| `~state` | `std_msgs/String` | 当前状态名称，不使用 `key=value` 字符串 |
+| `~active` | `std_msgs/Bool` | 当前是否正在执行 |
+| `~target` | `geometry_msgs/PoseStamped` | 当前或预览目标位姿 |
 
-## 舵机话题
+所有飞行示例只向 `/mavros/setpoint_position/local` 发布 `PoseStamped`。示例接口不使用原始
+位置目标位掩码。
 
-| 话题 | 类型 | 含义 |
+## Tag 接口
+
+| 接口 | 类型 | 方向 |
 | --- | --- | --- |
-| `/robotac_servo/control` | `std_msgs/Bool` | `false` 为关舱角，`true` 为配置的开舱角 |
-| `/robotac_servo/status` | `std_msgs/String` | 串口写入状态，不是机械角度测量 |
+| `/robotac_examples/tag/pose` | `geometry_msgs/PoseStamped` | TagTracker 输出 |
+| `/robotac_examples/tag/error` | `geometry_msgs/Vector3Stamped` | Tag 相对飞机的本地坐标偏差 |
 
-## 预览与实机输出
+TagTracker 只选择配置的 ID。连续检测结果跳变过大时，需要重新积累稳定样本。示例 10 在
+飞行中长时间收不到 Tag 时会中止并请求降落。
 
-| 功能 | 预览/观察 | 实机输出 |
+## 舵机接口
+
+| 接口 | 类型 | 含义 |
 | --- | --- | --- |
-| 外部视觉 | `/robotac/fastlio_vision/path_a_pose_preview` | `/mavros/vision_pose/pose` |
-| 通用航点 | `/robotac/flight/setpoint_preview` | `/mavros/setpoint_raw/local` |
-| C 组任务 | `/robotac/tag_payload_mission/setpoint_preview` | `/mavros/setpoint_raw/local` |
-| 投放 | 状态清单和仿真记录 | `/robotac_servo/control` |
+| `/robotac_servo/set_released` | `std_srvs/SetBool` | `true` 释放，`false` 阻挡 |
+| `/robotac_servo/connected` | `std_msgs/Bool` | 串口当前可访问 |
+| `/robotac_servo/state` | `std_msgs/String` | `unknown`、`blocked`、`released` 或 `error` |
+| `/robotac_servo/command_ok` | `std_msgs/Bool` | 最近一次命令是否成功 |
 
-存在预览数据不代表对应实机输出已经启用；`output_enabled=true` 亦不足以证明 PX4
-已接受并正确融合数据。验收必须同时检查消费者、时间同步、估计器和本地位置响应。
+节点断线重连后不会重放上一条动作。
 
 ## 坐标系
 
-- FAST-LIO：`camera_init -> body`。
-- 外部视觉候选：通常为 `odom -> base_link`。
-- MAVROS 本地位置：通常为 `map -> base_link`。
-- 通用航点任务：`robotac_start_body`，`x` 向前、`y` 向左、`z` 向上。
-- C 组任务：启动时建立任务帧，`x` 向机头、`y` 向机体右侧、`z` 向上。
+- FAST-LIO 输入与输出坐标以实际配置和安装标定为准。
+- MAVROS 本地位置按 ROS ENU 表示，PX4 内部转换由 MAVROS 处理。
+- 相对位移示例的 `x` 为起始航向前方，`y` 为左方，`z` 为上方。
+- Tag 本地位置依赖 `map` 到相机光学坐标系的有效 TF。
 
-上述两类任务帧的横向正方向不同，航线文件不得混用。任何帧转换都必须由测量和运动方向
-检查证明，禁止仅凭名称添加静态 TF。
-
-[返回文档索引](README.md)
+TF 名称、方向和数值必须分别验证。

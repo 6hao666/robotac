@@ -1,0 +1,12 @@
+<launch>
+  <arg name="video_device" default="/dev/robotac_rgb_camera" />
+  <arg name="lidar_config"
+       default="$(find robotac_bringup)/config/lidar/mid360s.json" />
+
+  <include file="$(find robotac_bringup)/launch/lidar_mid360s.launch">
+    <arg name="lidar_config" value="$(arg lidar_config)" />
+  </include>
+  <include file="$(find robotac_bringup)/launch/camera_rgb.launch">
+    <arg name="video_device" value="$(arg video_device)" />
+  </include>
+</launch>

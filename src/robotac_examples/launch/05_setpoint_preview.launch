@@ -1,0 +1,13 @@
+<launch>
+  <arg name="x" default="0.5" />
+  <arg name="y" default="0.0" />
+  <arg name="z" default="0.6" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="05_setpoint_preview.py"
+          name="setpoint_preview" output="screen">
+      <param name="x" value="$(arg x)" />
+      <param name="y" value="$(arg y)" />
+      <param name="z" value="$(arg z)" />
+    </node>
+  </group>
+</launch>

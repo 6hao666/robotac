@@ -1,0 +1,15 @@
+<launch>
+  <arg name="fastlio_config"
+       default="$(find robotac_bringup)/config/fastlio/mid360s.yaml" />
+  <arg name="tags_config"
+       default="$(find robotac_bringup)/config/apriltag/tags.yaml" />
+  <arg name="rviz" default="false" />
+
+  <include file="$(find robotac_bringup)/launch/fastlio_mid360s.launch">
+    <arg name="fastlio_config" value="$(arg fastlio_config)" />
+    <arg name="rviz" value="$(arg rviz)" />
+  </include>
+  <include file="$(find robotac_bringup)/launch/apriltag_rgb.launch">
+    <arg name="tags_config" value="$(arg tags_config)" />
+  </include>
+</launch>

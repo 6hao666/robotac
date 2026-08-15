@@ -1,0 +1,5 @@
+# HL-340/CH340 USB PWM 控制器。当前样机报告的 VID:PID 为 1a86:7523。
+# 更换控制器后须先使用 lsusb 核对，不得直接沿用该值。
+# 安装目标为 /etc/udev/rules.d/99-robotac-servo.rules。
+SUBSYSTEM=="tty", KERNEL=="ttyUSB[0-9]*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="robotac_servo", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="robotac_servo", GROUP="dialout", MODE="0660"

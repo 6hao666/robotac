@@ -1,0 +1,10 @@
+<launch>
+  <arg name="route_file"
+       default="$(find robotac_examples)/config/waypoints.yaml" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="08_waypoints.py" name="waypoints"
+          output="screen" required="true">
+      <param name="route_file" value="$(arg route_file)" />
+    </node>
+  </group>
+</launch>

@@ -1,0 +1,11 @@
+input_topic: /sunray/odometry
+preview_topic: /robotac_localization/vision_pose_preview
+px4_topic: /mavros/vision_pose/pose
+output_frame: odom
+expected_input_frame: world
+strict_input_frame: false
+max_age: 0.30
+max_future: 0.10
+timeout: 0.50
+max_speed: 8.0
+max_radius: 50.0

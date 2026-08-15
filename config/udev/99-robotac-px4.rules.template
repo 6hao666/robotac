@@ -1,3 +1,0 @@
-# Replace VENDOR_ID, PRODUCT_ID, and SERIAL with values from:
-# udevadm info --attribute-walk --name=/dev/ttyACMN
-SUBSYSTEM=="tty", ATTRS{idVendor}=="VENDOR_ID", ATTRS{idProduct}=="PRODUCT_ID", ATTRS{serial}=="SERIAL", SYMLINK+="px4_fcu", GROUP="dialout", MODE="0660"

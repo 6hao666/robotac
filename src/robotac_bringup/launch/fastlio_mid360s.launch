@@ -1,13 +1,13 @@
 <launch>
-  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
-  <arg name="fastlio_config" default="$(arg config_root)/fastlio/mid360s.yaml" />
+  <arg name="fastlio_config"
+       default="$(find robotac_bringup)/config/fastlio/mid360s.yaml" />
   <arg name="pcd_save" default="false" />
   <arg name="rviz" default="false" />
 
   <rosparam command="load" file="$(arg fastlio_config)" />
   <param name="pcd_save/pcd_save_en" type="bool" value="$(arg pcd_save)" />
   <node pkg="fast_lio" type="fastlio_mapping" name="fastlio_mapping" output="screen" />
-  <!-- Sunray Path A publishes corrected local odometry here for MAVROS vision pose. -->
+  <!-- 修正后的本地里程计由 robotac_localization 单独接入 MAVROS。 -->
   <node pkg="fast_lio" type="transform_odom_pointCloud" name="transform_odom_pointCloud" output="screen" />
 
   <group if="$(arg rviz)">

@@ -1,0 +1,14 @@
+# 所有门禁默认未确认。只能在对应飞机完成现场检查后逐项修改。
+deployment:
+  lidar_network_configured: false
+  lidar_imu_extrinsics_calibrated: false
+  lidar_imu_time_checked: false
+  camera_extrinsics_measured: false
+  stable_camera_device_configured: false
+  stable_fcu_device_configured: false
+  fastlio_airframe_extrinsics_validated: false
+  fastlio_axes_validated: false
+  px4_external_vision_configured: false
+  px4_offboard_failsafe_configured: false
+  local_flight_ground_tested: false
+  stable_servo_device_configured: false

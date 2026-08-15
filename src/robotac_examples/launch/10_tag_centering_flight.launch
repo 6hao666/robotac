@@ -1,0 +1,13 @@
+<launch>
+  <arg name="tag_id" default="0" />
+  <arg name="height" default="0.6" />
+  <arg name="hold" default="3.0" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="10_tag_centering_flight.py"
+          name="tag_centering_flight" output="screen" required="true">
+      <param name="tag_id" value="$(arg tag_id)" />
+      <param name="height" value="$(arg height)" />
+      <param name="hold" value="$(arg hold)" />
+    </node>
+  </group>
+</launch>

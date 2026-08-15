@@ -1,19 +1,16 @@
 <launch>
-  <arg name="fcu_url" default="serial:///dev/ttyACM0:921600" />
+  <arg name="fcu_url" default="serial:///dev/robotac_px4:921600" />
   <arg name="gcs_url" default="" />
   <arg name="tgt_system" default="1" />
   <arg name="tgt_component" default="1" />
-  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
-  <!-- The default plugin list is local-only and does not require GeographicLib.
-       Set true only after intentionally re-enabling global-position plugins. -->
-  <arg name="check_geographiclib" default="false" />
-
-  <node if="$(arg check_geographiclib)" pkg="robotac_bringup" type="check_geographiclib.sh"
-        name="check_geographiclib" args="--hold" output="screen" required="true" />
+  <arg name="pluginlists_yaml"
+       default="$(find robotac_bringup)/config/mavros/px4_pluginlists.yaml" />
+  <arg name="config_yaml"
+       default="$(find robotac_bringup)/config/mavros/px4.yaml" />
 
   <include file="$(find mavros)/launch/node.launch">
-    <arg name="pluginlists_yaml" value="$(arg config_root)/mavros/px4_pluginlists.yaml" />
-    <arg name="config_yaml" value="$(arg config_root)/mavros/px4.yaml" />
+    <arg name="pluginlists_yaml" value="$(arg pluginlists_yaml)" />
+    <arg name="config_yaml" value="$(arg config_yaml)" />
     <arg name="fcu_url" value="$(arg fcu_url)" />
     <arg name="gcs_url" value="$(arg gcs_url)" />
     <arg name="tgt_system" value="$(arg tgt_system)" />

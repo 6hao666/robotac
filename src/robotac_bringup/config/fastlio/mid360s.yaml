@@ -1,0 +1,35 @@
+common:
+    lid_topic: "/livox/lidar"
+    imu_topic: "/livox/imu"
+    time_sync_en: false         # 仅在确实无法进行外部时间同步时启用。
+    time_offset_lidar_to_imu: 0.0 # 由 LI-Init 等方法标定的雷达与 IMU 时间偏移。
+                                  # 无法准确确认偏移时必须保持为 0.0。
+
+preprocess:
+    lidar_type: 1               # 1: Livox；2: Velodyne；3: Ouster。
+    scan_line: 4
+    blind: 0.5
+
+mapping:
+    acc_cov: 0.1
+    gyr_cov: 0.1
+    b_acc_cov: 0.0001
+    b_gyr_cov: 0.0001
+    fov_degree: 360
+    det_range: 100.0
+    extrinsic_est_en: false     # true 表示在线估计 IMU 与雷达外参。
+    extrinsic_T: [-0.011, -0.02329, 0.04412]
+    extrinsic_R: [1, 0, 0,
+                  0, 1, 0,
+                  0, 0, 1]
+
+publish:
+    path_en: true
+    scan_publish_en: true       # false 表示关闭全部点云输出。
+    dense_publish_en: true      # false 表示降低全局坐标系点云密度。
+    scan_bodyframe_pub_en: true # true 表示输出 IMU 机体坐标系点云。
+
+pcd_save:
+    pcd_save_en: false
+    interval: -1                # 每个 PCD 文件保存的雷达帧数。
+                                # -1 表示保存全部帧，长时间运行可能耗尽内存。

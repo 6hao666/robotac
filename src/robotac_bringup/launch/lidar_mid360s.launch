@@ -1,6 +1,6 @@
 <launch>
-  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
-  <arg name="lidar_config" default="$(arg config_root)/lidar/mid360s.json" />
+  <arg name="lidar_config"
+       default="$(find robotac_bringup)/config/lidar/mid360s.json" />
   <arg name="bd_list" default="100000000000000" />
   <arg name="frame_id" default="livox_frame" />
   <arg name="publish_freq" default="10.0" />

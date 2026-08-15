@@ -1,8 +1,0 @@
-# Known Robotac USB RGB camera: Realtek 0bda:5858. The camera exposes a
-# capture node with index 0 and a metadata node with index 1; only index 0
-# receives the stable capture alias below.
-#
-# For another camera, replace the two USB IDs (and add ATTRS{serial} when it
-# has one). Inspect the device with:
-#   udevadm info --attribute-walk --name=/dev/videoN
-SUBSYSTEM=="video4linux", KERNEL=="video[0-9]*", ATTR{index}=="0", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5858", SYMLINK+="robotac_rgb_camera", GROUP="video", MODE="0660"

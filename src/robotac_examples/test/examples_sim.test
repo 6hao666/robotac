@@ -1,0 +1,57 @@
+<launch>
+  <node pkg="robotac_examples" type="fake_fcu.py" name="fake_fcu" />
+  <node pkg="robotac_examples" type="fake_tag.py" name="fake_tag" />
+  <node pkg="robotac_servo" type="servo_node.py" name="servo_missing"
+        ns="robotac_test">
+    <param name="port" value="/dev/robotac_test_missing_servo" />
+  </node>
+
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="06_hover.py" name="hover_default">
+      <param name="height" value="0.2" />
+      <param name="hold" value="0.1" />
+    </node>
+    <node pkg="robotac_examples" type="06_hover.py" name="hover_stop">
+      <param name="height" value="0.2" />
+      <param name="hold" value="5.0" />
+    </node>
+    <node pkg="robotac_examples" type="06_hover.py" name="hover_fault">
+      <param name="height" value="0.2" />
+      <param name="hold" value="5.0" />
+    </node>
+    <node pkg="robotac_examples" type="06_hover.py" name="hover_stale">
+      <param name="height" value="0.2" />
+      <param name="hold" value="0.1" />
+    </node>
+    <node pkg="robotac_examples" type="06_hover.py" name="hover_estimator">
+      <param name="height" value="0.2" />
+      <param name="hold" value="0.1" />
+    </node>
+    <node pkg="robotac_examples" type="07_move_relative.py" name="move_relative">
+      <param name="height" value="0.2" />
+      <param name="forward" value="0.2" />
+    </node>
+    <node pkg="robotac_examples" type="07_move_relative.py" name="move_bounds">
+      <param name="height" value="0.2" />
+      <param name="forward" value="5.0" />
+      <param name="max_xy" value="1.0" />
+    </node>
+    <node pkg="robotac_examples" type="08_waypoints.py" name="waypoints">
+      <param name="route_file"
+             value="$(find robotac_examples)/test/waypoints_sim.yaml" />
+    </node>
+    <node pkg="robotac_examples" type="10_tag_centering_flight.py"
+          name="tag_success">
+      <param name="height" value="0.2" />
+      <param name="hold" value="0.3" />
+    </node>
+    <node pkg="robotac_examples" type="10_tag_centering_flight.py"
+          name="tag_loss">
+      <param name="height" value="0.2" />
+      <param name="hold" value="5.0" />
+    </node>
+  </group>
+
+  <test test-name="examples_sim_test" pkg="robotac_examples"
+        type="examples_sim_test.py" time-limit="100" />
+</launch>

@@ -1,0 +1,6 @@
+<launch>
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="02_local_pose.py" name="local_pose"
+          output="screen" />
+  </group>
+</launch>

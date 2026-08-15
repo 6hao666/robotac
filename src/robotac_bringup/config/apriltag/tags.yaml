@@ -1,0 +1,10 @@
+# 本示例只配置规则指定的独立 Tag36h11 ID 0，不使用 Tag bundle。
+# apriltag_ros 的 size 指黑色编码区域边长，不包含外侧白色留边。
+printing:
+  total_size_m: 0.25
+  tag_size_m: 0.15
+
+standalone_tags:
+  - {id: 0, size: 0.15, name: tag_0}
+
+tag_bundles: []

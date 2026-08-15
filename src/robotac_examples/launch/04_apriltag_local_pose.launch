@@ -1,0 +1,11 @@
+<launch>
+  <arg name="tag_id" default="0" />
+  <arg name="target_frame" default="map" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="04_apriltag_local_pose.py"
+          name="apriltag_local_pose" output="screen">
+      <param name="tag_id" value="$(arg tag_id)" />
+      <param name="target_frame" value="$(arg target_frame)" />
+    </node>
+  </group>
+</launch>

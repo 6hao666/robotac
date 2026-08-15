@@ -1,5 +1,0 @@
-# HL-340/CH340 USB PWM controller used by yundrone_blink.
-# The aircraft currently reports VID:PID 1a86:7523. Verify with lsusb before
-# installing on another controller. Install as /etc/udev/rules.d/99-robotac-servo.rules.
-SUBSYSTEM=="tty", KERNEL=="ttyUSB[0-9]*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="robotac_servo", GROUP="dialout", MODE="0660"
-SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="robotac_servo", GROUP="dialout", MODE="0660"

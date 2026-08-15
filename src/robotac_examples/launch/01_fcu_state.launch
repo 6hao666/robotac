@@ -1,0 +1,6 @@
+<launch>
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="01_fcu_state.py" name="fcu_state"
+          output="screen" />
+  </group>
+</launch>

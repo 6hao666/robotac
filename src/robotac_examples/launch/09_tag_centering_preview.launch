@@ -1,0 +1,9 @@
+<launch>
+  <arg name="tag_id" default="0" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="09_tag_centering_preview.py"
+          name="tag_centering_preview" output="screen">
+      <param name="tag_id" value="$(arg tag_id)" />
+    </node>
+  </group>
+</launch>

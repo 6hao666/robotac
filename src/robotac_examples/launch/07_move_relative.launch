@@ -1,0 +1,11 @@
+<launch>
+  <arg name="height" default="0.6" />
+  <arg name="forward" default="0.5" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="07_move_relative.py"
+          name="move_relative" output="screen" required="true">
+      <param name="height" value="$(arg height)" />
+      <param name="forward" value="$(arg forward)" />
+    </node>
+  </group>
+</launch>

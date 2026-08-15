@@ -1,19 +1,10 @@
 <launch>
-  <arg name="port" default="/dev/ttyUSB0" />
-  <arg name="baudrate" default="115200" />
-  <arg name="open_angle" default="45" />
-  <arg name="initial_open" default="false" />
-  <arg name="close_on_shutdown" default="true" />
+  <arg name="config" default="$(find robotac_servo)/config/servo.yaml" />
+  <arg name="port" default="/dev/robotac_servo" />
 
-  <node pkg="robotac_servo" type="servo_node.py" name="servo_switch"
+  <node pkg="robotac_servo" type="servo_node.py" name="robotac_servo"
         output="screen" respawn="false">
-    <rosparam command="load" file="$(find robotac_servo)/config/servo.yaml" />
+    <rosparam command="load" file="$(arg config)" />
     <param name="port" value="$(arg port)" />
-    <param name="baudrate" value="$(arg baudrate)" />
-    <param name="open_angle" value="$(arg open_angle)" />
-    <param name="initial_open" value="$(arg initial_open)" />
-    <param name="close_on_shutdown" value="$(arg close_on_shutdown)" />
-    <remap from="control" to="/robotac_servo/control" />
-    <remap from="status" to="/robotac_servo/status" />
   </node>
 </launch>

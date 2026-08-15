@@ -1,0 +1,11 @@
+# 只加载教学示例需要的本地飞行接口。
+plugin_blacklist: []
+plugin_whitelist:
+  - command
+  - imu
+  - local_position
+  - param
+  - setpoint_position
+  - sys_status
+  - sys_time
+  - vision_pose_estimate

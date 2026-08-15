@@ -1,0 +1,6 @@
+<launch>
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="03_apriltag_detection.py"
+          name="apriltag_detection" output="screen" />
+  </group>
+</launch>

@@ -1,9 +1,50 @@
+# ROS / catkin 构建产物
 build/
 devel/
 install/
+build_isolated/
+devel_isolated/
+install_isolated/
 log/
 .catkin_tools/
+catkin_generated/
+*.catkin
+compile_commands.json
+
+# ROS 运行记录和大体积传感器数据
+*.bag
+*.bag.active
+*.db3
+*.pcd
+*.ply
+*.las
+*.rosout.log
 *.log
-.DS_Store
+
+# Python 缓存和测试产物
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+pytest_report.html
+
+# 临时输出和本地证据目录
+artifacts/
+evidence/
+test-results/
+tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# 本地环境和编辑器文件
+.env
+.env.local
+.idea/
+.vscode/
+.DS_Store

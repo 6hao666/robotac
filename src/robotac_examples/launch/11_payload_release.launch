@@ -1,0 +1,13 @@
+<launch>
+  <arg name="released" default="true" />
+  <arg name="servo_port" default="/dev/robotac_servo" />
+  <include file="$(find robotac_servo)/launch/servo.launch">
+    <arg name="port" value="$(arg servo_port)" />
+  </include>
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="11_payload_release.py"
+          name="payload_release" output="screen">
+      <param name="released" value="$(arg released)" />
+    </node>
+  </group>
+</launch>

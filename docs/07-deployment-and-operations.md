@@ -1,146 +1,111 @@
-# 部署与运维
+# 部署与运行
 
-## 适用范围
+## 同步
 
-本章规定已审核版本向 Ubuntu 20.04 机载计算机同步、构建、被动冒烟检查、证据采集和
-进程清理的操作流程。部署不构成飞行授权，部署脚本不会启动 Robotac 飞行状态机。
-
-## 执行前确认
-
-- 工作树状态和目标 Git SHA 已记录。
-- 目标主机确为本队登记的 `<飞机地址>`，远端目录已确认。
-- `config/lidar/mid360s.json` 使用当前飞机的 `<机载网卡地址>` 与 `<雷达地址>`。
-- `<飞控串口设备>`、相机和舵机别名已通过 udev 核验。
-- 不得在仓库或命令历史中写入访问凭据，应使用已配置的 SSH 密钥。
-- 飞机处于允许构建和只读测试的安全状态。
-- 本次只读检查范围、现场负责人和停止条件已明确。
-
-## 同步源码
-
-使用通用同步脚本时：
+从开发机同步到机载 Ubuntu 主机：
 
 ```bash
-./scripts/sync_to_ubuntu.sh <用户>@<飞机地址>:<远端工作空间>
+./tools/sync_workspace.sh <用户>@<飞机地址>:<工作空间目录>
 ```
 
-脚本将排除 `.git`、构建产物、日志、bag、PCD 和缓存。同步前须检查远端目标路径，不得覆盖
-不属于本项目的数据。同步完成后须在远端再次确认关键配置，不得根据本地输出推断远端结果。
+同步脚本排除 `.git`、`build`、`devel`、`install` 和 `log`，也不会删除远端已有的其他文件。
+同步前应确认目标目录，避免覆盖其他队伍的文件或系统服务使用的配置。
 
-## 标准部署脚本
-
-准备好的 Ubuntu 20.04 飞机可使用：
+## 机载构建
 
 ```bash
-./scripts/deploy_aircraft.sh <飞机地址> \
-  --lidar-ip <雷达地址> \
-  --mavros-port <飞控串口设备>
+cd <工作空间目录>
+./tools/test_01_source.sh
+./tools/test_02_build.sh
+source devel/setup.bash
+./tools/test_03_unit.sh
+./tools/test_04_simulation.sh
 ```
 
-该脚本的职责是同步、准备权限、安装本机依赖、构建、静态校验，并在未跳过时执行被动
-MAVROS 与 MID360/FAST-LIO 冒烟检查。该脚本不会调用 MAVROS 服务、发布设定点、切换模式、
-解锁或启动飞行状态机。
+构建和仿真阶段不连接设备，不启动真实硬件 launch。
 
-任何跳过选项均须在记录中说明。跳过构建或只读检查后，不得沿用完整部署成功的结论。
+## 启动基础组件
 
-## 远端分步工具
-
-| 脚本 | 用途 | 运行边界 |
-| --- | --- | --- |
-| `remote_build_only.sh` | 安装/检查本机依赖并执行远端构建 | 不启动 ROS 节点 |
-| `remote_validate_no_launch.sh` | 检查包、launch、共享库和静态配置 | 不启动 ROS 节点 |
-| `remote_preflight_readonly.sh` | 在已准备环境中执行飞行前只读观察 | 不发送控制命令 |
-| `remote_readonly_audit.sh` | 汇总远端设备、进程、话题和安全状态 | 只读审计 |
-
-分步定位问题时应优先使用上述边界明确的工具。配置变更期间禁止同时运行完整栈。
-
-## 构建与静态检查
-
-远端构建后至少确认：
+分别在已加载工作空间环境的终端启动：
 
 ```bash
-source /opt/ros/noetic/setup.bash
-source <远端工作空间>/devel/setup.bash
-./scripts/check_flight_contract.py
-./scripts/verify_workspace.sh
+roslaunch robotac_bringup sensors.launch
+roslaunch robotac_bringup perception.launch
+roslaunch robotac_bringup flight_base.launch
 ```
 
-记录退出状态和失败输出。必须区分：未执行、因环境跳过、执行失败、执行通过。
+排障时只启动对应的低层 launch。不要用多个终端重复启动同一设备节点。
 
-## 被动冒烟检查
+## 只读检查
 
-被动检查仅验证通信和数据，不验证飞行控制：
-
-- MAVROS：连接状态、未解锁、IMU 和本地位置可读。
-- MID360：`/livox/lidar`、`/livox/imu` 类型和频率稳定。
-- FAST-LIO：`/Odometry` 和点云有数据，帧符合约定。
-- 相机：图像和相机信息匹配，曝光与帧率可用。
-- AprilTag：已知静态 Tag 可重复检测，位姿无明显跳变。
-- 外部视觉：只检查预览和健康话题，实际输出保持关闭。
-
-可在已经运行的只读栈上使用：
+基础组件全部启动后执行：
 
 ```bash
-./scripts/lidar_runtime_check.sh
-./scripts/fastlio_runtime_check.sh
-./scripts/collect_readonly_flight_evidence.sh --output-dir <证据目录>
+./tools/test_05_hardware_readonly.sh
 ```
 
-上述脚本的运行边界如下：前两个脚本仅观察现有节点，证据采集器亦不会自行启动设备节点。
-执行前须阅读脚本使用说明，并确认当前 ROS master 为目标只读会话。
+随后人工检查：
 
-## 日志与证据采集
+```bash
+rostopic hz /sunray/odometry
+rostopic hz /mavros/local_position/pose
+rostopic echo -n 1 /vision_pose_bridge/state
+rostopic echo -n 1 /mavros/state
+```
 
-每次部署应建立独立证据目录，使用不含人员姓名和真实地址的编号。至少保存：
+只读检查不得调用飞控服务。
 
-- `git rev-parse HEAD` 输出和工作树状态。
-- 配置文件校验值，不公开保存真实地址版本。
-- 构建、契约和工作空间验证日志。
-- ROS 节点、话题类型/频率、TF 和诊断摘要。
-- MAVROS 连接、解锁和落地状态。
-- 启动与停止时间、异常和遗留进程检查。
+## 示例运行
 
-bag、PCD 和图像可能占用大量存储空间并包含现场信息，须按队伍数据制度存放，不得默认提交 Git。
+以悬停示例为例：
+
+```bash
+roslaunch robotac_examples 06_hover.launch
+```
+
+launch 启动后保持 `IDLE`。现场检查完成并获得开始指令后，另行调用：
+
+```bash
+rosservice call /robotac_examples/hover/start "{}"
+```
+
+需要中止时：
+
+```bash
+rosservice call /robotac_examples/hover/stop "{}"
+```
+
+每次节点只执行一次。结束后重新启动 launch 才能进行下一次测试。
+
+## 运行记录
+
+每次会控制飞机或投放机构的测试至少记录：
+
+- Git 提交 SHA 和使用的配置文件；
+- 飞机编号、测试日期、场地和安全负责人；
+- launch 参数、`~state`、`~active` 和 `~target`；
+- FCU 模式、解锁、落地、estimator 和 timesync 状态；
+- 中止、人工接管和异常原因；
+- 本次结果，以及下一次准备增加的测试内容。
+
+公开材料应删除机器地址、个人路径和凭据。
 
 ## 比赛前检查
 
-### 软件与规则
+- 代码与配置和预审提交版本一致，变更已有记录。
+- 指定飞机、投放机构、模拟货物和电池通过检录。
+- 传感器、外部视觉和本地位置稳定。
+- Tag ID、尺寸、贴纸方向和相机外参已复核。
+- 障碍路线、边界、计时和中止条件使用当前规则。
+- 遥控器接管和急停方式已经确认，安全操作员已经确定。
+- 两次飞行共用计时的操作流程已经演练。
 
-- [ ] Git SHA 与批准版本一致，工作树无临时修改。
-- [ ] 最新规则适配清单完成，任务参数已冻结。
-- [ ] `route_manifest` 与场地审核表一致。
-- [ ] 离线、仿真、只读和地面联调证据齐全。
+## 结束检查
 
-### 硬件与飞控
+1. 确认飞机落地、上锁、停桨。
+2. 断开动力电池，再处理 USB 和载荷。
+3. 正常结束示例、bringup 和记录进程。
+4. 用 `rosnode list` 核对没有重复或残留节点。
+5. 保存日志和配置快照，记录异常。
 
-- [ ] 结构、桨叶、电池、重心、载荷和投放机构检查完成。
-- [ ] 雷达、相机、飞控和舵机设备别名稳定。
-- [ ] 外参、时间同步、PX4 外部视觉和 Offboard 保护已复核。
-- [ ] 遥控接管、急停和通信中断预案已演练。
-
-### 现场
-
-- [ ] 场地、净空、警戒线、天气和照明合格。
-- [ ] 指挥、遥控、程序、观察和记录角色到位。
-- [ ] 口令、启动条件、中止条件和复位条件明确。
-- [ ] 无关人员已撤离，组委会允许开始当前阶段。
-
-## 运行中的原则
-
-- 同一时段仅运行一个经批准的任务入口。
-- 启动后持续观察任务状态、MAVROS、定位、Tag 和投放回执。
-- 任何关键数据断流、坐标异常、越界趋势或人员侵入都按预案中止。
-- 任务活动期间不得临时修改 YAML、PX4 参数、TF 或设备连接。
-- 中止后须先确认飞机安全，再保存证据并分析原因；不得立即复位重跑。
-
-## 结束与进程清理
-
-1. 按 launch 的正常中止流程停止本次会话，等待子节点退出。
-2. 确认任务 `active` 为 `false`，飞机已落地、未解锁，投放机构处于安全位置。
-3. 使用 `rosnode list` 和系统进程查询检查是否残留 MAVROS、Livox、FAST-LIO、相机、
-   AprilTag、任务或舵机节点。
-4. 若存在残留，须识别其父 launch 和所属会话后正常结束；禁止使用历史 PID 或宽泛进程名终止进程。
-5. 保存日志、记录清理结果，按现场流程断电和拆除电池。
-
-部署/运行任务的结束条件为：节点清理、设备状态确认和证据保存均已完成。
-
-[返回文档索引](README.md)
+不得依据旧进程编号直接终止进程，也不得用宽泛进程名清理无关 ROS 节点。

@@ -1,0 +1,8 @@
+<launch>
+  <arg name="config" default="$(find robotac_localization)/config/vision_pose.yaml" />
+  <node pkg="robotac_localization" type="vision_pose_bridge.py"
+        name="vision_pose_bridge" output="screen">
+    <rosparam command="load" file="$(arg config)" />
+    <param name="publish_to_px4" value="false" />
+  </node>
+</launch>

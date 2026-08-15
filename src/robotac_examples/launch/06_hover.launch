@@ -1,0 +1,11 @@
+<launch>
+  <arg name="height" default="0.6" />
+  <arg name="hold" default="3.0" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="06_hover.py" name="hover"
+          output="screen" required="true">
+      <param name="height" value="$(arg height)" />
+      <param name="hold" value="$(arg hold)" />
+    </node>
+  </group>
+</launch>

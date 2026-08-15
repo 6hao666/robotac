@@ -4,11 +4,11 @@
   <arg name="width" default="1920" />
   <arg name="height" default="1080" />
   <arg name="framerate" default="30" />
-  <arg name="config_root" default="$(env HOME)/robotac_ws/config" />
-  <arg name="camera_info_url" default="file://$(arg config_root)/camera/rgb.yaml" />
+  <arg name="camera_info_url"
+       default="file://$(find robotac_bringup)/config/camera/rgb.yaml" />
   <arg name="enable_rectify" default="false" />
 
-  <!-- Keep the RGB stream raw even when optional image_transport plugins are installed. -->
+  <!-- 即使安装了可选 image_transport 插件，也只发布原始 RGB 图像。 -->
   <rosparam param="/camera/rgb/image_raw/disable_pub_plugins">
     - image_transport/compressed
     - image_transport/compressedDepth
@@ -18,7 +18,8 @@
   <group ns="camera">
     <node pkg="web_cam" type="web_cam_node" name="rgb" output="screen"
           respawn="true" respawn_delay="2">
-      <rosparam command="load" file="$(find robotac_bringup)/config/webcam.yaml" />
+      <rosparam command="load"
+                file="$(find robotac_bringup)/config/camera/webcam.yaml" />
       <param name="video_device" value="$(arg video_device)" />
       <param name="pixel_format" value="$(arg pixel_format)" />
       <param name="image_width" value="$(arg width)" />

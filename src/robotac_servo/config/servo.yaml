@@ -1,6 +1,20 @@
-# USB PWM controller protocol used by yundrone_blink.
-port: /dev/ttyUSB0
+# 启动时只连接串口，不发送任何舵机动作。
+port: /dev/robotac_servo
+port_candidates:
+  - /dev/robotac_servo
 baudrate: 115200
-open_angle: 45
-initial_open: false
-close_on_shutdown: true
+
+channel: 1
+frequency_hz: 50
+pwm_min_duty: 3
+pwm_max_duty: 12
+min_command_angle: 10.0
+max_command_angle: 70.0
+blocked_angle: 15.0
+released_angle: 45.0
+
+# 动作完成后发送 0% 占空比，避免持续堵转。
+drive_seconds: 0.30
+idle_after_move: true
+idle_duty: 0
+allow_repeat: false
