@@ -19,16 +19,20 @@ class ServoProtocolTest(unittest.TestCase):
     def test_pulse_width(self):
         self.assertEqual(pulse_width_us(50, 5), 1000)
 
-    def test_default_positions_are_distinct(self):
+    def test_default_positions_match_aircraft_calibration(self):
         calibration = ServoCalibration()
         calibration.validate()
-        self.assertNotEqual(calibration.blocked_duty,
-                            calibration.released_duty)
+        self.assertEqual(calibration.blocked_angle, 0.0)
+        self.assertEqual(calibration.released_angle, 45.0)
+        self.assertEqual(calibration.blocked_duty, 3)
+        self.assertEqual(calibration.released_duty, 5)
 
     def test_soft_limit_rejects_angle(self):
         calibration = ServoCalibration()
         with self.assertRaises(ValueError):
-            calibration.duty_for_angle(5.0)
+            calibration.duty_for_angle(-1.0)
+        with self.assertRaises(ValueError):
+            calibration.duty_for_angle(71.0)
 
 
 if __name__ == "__main__":

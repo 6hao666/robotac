@@ -51,9 +51,9 @@ class ServoNode(object):
             frequency_hz=int(rospy.get_param("~frequency_hz", 50)),
             pwm_min_duty=int(rospy.get_param("~pwm_min_duty", 3)),
             pwm_max_duty=int(rospy.get_param("~pwm_max_duty", 12)),
-            min_command_angle=float(rospy.get_param("~min_command_angle", 10.0)),
+            min_command_angle=float(rospy.get_param("~min_command_angle", 0.0)),
             max_command_angle=float(rospy.get_param("~max_command_angle", 70.0)),
-            blocked_angle=float(rospy.get_param("~blocked_angle", 15.0)),
+            blocked_angle=float(rospy.get_param("~blocked_angle", 0.0)),
             released_angle=float(rospy.get_param("~released_angle", 45.0)),
             idle_duty=int(rospy.get_param("~idle_duty", 0)))
 

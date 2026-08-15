@@ -1,0 +1,18 @@
+<launch>
+  <arg name="port" default="/dev/robotac_servo" />
+  <arg name="fallback_port_0" default="/dev/ttyUSB0" />
+  <arg name="fallback_port_1" default="/dev/ttyUSB1" />
+  <arg name="baudrate" default="115200" />
+  <arg name="channel" default="1" />
+  <arg name="frequency_hz" default="50" />
+  <arg name="pwm_min_duty" default="3" />
+  <arg name="pwm_max_duty" default="12" />
+  <arg name="min_angle" default="0" />
+  <arg name="max_angle" default="180" />
+  <arg name="start_angle" default="45" />
+  <arg name="drive_seconds" default="0.03" />
+
+  <node pkg="robotac_servo" type="servo_angle_tuner.py"
+        name="servo_angle_tuner" output="screen" required="true"
+        args="--port $(arg port) --port $(arg fallback_port_0) --port $(arg fallback_port_1) --baudrate $(arg baudrate) --channel $(arg channel) --frequency-hz $(arg frequency_hz) --pwm-min-duty $(arg pwm_min_duty) --pwm-max-duty $(arg pwm_max_duty) --min-angle $(arg min_angle) --max-angle $(arg max_angle) --start-angle $(arg start_angle) --drive-seconds $(arg drive_seconds)" />
+</launch>

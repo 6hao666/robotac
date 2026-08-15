@@ -42,8 +42,8 @@ class ServoCalibration(object):
     """保存经过地面标定的舵机参数。"""
 
     def __init__(self, channel=1, frequency_hz=50, pwm_min_duty=3,
-                 pwm_max_duty=12, min_command_angle=10.0,
-                 max_command_angle=70.0, blocked_angle=15.0,
+                 pwm_max_duty=12, min_command_angle=0.0,
+                 max_command_angle=70.0, blocked_angle=0.0,
                  released_angle=45.0, idle_duty=0):
         self.channel = channel
         self.frequency_hz = frequency_hz

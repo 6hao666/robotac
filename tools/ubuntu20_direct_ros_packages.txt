@@ -1,3 +1,6 @@
 ros-noetic-angles
+ros-noetic-apriltag-ros
 ros-noetic-diagnostic-updater
+ros-noetic-mavros
+ros-noetic-mavros-extras
 ros-noetic-tf2-eigen

@@ -1,6 +1,7 @@
 # ROS / catkin 构建产物
 build/
 devel/
+devel_full/
 install/
 build_isolated/
 devel_isolated/
@@ -46,6 +47,5 @@ tmp/
 .env
 .env.local
 .idea/
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 .DS_Store
