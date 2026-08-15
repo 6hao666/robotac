@@ -39,7 +39,8 @@ if [[ ${ROBOTAC_SKIP_SYSTEM_PACKAGES:-0} != 1 ]]; then
   done
   "${sudo_cmd[@]}" apt-get update
   "${sudo_cmd[@]}" apt-get install -y "${packages[@]}"
-  if ! rosdep db >/dev/null 2>&1; then
+  rosdep_sources=/etc/ros/rosdep/sources.list.d/20-default.list
+  if [[ ! -f "$rosdep_sources" ]]; then
     "${sudo_cmd[@]}" rosdep init
   fi
   rosdep update
