@@ -49,14 +49,15 @@ OFFBOARD、解锁和降落；`11` 会操作投放机构。
 ```bash
 # 进入工作空间目录。
 cd ~/robotac_ws
-# 在已安装 ROS Noetic 的 Orin Nano Super 上完成预检、安装、比赛构建和离线测试。
-./tools/setup_orin_nano_super.sh
+# 在已安装 ROS Noetic 的 Jetson Orin Nano、Nano Super 或 NX 上完成软件部署。
+./tools/setup_jetson_orin.sh
 # 加载当前工作空间的 ROS 环境。
 source devel/setup.bash
 ```
 
 目标机必须预先安装 Ubuntu 20.04 和 ROS Noetic。一条龙脚本不会配置真实硬件，也不会启动
 ROS 节点；脚本成功仅表示软件就绪，雷达网络、稳定设备别名和机械标定仍须按现场文档确认。
+旧入口 `./tools/setup_orin_nano_super.sh` 继续保留，并转发到相同的通用部署流程。
 
 默认比赛模式的增量构建执行：
 
