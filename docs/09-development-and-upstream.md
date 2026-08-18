@@ -26,6 +26,7 @@
 
 | 工具 | 用途 |
 | --- | --- |
+| `setup_jetson_orin.sh` | 在 Jetson Orin Nano、Nano Super 或 NX 上完成软件部署 |
 | `install_ubuntu20.sh` | 安装 Ubuntu 20.04 与 ROS Noetic 依赖 |
 | `build.sh` | 执行默认比赛模式 catkin 增量构建 |
 | `build_full.sh` | 在独立目录执行全部源码包构建 |
