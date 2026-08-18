@@ -10,9 +10,9 @@
 | `perception.launch` | 启动 FAST-LIO 与 AprilTag | 只产生定位和检测结果 |
 | `flight_base.launch` | 启动 MAVROS 与外部视觉 PX4 输出 | 不解锁、不发布飞行设定点 |
 
-底层 launch 包括 `lidar_mid360s.launch`、`camera_rgb.launch`、`fastlio_mid360s.launch`、
-`apriltag_rgb.launch`、`camera_extrinsics.launch` 和 `mavros_px4.launch`。需要单独检查某个
-组件时，可直接启动相应的底层 launch。
+可单独启动的组件包括 `lidar_mid360s.launch`、`camera_rgb.launch`、`fastlio_mid360s.launch`、
+`apriltag_rgb.launch`、`camera_extrinsics.launch` 和 `mavros_px4.launch`。排查某个组件时，
+直接启动对应的 launch 即可。
 
 ## 定位入口
 

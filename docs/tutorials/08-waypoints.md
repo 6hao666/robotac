@@ -2,11 +2,11 @@
 
 ![PlantUML：航点加载、执行与越界中止流程](../assets/plantuml/tutorial-08-waypoints.svg "PlantUML：简短航点执行流程")
 
-## 目的
+## 本教程的作用
 
 读取 YAML 中的相对航点，按顺序到达并保持，最后请求降落。
 
-## 前置条件
+## 开始前确认
 
 - 示例 07 已通过。
 - 航点文件只包含 `x`、`y`、`z`、`hold`。
@@ -25,12 +25,12 @@ rosservice call /robotac_examples/waypoints/start "{}"
 
 中止服务为 `/robotac_examples/waypoints/stop`。
 
-## 预期输出
+## 正常结果
 
 状态按 `WAYPOINT_1`、`WAYPOINT_2` 等顺序变化，全部完成后进入 `LANDING` 和 `COMPLETE`。
 `~target` 可用于记录每个实际发送的目标。
 
-## 失败判断
+## 需要停止并检查的情况
 
 - YAML 字段缺失、增加未知字段或 `hold` 超限：节点启动失败。
 - 目标越界或超时：任务进入 `ABORT` 并请求降落。

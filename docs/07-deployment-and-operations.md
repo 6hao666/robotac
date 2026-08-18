@@ -36,7 +36,7 @@
 cd <工作空间目录>
 # 检查源码和文档链接。
 ./tools/test_01_source.sh
-# 执行默认比赛构建并检查包发现情况。
+# 执行比赛运行构建并检查包发现情况。
 ./tools/test_02_build.sh
 # 加载构建后的 ROS 环境。
 source devel/setup.bash
@@ -47,12 +47,12 @@ source devel/setup.bash
 ```
 
 构建和仿真阶段不连接设备，不启动真实硬件 launch。
-默认比赛构建使用系统 MAVROS 和 AprilTag ROS。只有验证第三方源码时才执行
+比赛运行构建使用系统 MAVROS 和 AprilTag ROS。只有验证第三方源码时才执行
 `./tools/build_full.sh`；其环境位于 `devel_full/setup.bash`，不得替代日常比赛环境。
 
 ## 单独验证传感器
 
-首次配置或排障时，先分别启动低层节点。雷达终端执行：
+首次配置或排障时，先分别启动需要检查的组件。雷达终端执行：
 
 ```bash
 # 发现并比较现场地址；需要时按提示确认写入配置。
@@ -101,7 +101,7 @@ roslaunch robotac_bringup perception.launch
 roslaunch robotac_bringup flight_base.launch
 ```
 
-排障时只启动对应的低层 launch。不要用多个终端重复启动同一设备节点。
+排障时只启动对应的组件 launch。不要用多个终端重复启动同一设备节点。
 `sensors.launch` 会同时启动 MID360 和 RGB 相机；它不负责发现地址或安装 udev 规则。
 
 ## 只读检查

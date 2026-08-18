@@ -2,11 +2,11 @@
 
 ![PlantUML：本地位姿只读检查链路](../assets/plantuml/tutorial-02-local-pose.svg "PlantUML：本地位姿只读检查链路")
 
-## 目的
+## 本教程的作用
 
 只读检查 MAVROS 本地位置、姿态、接收频率和消息年龄。
 
-## 前置条件
+## 开始前确认
 
 - 示例 01 已确认 FCU 连接正常。
 - PX4 estimator 已产生本地位置。
@@ -19,12 +19,12 @@
 roslaunch robotac_examples 02_local_pose.launch
 ```
 
-## 预期输出
+## 正常结果
 
 终端周期显示 `x`、`y`、`z`、姿态、接收频率和数据年龄。静止时数据应连续，方向应符合
 本机坐标标定。
 
-## 失败判断
+## 需要停止并检查的情况
 
 - 没有输出：`/mavros/local_position/pose` 无数据。
 - 数据年龄持续增加：上游时间戳或通信异常。

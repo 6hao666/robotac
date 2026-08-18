@@ -2,11 +2,11 @@
 
 ![PlantUML：定高悬停状态机与中止降落路径](../assets/plantuml/tutorial-06-hover.svg "PlantUML：定高悬停状态机")
 
-## 目的
+## 本教程的作用
 
 从地面请求 OFFBOARD、解锁、定高悬停，并在保持结束后请求降落。
 
-## 前置条件
+## 开始前确认
 
 - 已完成安全检查的前四个步骤。
 - `sensors.launch`、`perception.launch` 和 `flight_base.launch` 正常。
@@ -34,12 +34,12 @@ rosservice call /robotac_examples/hover/start "{}"
 rosservice call /robotac_examples/hover/stop "{}"
 ```
 
-## 预期输出
+## 正常结果
 
 `~state` 依次进入 `PRESTREAM`、`TAKEOFF`、`HOVER`、`LANDING`、`COMPLETE`。`~active`
 仅在任务执行期间为真。
 
-## 失败判断
+## 需要停止并检查的情况
 
 - `~start` 拒绝：按返回原因检查落地、位置、外部视觉、estimator、timesync 或订阅关系。
 - 状态进入 `ABORT`：确认实际飞机是否执行降落，准备人工接管。

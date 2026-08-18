@@ -2,11 +2,11 @@
 
 ![PlantUML：Tag 对准飞行状态机与失锁降落路径](../assets/plantuml/tutorial-10-tag-centering-flight.svg "PlantUML：Tag 对准飞行状态机")
 
-## 目的
+## 本教程的作用
 
 从地面起飞，对准 ID 0，在默认 3 秒稳定时间后请求降落。
 
-## 前置条件
+## 开始前确认
 
 - 示例 06 和 09 均已通过。
 - 起飞位置能够稳定检测目标，TF 和相机外参已经现场确认。
@@ -25,12 +25,12 @@ rosservice call /robotac_examples/tag_centering_flight/start "{}"
 
 中止服务为 `/robotac_examples/tag_centering_flight/stop`。
 
-## 预期输出
+## 正常结果
 
 启动时必须已有稳定 Tag。状态经过 `PRESTREAM`、`TAKEOFF`、`TAG_CENTERING`、`LANDING`
 和 `COMPLETE`。对准期间 `~target` 按 `max_step` 限制逐步修正。
 
-## 失败判断
+## 需要停止并检查的情况
 
 - 启动时无稳定 Tag：拒绝继续或进入中止降落。
 - 飞行中长时间收不到 Tag：停止更新目标并请求降落。
