@@ -7,8 +7,8 @@
 从开发机同步到机载 Ubuntu 主机：
 
 ```bash
-# 将工作空间同步到机载 Ubuntu 主机。
-./tools/sync_workspace.sh <用户>@<飞机地址>:<工作空间目录>
+# 将当前 Robotac 仓库同步到机载主机的 /home/<用户>/robotac。
+./tools/sync_workspace.sh <用户>@<飞机地址>:/home/<用户>/robotac
 ```
 
 同步脚本排除 `.git`、`build`、`devel`、`install` 和 `log`，也不会删除远端已有的其他文件。
@@ -19,10 +19,10 @@
 ```bash
 # 预览文件更新、旧源码删除、构建目录清理和环境文件初始化。
 ./tools/sync_workspace.sh --mirror --dry-run \
-  <用户>@<飞机地址>:<工作空间绝对目录>
+  <用户>@<飞机地址>:/home/<用户>/robotac
 # 执行完整镜像；该操作会同步 .git 并删除远端多余源码。
 ./tools/sync_workspace.sh --mirror \
-  <用户>@<飞机地址>:<工作空间绝对目录>
+  <用户>@<飞机地址>:/home/<用户>/robotac
 ```
 
 镜像模式不会上传或删除已有的 `.env`、`.env.local`。仓库只同步 `.env.template`；使用
@@ -32,8 +32,8 @@
 ## 机载构建
 
 ```bash
-# 进入机载工作空间。
-cd <工作空间目录>
+# 进入机载 Robotac 仓库根目录。
+cd /home/<用户>/robotac
 # 检查源码和文档链接。
 ./tools/test_01_source.sh
 # 执行比赛运行构建并检查包发现情况。

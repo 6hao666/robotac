@@ -15,14 +15,43 @@
 macOS 可以执行源码检查和不依赖 ROS 的单元测试，但 ROS Noetic 构建和仿真必须在
 Ubuntu 20.04 上完成。
 
-## 首次安装
+## 获取源码
 
-目标机须预先安装 Ubuntu 20.04 和 ROS Noetic。Jetson Orin Nano、Nano Super 和 Orin NX
-首次安装时使用以下部署脚本：
+目标机须预先安装 Ubuntu 20.04 和 ROS Noetic。先安装 Git：
 
 ```bash
-# 进入工作空间目录。
-cd ~/robotac_ws
+# 更新软件包索引。
+sudo apt update
+# 安装 Git。
+sudo apt install -y git
+# 返回当前用户主目录，仓库将保存为 ~/robotac。
+cd ~
+```
+
+GitHub 和 Gitee 选择一种即可。网络能够稳定访问 GitHub 时使用：
+
+```bash
+# 从 GitHub 获取 Robotac 源码。
+git clone https://github.com/YunDrone-Team/robotac.git
+```
+
+网络条件不佳时使用 Gitee 镜像：
+
+```bash
+# 从 Gitee 镜像获取 Robotac 源码。
+git clone https://gitee.com/yundrone_sunray2023/robotac.git
+```
+
+两种方式都会创建 `~/robotac`。该目录本身就是 catkin 工作空间，不需要另建工作空间目录，
+也不要将本仓库放入另一个 catkin 工作空间。本文后续命令均从 `~/robotac` 执行。
+
+## 首次安装
+
+Jetson Orin Nano、Nano Super 和 Orin NX 首次安装时执行：
+
+```bash
+# 进入 Robotac 仓库根目录。
+cd ~/robotac
 # 完成平台预检、依赖和定制 SDK 安装、比赛构建及离线测试。
 ./tools/setup_jetson_orin.sh
 # 加载构建后的工作空间环境。

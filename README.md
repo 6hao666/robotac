@@ -44,19 +44,47 @@ OFFBOARD、解锁和降落；`11` 会操作投放机构。
 `mavros`、`apriltag`、`apriltag_ros`、`fast_lio`、`livox_ros_driver2`、`Livox-SDK2`
 和 `web_cam` 为固定版本的第三方源码，参赛开发通常不需要修改。
 
-## 安装与构建
+## 获取源码与安装
+
+目标机须预先安装 Ubuntu 20.04 和 ROS Noetic。先安装 Git：
 
 ```bash
-# 进入工作空间目录。
-cd ~/robotac_ws
+# 更新软件包索引。
+sudo apt update
+# 安装 Git。
+sudo apt install -y git
+# 返回当前用户主目录，仓库将保存为 ~/robotac。
+cd ~
+```
+
+GitHub 和 Gitee 选择一种即可。网络能够稳定访问 GitHub 时使用：
+
+```bash
+# 从 GitHub 获取 Robotac 源码。
+git clone https://github.com/YunDrone-Team/robotac.git
+```
+
+网络条件不佳时使用 Gitee 镜像：
+
+```bash
+# 从 Gitee 镜像获取 Robotac 源码。
+git clone https://gitee.com/yundrone_sunray2023/robotac.git
+```
+
+仓库根目录 `~/robotac` 本身就是 catkin 工作空间，不需要另外创建工作空间目录，也不要将
+本仓库放入另一个 catkin 工作空间。完成 clone 后执行：
+
+```bash
+# 进入 Robotac 仓库根目录。
+cd ~/robotac
 # 在已安装 ROS Noetic 的 Jetson Orin Nano、Nano Super 或 NX 上完成软件部署。
 ./tools/setup_jetson_orin.sh
 # 加载当前工作空间的 ROS 环境。
 source devel/setup.bash
 ```
 
-目标机必须预先安装 Ubuntu 20.04 和 ROS Noetic。部署脚本不会配置真实硬件，也不会启动
-ROS 节点。脚本完成后，表示依赖已经安装、工作空间已经构建并完成离线检查；这不表示雷达网络、
+部署脚本不会配置真实硬件，也不会启动 ROS 节点。脚本完成后，表示依赖已经安装、工作空间
+已经构建并完成离线检查；这不表示雷达网络、
 稳定设备别名、飞控连接或投放机构标定已经完成。上述项目仍须按现场文档逐项确认。
 旧入口 `./tools/setup_orin_nano_super.sh` 继续保留，并转发到相同的部署流程。
 
