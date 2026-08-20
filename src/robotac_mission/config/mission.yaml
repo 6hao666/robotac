@@ -1,0 +1,81 @@
+# robotac_mission 参数模板（骨架轮）。
+# 说明：
+# - 数值为占位值：规则几何值（场地/圆桌/障碍，来自 2026-8-12 C 组规则）可直接参考，
+#   其余阈值（超时/速度/高度）为安全占位，标注“待实机验证”的字段须由实机负责人
+#   经地面与飞行验证后回填。
+# - 不包含借用新机 IP、序列号、设备别名、外参（交接文档红线）。
+# - mission.dry_run=true 时 interfaces 不发送任何控制；本轮固定 true。
+
+frames:
+  mission_frame: map
+  body_frame: base_link
+
+limits:
+  field_min: [0.0, 0.0, 0.0]     # 有效飞行区下界（规则几何，待 map 原点标定校准）
+  field_max: [4.0, 5.0, 3.0]     # 有效飞行区上界 4.00m x 5.00m x 3.00m
+  max_speed: 0.5                 # 待实机验证
+
+obstacle:                        # 固定障碍（规则几何，参考值）
+  size: [2.10, 0.15, 2.00]       # 长 x 宽 x 高 m
+  cross_gap: 0.95                # 两侧净宽 m
+  no_overfly: true               # 禁止从顶部越过
+
+tables:                          # 两桌同 Tag 判别依据（规则几何参考值）
+  takeoff_center: [2.00, 0.80]   # 起降台圆心（场地坐标，待映射到 map）
+  delivery_center: [2.00, 4.20]  # 投放台圆心
+  height: 0.75                   # 桌面高 m
+  search_radius: 1.0             # 预期桌区匹配半径，待实机验证
+
+timing:
+  pose_timeout: 0.5              # 本地位姿数据年龄上限 s
+  tag_timeout: 1.0               # Tag 数据年龄上限 s
+  topic_timeout:                 # 各启动门话题数据年龄上限 s，待实机验证
+    fcu_state: 2.0               # /mavros/state（MAVROS 低频）
+    extended_state: 2.0          # /mavros/extended_state（低频）
+    estimator_status: 3.0        # /mavros/estimator_status（交接实测 ~1Hz，阈值须 ≥2-3× 周期防抖动误报）
+    timesync_status: 2.0         # /mavros/timesync_status（低频）
+    vision_healthy: 1.0          # /vision_pose_bridge/healthy
+    vision_state: 2.0            # /vision_pose_bridge/state（fake 周期 0.5s）
+  max_rtt_ms: 50.0               # timesync 往返时延上限 ms（实测约 1.78ms，留裕量）
+  total_window: 360.0            # 两次飞行共享连续 6 分钟（规则硬性）
+  flight_budget: 150.0           # 单次飞行预算 s，待实机验证
+  takeoff_hold: 3.0              # C1 起飞稳定保持 >=3s（规则硬性）
+  align_hold: 3.0                # C3 对准悬停稳定保持 >=3s（规则硬性）
+  stage_timeout:                 # 各阶段超时 s，待实机验证
+    takeoff: 20.0
+    transit: 30.0
+    search: 30.0
+    align: 20.0
+    release: 10.0
+    return: 30.0
+    land: 20.0
+
+tag:
+  family: tag36h11
+  id: 0
+  black_size_m: 0.15             # 黑色编码区边长 m
+  stable_time: 1.0               # 连续稳定时间 s，待实机验证
+
+waypoints:                       # 名义航点骨架（规则几何参考，map 原点标定后校准）
+  # 桌上方航点（takeoff/mission/return）z 须 ≥ 桌面高 0.75（config 校验）；
+  # C1 起飞稳定保持须 1.0-2.0m，占位取 1.0。绕障航点位于场地中段侧隙、不在桌上。
+  takeoff: [2.0, 0.80, 1.0]      # 起降台上方（C1 保持高度，> 桌面 0.75）
+  obstacle_routing:              # 去程绕障：中线上行 -> 侧隙 -> 穿越 -> 回中线
+    approach: [2.0, 1.5, 0.6]
+    gap_enter: [1.0, 1.5, 0.8]
+    gap_cross: [1.0, 3.5, 0.8]
+    resume: [2.0, 3.5, 0.6]
+  mission: [[2.0, 4.20, 1.0]]    # 投放台正上方（> 桌面 0.75，便于识别 Tag/投放）
+  return_routing:                # 返程绕障（另一侧，结构同上）
+    approach: [2.0, 3.5, 0.6]
+    gap_enter: [3.0, 3.5, 0.8]
+    gap_cross: [3.0, 1.5, 0.8]
+    resume: [2.0, 1.5, 0.6]
+  return: [[2.0, 0.80, 1.0]]     # 起降台上方（> 桌面 0.75）
+
+payload:
+  enable: false                  # 本轮固定 false
+  retry_count: 0
+
+mission:
+  dry_run: true                  # 本轮固定 true，interfaces 不发送任何控制

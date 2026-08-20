@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>robotac_mission</name>
+  <version>0.1.0</version>
+  <description>ROBOTAC C 组决赛任务状态机包：显式、可观测、可中止。骨架轮仅含预启动状态与终态，不产生飞行动作。</description>
+  <maintainer email="robotac.team@example.com">robotac</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>apriltag_ros</depend>
+  <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <test_depend>python3-nose</test_depend>
+  <test_depend>rostest</test_depend>
+</package>

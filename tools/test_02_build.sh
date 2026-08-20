@@ -6,7 +6,7 @@ workspace=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 set +u
 source "${workspace}/devel/setup.bash"
 set -u
-for package in robotac_bringup robotac_examples robotac_localization robotac_servo; do
+for package in robotac_bringup robotac_examples robotac_localization robotac_servo robotac_mission; do
   rospack find "${package}" >/dev/null
 done
 for package in libmavconn mavros_msgs mavros mavros_extras apriltag_ros; do

@@ -49,3 +49,13 @@ tmp/
 .idea/
 .vscode/
 .DS_Store
+
+# 本地 Claude 协作指南与工作产物（不随 git 提交）
+CLAUDE.md
+_pdf_extracted_text.txt
+_feishu_manual_text.txt
+.claude/
+agent_notes/
+
+# 本地开发方案（不随 git 提交）
+_robotac_mission_build_plan.md

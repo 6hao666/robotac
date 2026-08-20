@@ -1,0 +1,18 @@
+<launch>
+  <!-- G1 仿真：复用 robotac_examples 的 fake 节点（不改第三方），
+       并由 fake_vision_state.py 补发 /vision_pose_bridge/state
+       （fake_fcu 未提供该话题，见方案 §9.3 fake 话题覆盖审计）。 -->
+  <node pkg="robotac_examples" type="fake_fcu.py" name="fake_fcu" />
+  <node pkg="robotac_examples" type="fake_tag.py" name="fake_tag" />
+  <node pkg="robotac_mission" type="fake_vision_state.py"
+        name="fake_vision_state" />
+
+  <node pkg="robotac_mission" type="mission_node.py" name="robotac_mission"
+        output="screen">
+    <param name="mission_yaml"
+           value="$(find robotac_mission)/config/mission.yaml" />
+  </node>
+
+  <test test-name="mission_sim_test" pkg="robotac_mission"
+        type="mission_sim_test.py" time-limit="120" />
+</launch>

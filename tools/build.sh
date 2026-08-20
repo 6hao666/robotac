@@ -38,14 +38,14 @@ if [[ "$mode" == competition ]]; then
   build_space="${workspace}/build/competition"
   devel_space="${workspace}/devel"
   packages=(livox_ros_driver2 fast_lio web_cam robotac_bringup
-    robotac_examples robotac_localization robotac_servo)
+    robotac_examples robotac_localization robotac_servo robotac_mission)
   rm -rf -- "$source_space"
   mkdir -p "$source_space"
   ln -s "${workspace}/src/CMakeLists.txt" "$source_space/CMakeLists.txt"
   for package in "${packages[@]}"; do
     ln -s "${workspace}/src/${package}" "$source_space/${package}"
   done
-  echo "执行比赛构建：本地 7 个包，MAVROS 与 AprilTag 使用系统二进制包。"
+  echo "执行比赛构建：本地 8 个包，MAVROS 与 AprilTag 使用系统二进制包。"
 else
   source_space="${workspace}/src"
   build_space="${workspace}/build/full"

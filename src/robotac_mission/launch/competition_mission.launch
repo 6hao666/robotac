@@ -1,0 +1,10 @@
+<launch>
+  <!-- 决赛任务状态机：启动后仅进入 WAIT_READY / WAIT_START，不产生任何飞行动作。
+       参数文件可通过 mission_yaml 覆盖（默认使用包内模板，值为占位，待实机回填）。 -->
+  <arg name="mission_yaml"
+       default="$(find robotac_mission)/config/mission.yaml" />
+  <node pkg="robotac_mission" type="mission_node.py" name="robotac_mission"
+        output="screen">
+    <param name="mission_yaml" value="$(arg mission_yaml)" />
+  </node>
+</launch>

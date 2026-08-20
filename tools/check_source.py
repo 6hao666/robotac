@@ -17,6 +17,7 @@ OWN_PACKAGES = [
     ROOT / "src/robotac_examples",
     ROOT / "src/robotac_localization",
     ROOT / "src/robotac_servo",
+    ROOT / "src/robotac_mission",
 ]
 EXAMPLE_NAMES = [
     "fcu_state", "local_pose", "apriltag_detection",
