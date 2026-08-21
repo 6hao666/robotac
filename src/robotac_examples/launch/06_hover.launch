@@ -1,11 +1,16 @@
 <launch>
   <arg name="height" default="0.6" />
   <arg name="hold" default="3.0" />
+  <!-- 2026-08-21 修复：/mavros/state 与 /mavros/estimator_status 均按 1Hz 发布，
+       原 data_timeout=1.0s 等于消息间隔，任何抖动都会误判"数据过期"而中止。
+       提到 3.0s（容忍 3 条未到），仍能及时捕获真实数据失联。 -->
+  <arg name="data_timeout" default="3.0" />
   <group ns="robotac_examples">
     <node pkg="robotac_examples" type="06_hover.py" name="hover"
           output="screen" required="true">
       <param name="height" value="$(arg height)" />
       <param name="hold" value="$(arg hold)" />
+      <param name="data_timeout" value="$(arg data_timeout)" />
     </node>
   </group>
 </launch>
