@@ -12,6 +12,11 @@ class FlightInputs(object):
     def __init__(self, pose_timeout, data_timeout):
         self.pose_timeout = pose_timeout
         self.data_timeout = data_timeout
+        # 2026-08-21 修复：health 检查对"瞬态类"问题（数据过期 / timesync RTT）
+        # 做去抖——连续 health_debounce 次才中止，避免握手期间单次尖峰误报。
+        # 硬安全项（估计器无效 / OFFBOARD 丢失 / 飞控断开）仍立即中止。
+        self.health_debounce = int(rospy.get_param("~health_debounce", 5))
+        self.soft_bad_count = 0
         self.state = State()
         self.extended = ExtendedState()
         self.pose = None
@@ -101,12 +106,25 @@ class FlightInputs(object):
             return "MAVROS 未订阅位置设定点"
         return None
 
+    def _soft_issue(self, issue):
+        return issue.endswith("过期") or issue == "时间同步往返延迟过大"
+
     def health_issue(self, stop_requested, setpoint_connections):
         if stop_requested:
             return "操作员停止"
         issue = self.data_issue()
         if issue is not None:
+            if self._soft_issue(issue):
+                # 瞬态类（数据过期 / timesync RTT）：连续 health_debounce 次
+                # 才上报中止，避免握手期间的瞬时尖峰误报。
+                self.soft_bad_count += 1
+                if self.soft_bad_count < self.health_debounce:
+                    return None
+                return issue
+            # 硬安全项（估计器无效 / OFFBOARD 丢失 / 飞控断开等）：立即中止。
+            self.soft_bad_count = 0
             return issue
+        self.soft_bad_count = 0
         if self.state.armed and self.state.mode != "OFFBOARD":
             return "OFFBOARD 模式丢失"
         if setpoint_connections < 1:
