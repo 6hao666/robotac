@@ -28,7 +28,10 @@ class FlightController(FlightInputs):
         self.frame_id = rospy.get_param("~frame_id", "map")
         self.rate_hz = float(rospy.get_param("~rate", 20.0))
         self.pose_timeout = float(rospy.get_param("~pose_timeout", 0.5))
-        self.data_timeout = float(rospy.get_param("~data_timeout", 1.0))
+        # 2026-08-21 修复：/mavros/state 与 estimator_status 按 1Hz 发布，
+        # 默认 1.0s 等于消息间隔，任何抖动都误判"过期"而中止（06 第 2 次尝试踩到）。
+        # 默认提到 3.0s；启动该参数的 launch 可覆盖。仅瞬态门受益，硬安全门不受影响。
+        self.data_timeout = float(rospy.get_param("~data_timeout", 3.0))
         self.max_xy = float(rospy.get_param("~max_xy", 2.0))
         self.max_z = float(rospy.get_param("~max_z", 2.0))
         self.position_tolerance = float(rospy.get_param(
