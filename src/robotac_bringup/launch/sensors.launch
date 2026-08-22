@@ -9,4 +9,12 @@
   <include file="$(find robotac_bringup)/launch/camera_rgb.launch">
     <arg name="video_device" value="$(arg video_device)" />
   </include>
+
+  <!-- TF 链：相机外参 body->camera_rgb_optical_frame（09/10/C3 tag->map 依赖） -->
+  <include file="$(find robotac_bringup)/launch/camera_extrinsics.launch" />
+
+  <!-- TF 链桥接：map -> camera_init（FC 帧 -> FAST-LIO 帧）。
+       近似恒等（EKF 把视觉 odom 对齐到 FC map 帧）。 -->
+  <node pkg="tf" type="static_transform_publisher" name="map_camera_init_bridge"
+        args="0 0 0 0 0 0 map camera_init 100" />
 </launch>

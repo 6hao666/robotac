@@ -3,7 +3,7 @@ deployment:
   lidar_network_configured: false
   lidar_imu_extrinsics_calibrated: false
   lidar_imu_time_checked: false
-  camera_extrinsics_measured: false
+  camera_extrinsics_measured: true
   stable_camera_device_configured: false
   stable_fcu_device_configured: false
   fastlio_airframe_extrinsics_validated: false

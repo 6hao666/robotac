@@ -1,11 +1,17 @@
 <launch>
-  <arg name="parent_frame" default="base_link" />
+  <!-- 相机外参：body -> camera_rgb_optical_frame
+       2026-08-22 比赛机 tag 居中法标定：
+       下视相机光轴朝下 => 绕 Y 旋转 180°（pitch=pi）。
+       位置按近似 0（水平映射不受 z 影响；精确位置待多点标定精修）。
+       parent 用 body（FAST-LIO 机体帧），与 map->camera_init 桥接配合形成
+       tag -> map 完整 TF 链（09/10/C3 依赖）。 -->
+  <arg name="parent_frame" default="body" />
   <arg name="child_frame" default="camera_rgb_optical_frame" />
   <arg name="x" default="0.0" />
   <arg name="y" default="0.0" />
   <arg name="z" default="0.0" />
   <arg name="roll" default="0.0" />
-  <arg name="pitch" default="0.0" />
+  <arg name="pitch" default="3.14159" />
   <arg name="yaw" default="0.0" />
 
   <node pkg="tf" type="static_transform_publisher" name="camera_rgb_extrinsics"
