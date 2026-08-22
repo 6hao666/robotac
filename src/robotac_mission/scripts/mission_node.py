@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""robotac_mission 状态机节点壳（骨架）。
+"""robotac_mission 状态机节点壳（M2 飞行轮）。
 
-启动后仅进入 WAIT_READY / WAIT_START，不产生任何飞行动作（dry_run）。
+预启动：WAIT_READY / WAIT_START，只读安全门；`mission.flight_enabled=false`
+时 start 保持占位语义（G1 预启动范围）。`flight_enabled=true` 后 start 捕获
+home（起飞点局部归零）并进入 TAKEOFF，由 20Hz 定时器驱动 FlightDriver 逐态
+推进 C1-C5（真实控制受 interfaces.dry_run 门控）。
+
 订阅传感器/飞控话题 -> 计算安全门 -> 驱动 state_machine -> 发布
 state / state_reason / active / target / result，并暴露 start / stop / reset 服务。
 
@@ -9,9 +13,11 @@ BOOT 可重入：mission_reset（ERROR -> BOOT）会重新从磁盘读取 missio
 不得复用进程内存中缓存的旧参数。
 """
 
+import math
 import threading
 
 import rospy
+import tf2_ros
 from apriltag_ros.msg import AprilTagDetectionArray
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import EstimatorStatus, ExtendedState, State, TimesyncStatus
@@ -20,6 +26,8 @@ from std_srvs.srv import Trigger, TriggerResponse
 
 from robotac_mission import guards
 from robotac_mission.config import ConfigError, load_config
+from robotac_mission.coordinates import Coordinates
+from robotac_mission.flight_driver import FlightDriver
 from robotac_mission.interfaces import MissionInterfaces
 from robotac_mission.state_machine import MissionState, MissionStateMachine
 
@@ -53,6 +61,7 @@ class MissionNode(object):
         self.vision_state = None
         self.vision_state_received = None
         self.tag = None
+        self.tag_received = None
 
         self.state_pub = rospy.Publisher("/robotac_mission/state", String,
                                          queue_size=1, latch=True)
@@ -68,6 +77,8 @@ class MissionNode(object):
         rospy.Service("/robotac_mission/start", Trigger, self._on_start)
         rospy.Service("/robotac_mission/stop", Trigger, self._on_stop)
         rospy.Service("/robotac_mission/reset", Trigger, self._on_reset)
+        rospy.Service("/robotac_mission/manual_takeover", Trigger,
+                      self._on_manual_takeover)
 
         rospy.Subscriber("/mavros/state", State, self._cb_fcu_state,
                          queue_size=5)
@@ -88,18 +99,37 @@ class MissionNode(object):
 
         self.interfaces = MissionInterfaces(
             dry_run=True, target_sink=self.target_pub.publish)
+        # M2 飞行轮：坐标系（起飞点局部归零）、TF（C3 Tag→map）、飞行驱动。
+        self.coord = Coordinates()
+        self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(10.0))
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+        self.camera_frame = rospy.get_param(
+            "~camera_frame", "camera_rgb_optical_frame")
+        self.driver = None
+        self.flight_enabled = False
+        self._window_started = None   # 6 分钟共享窗口起点（首次 start）
+        self._abort_land_issued = False
         self._boot()
         rospy.Timer(rospy.Duration(0.2), self._on_timer)
+        # L1：飞行控制频率用 config.control.rate_hz（参数校验失败时退回 20Hz）
+        rate_hz = (20.0 if self.config is None
+                   else float(self.config["control"]["rate_hz"]))
+        rospy.Timer(rospy.Duration(1.0 / rate_hz), self._on_flight_timer)
 
     # ---- BOOT / 参数 ----
 
     def _boot(self):
         """读取并校验 mission.yaml。成功 -> WAIT_READY；失败 -> ERROR。"""
         self.config = None
+        self.driver = None
+        self.flight_enabled = False
+        self._abort_land_issued = False
         try:
             self.config = load_config(self.config_path)
             self.interfaces.dry_run = bool(
                 self.config.get("mission", {}).get("dry_run", True))
+            self.flight_enabled = bool(
+                self.config.get("mission", {}).get("flight_enabled", False))
             self.machine.handle_boot_params(True, "参数校验通过")
         except ConfigError as exc:
             rospy.logerr("mission.yaml 校验失败: %s", exc)
@@ -138,6 +168,7 @@ class MissionNode(object):
 
     def _cb_tag(self, message):
         self.tag = message
+        self.tag_received = rospy.Time.now()
 
     # ---- 安全门 ----
 
@@ -170,10 +201,9 @@ class MissionNode(object):
             position = (self.pose.pose.position.x,
                         self.pose.pose.position.y,
                         self.pose.pose.position.z)
-            checks.append(guards.pose_valid(
+            # home 未捕获，场地边界无 map 锚点（§16.10）：只验新鲜度 + 有限数
+            checks.append(guards.pose_fresh(
                 position, self._topic_age(self.pose_received),
-                self.config["limits"]["field_min"],
-                self.config["limits"]["field_max"],
                 timing["pose_timeout"]))
         if self.estimator is None:
             checks.append((False, "未收到估计器状态"))
@@ -218,6 +248,15 @@ class MissionNode(object):
         except Exception:
             return float("inf")
 
+    def topic_age(self, name):
+        """FlightDriver 用：按名字取话题到达时刻龄（秒）。"""
+        received = getattr(self, {"pose": "pose_received",
+                                  "timesync": "timesync_received",
+                                  "vision_healthy": "vision_healthy_received",
+                                  "tag": "tag_received"
+                                  }.get(name, ""), None)
+        return self._topic_age(received)
+
     # ---- 服务 ----
 
     def _on_start(self, unused_request):
@@ -225,11 +264,31 @@ class MissionNode(object):
         with self._lock:
             # start 的接受依据必须是最新前置条件，而非最近一次 0.2s 定时器的结果
             # （≤0.2s 陈旧）；飞行轮 start 触发 TAKEOFF 前必须消除（R5-3）。
-            if self.config is not None:
+            if self.config is None:
+                return TriggerResponse(success=False, message="参数未加载")
+            if self.machine.state in MissionState.PRE_START:
                 ok, failed = self._evaluate_preconditions()
                 reason = "；".join(failed) if failed else "前置条件满足"
                 self.machine.handle_preconditions(ok, reason)
-            success, message = self.machine.request_start()
+                # 前置通过才查窗口：失败尝试不得消耗 6 分钟共享窗口（规则硬性）
+                if ok and self.flight_enabled:
+                    ok, reason = self._check_window()
+                    if not ok:
+                        self._publish_all()
+                        return TriggerResponse(success=False, message=reason)
+                    if self.pose is None:
+                        self._publish_all()
+                        return TriggerResponse(success=False,
+                                              message="本地位姿不可用，无法启动")
+                    home_xyz, home_yaw = self._capture_home()
+            success, message = self.machine.request_start(
+                flight_enabled=self.flight_enabled)
+            if success and self.flight_enabled:
+                # 进入 TAKEOFF：用捕获的 home 构造飞行驱动（起飞点局部归零）
+                self.driver = FlightDriver(self, self.machine,
+                                           self.interfaces, self.coord,
+                                           self.config)
+                self.driver.start(home_xyz, home_yaw)
             self._publish_all()
         return TriggerResponse(success=success, message=message)
 
@@ -244,6 +303,9 @@ class MissionNode(object):
         del unused_request
         with self._lock:
             success, message = self.machine.request_reset()
+            if success:
+                self.driver = None
+                self._abort_land_issued = False
             if self.machine.state == MissionState.BOOT:
                 # ERROR -> BOOT：从磁盘重读参数（BOOT 可重入）
                 self._boot()
@@ -255,20 +317,82 @@ class MissionNode(object):
     def _on_timer(self, unused_event):
         del unused_event
         with self._lock:
-            if self.config is not None:
+            if self.config is None:
+                self._publish_all()
+                return
+            if self.machine.state in MissionState.PRE_START:
                 ok, failed = self._evaluate_preconditions()
                 reason = "；".join(failed) if failed else "前置条件满足"
                 self.machine.handle_preconditions(ok, reason)
+            elif self.machine.state == MissionState.ABORT_LAND:
+                # 中止落地确认 -> COMPLETE（首个根因保留在 result）
+                if (self.extended_state is not None and
+                        self.extended_state.landed_state ==
+                        ExtendedState.LANDED_STATE_ON_GROUND):
+                    self.machine.confirm_landed()
             self._publish_all()
+
+    def _on_flight_timer(self, unused_event):
+        """20Hz 飞行控制：飞行态逐态推进；ABORT_LAND 触发放下 AUTO.LAND。"""
+        del unused_event
+        with self._lock:
+            if self.config is None or self.driver is None:
+                return
+            if self.machine.state in MissionState.FLIGHT:
+                self.driver.tick()
+            elif (self.machine.state == MissionState.ABORT_LAND and
+                    self.machine.active and not self._abort_land_issued):
+                self._abort_land_issued = True
+                ok, reason = self.interfaces.set_mode("AUTO.LAND")
+                if not ok:
+                    rospy.logwarn("中止降落模式请求失败: %s", reason)
+
+    def _check_window(self):
+        """6 分钟共享窗口：首次 start 记起点，此后校验剩余 ≥ flight_budget（M1）。"""
+        timing = self.config["timing"]
+        if self._window_started is None:
+            self._window_started = rospy.Time.now()
+            return True, ""
+        used = (rospy.Time.now() - self._window_started).to_sec()
+        return guards.window_ok(used, timing["total_window"],
+                                timing["flight_budget"])
+
+    def _on_manual_takeover(self, unused_request):
+        """人工接管确认：仅 ABORT_LAND 态可用（空中断连/AUTO.LAND 失败时
+        操作员接管后的唯一出口，M4）。"""
+        del unused_request
+        with self._lock:
+            if self.machine.state != MissionState.ABORT_LAND:
+                return TriggerResponse(
+                    success=False,
+                    message="当前状态不可人工接管：" + self.machine.state)
+            self.machine.confirm_manual_takeover()
+            self._publish_all()
+        return TriggerResponse(success=True, message="已确认人工接管")
+
+    def _capture_home(self):
+        """起飞时刻 map 位姿 + 偏航（起飞点局部归零锚点）。"""
+        position = self.pose.pose.position
+        yaw = self._yaw_from_quaternion(self.pose.pose.orientation)
+        return (position.x, position.y, position.z), yaw
+
+    @staticmethod
+    def _yaw_from_quaternion(orientation):
+        return math.atan2(
+            2.0 * (orientation.w * orientation.z +
+                   orientation.x * orientation.y),
+            1.0 - 2.0 * (orientation.y ** 2 + orientation.z ** 2))
 
     def _publish_all(self):
         self.state_pub.publish(String(data=self.machine.state))
         self.reason_pub.publish(String(data=self.machine.reason))
         self.active_pub.publish(Bool(data=self.machine.active))
         self.result_pub.publish(String(data=self.machine.result))
-        target = self._current_target()
-        if target is not None:
-            self.interfaces.publish_target(target)
+        # 飞行态下目标预览由 FlightDriver 转发（当前实际 setpoint）；此处只发预启动名义目标
+        if self.machine.state not in MissionState.FLIGHT:
+            target = self._current_target()
+            if target is not None:
+                self.interfaces.publish_target(target)
 
     def _current_target(self):
         """骨架轮：发布起飞点作为名义目标；飞行轮改为当前计算航点。"""

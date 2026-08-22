@@ -42,12 +42,24 @@ timing:
   flight_budget: 150.0
   takeoff_hold: 3.0
   align_hold: 3.0
+  waypoint_hold: 1.0
+  release_hold: 1.0
+  land_confirm: 30.0
   stage_timeout: {takeoff: 20, transit: 30, search: 30, align: 20, release: 10, return: 30, land: 20}
+control:
+  rate_hz: 20.0
+  position_tolerance: 0.15
+  max_step: 0.20
+  prestream_seconds: 2.0
+  health_debounce: 5
+  tag_jump_limit: 0.15
+  pose_jump_limit: 1.0
 tag:
   family: tag36h11
   id: 0
   black_size_m: 0.15
   stable_time: 1.0
+  stable_samples: 5
 waypoints:
   takeoff: [2.0, 0.80, 1.0]
   obstacle_routing:
@@ -67,6 +79,7 @@ payload:
   retry_count: 0
 mission:
   dry_run: true
+  flight_enabled: false
 """
 
 
@@ -129,6 +142,32 @@ class ConfigTest(unittest.TestCase):
     def test_negative_timeout_rejected(self):
         text = _minimal().replace("pose_timeout: 0.5",
                                   "pose_timeout: -1")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_flight_enabled_required(self):
+        text = _minimal().replace("  flight_enabled: false\n", "")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_control_section_required(self):
+        text = _minimal().replace("control:\n", "")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_control_health_debounce_must_be_int(self):
+        text = _minimal().replace("health_debounce: 5",
+                                  "health_debounce: 5.0")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_missing_waypoint_hold_rejected(self):
+        text = _minimal().replace("  waypoint_hold: 1.0\n", "")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_stable_samples_required(self):
+        text = _minimal().replace("  stable_samples: 5\n", "")
         with self.assertRaises(ConfigError):
             self._load(text)
 

@@ -41,6 +41,9 @@ timing:
   flight_budget: 150.0           # 单次飞行预算 s，待实机验证
   takeoff_hold: 3.0              # C1 起飞稳定保持 >=3s（规则硬性）
   align_hold: 3.0                # C3 对准悬停稳定保持 >=3s（规则硬性）
+  waypoint_hold: 1.0             # 绕障/返航每航点稳定保持 s，待实机验证
+  release_hold: 1.0              # 释放后等待货物脱离的保持 s，待实机验证
+  land_confirm: 30.0             # AUTO.LAND 等待落地确认 s（示例 06 模式）
   stage_timeout:                 # 各阶段超时 s，待实机验证
     takeoff: 20.0
     transit: 30.0
@@ -50,11 +53,21 @@ timing:
     return: 30.0
     land: 20.0
 
+control:                         # 飞行控制策略（占位，随 07/09/10 回填；示例源码值）
+  rate_hz: 20.0                  # setpoint 流频率（示例默认 20Hz）
+  position_tolerance: 0.15       # 到达/对准收敛容差 m（示例默认 0.15）
+  max_step: 0.20                 # ALIGN 单帧最大水平位移 m（示例 10 默认 0.20）
+  prestream_seconds: 2.0         # OFFBOARD 前 setpoint 预流时长 s（示例 begin 2.0）
+  health_debounce: 5             # 瞬态门连续次数（06 修复去抖，默认 5）
+  tag_jump_limit: 0.15           # Tag 稳定过滤跳变上限 m（示例 StableTag 0.15）
+  pose_jump_limit: 1.0           # 相邻位姿跳变告警上限 m（预留守卫）
+
 tag:
   family: tag36h11
   id: 0
   black_size_m: 0.15             # 黑色编码区边长 m
   stable_time: 1.0               # 连续稳定时间 s，待实机验证
+  stable_samples: 5              # 多样本均值窗口（示例 StableTag 5 样本），待实机验证
 
 waypoints:                       # 名义航点骨架（规则几何参考，map 原点标定后校准）
   # 桌上方航点（takeoff/mission/return）z 须 ≥ 桌面高 0.75（config 校验）；
@@ -78,4 +91,5 @@ payload:
   retry_count: 0
 
 mission:
-  dry_run: true                  # 本轮固定 true，interfaces 不发送任何控制
+  dry_run: true                  # true=interfaces 不发送任何控制（G1/拆桨联调）；真飞必须 false
+  flight_enabled: false          # true=start 进入 TAKEOFF 触发飞行态（真飞/拆桨联调）；false=骨架占位

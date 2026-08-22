@@ -8,6 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   std_srvs
+  tf2_geometry_msgs
+  tf2_ros
 )
 
 catkin_python_setup()
@@ -29,5 +31,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_state_machine.py)
   catkin_add_nosetests(test/test_guards.py)
   catkin_add_nosetests(test/test_config.py)
+  catkin_add_nosetests(test/test_coordinates.py)
+  catkin_add_nosetests(test/test_flight_health.py)
   add_rostest(launch/mission_sim.test)
 endif()

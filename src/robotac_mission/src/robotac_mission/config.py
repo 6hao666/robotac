@@ -16,7 +16,7 @@ class ConfigError(ValueError):
 
 _REQUIRED_SECTIONS = (
     "frames", "limits", "obstacle", "tables", "timing",
-    "tag", "waypoints", "payload", "mission",
+    "tag", "waypoints", "payload", "control", "mission",
 )
 
 _STAGE_TIMEOUT_KEYS = (
@@ -87,6 +87,9 @@ def validate(data):
     _require_positive(timing, "flight_budget")
     _require_nonnegative(timing, "takeoff_hold")
     _require_nonnegative(timing, "align_hold")
+    _require_nonnegative(timing, "waypoint_hold")
+    _require_nonnegative(timing, "release_hold")
+    _require_positive(timing, "land_confirm")
     stage = timing["stage_timeout"]
     if not isinstance(stage, dict):
         raise ConfigError("timing.stage_timeout 必须为映射")
@@ -108,6 +111,8 @@ def validate(data):
         raise ConfigError("tag.id 必须为非负整数")
     _require_positive(tag, "black_size_m")
     _require_nonnegative(tag, "stable_time")
+    if not isinstance(tag.get("stable_samples"), int) or tag["stable_samples"] < 1:
+        raise ConfigError("tag.stable_samples 必须为正整数（多样本均值窗口，§16.10）")
 
     waypoints = data["waypoints"]
     takeoff = _require_vec(waypoints, "takeoff", 3)
@@ -150,9 +155,19 @@ def validate(data):
     if not isinstance(payload.get("retry_count"), int) or payload["retry_count"] < 0:
         raise ConfigError("payload.retry_count 必须为非负整数")
 
+    control = data["control"]
+    for key in ("rate_hz", "position_tolerance", "max_step",
+                "prestream_seconds", "health_debounce",
+                "tag_jump_limit", "pose_jump_limit"):
+        _require_positive(control, key)
+    if not isinstance(control["health_debounce"], int):
+        raise ConfigError("control.health_debounce 必须为整数")
+
     mission = data["mission"]
     if not isinstance(mission.get("dry_run"), bool):
         raise ConfigError("mission.dry_run 必须为布尔")
+    if not isinstance(mission.get("flight_enabled"), bool):
+        raise ConfigError("mission.flight_enabled 必须为布尔")
 
 
 def _is_number(value):

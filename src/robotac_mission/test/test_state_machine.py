@@ -185,5 +185,82 @@ class PreconditionTest(unittest.TestCase):
         self.assertIn("event", last)
 
 
+class FlightStateMachineTest(unittest.TestCase):
+    """M2 飞行轮：完整 C1-C5 七态转移（表驱动 stage_done）。"""
+
+    def _fly(self):
+        machine = MissionStateMachine()
+        machine.handle_boot_params(True)
+        machine.handle_preconditions(True)
+        success, _ = machine.request_start(flight_enabled=True)
+        self.assertTrue(success)
+        self.assertEqual(machine.state, MissionState.TAKEOFF)
+        self.assertTrue(machine.active)
+        return machine
+
+    def test_start_flight_enabled_enters_takeoff(self):
+        machine = self._fly()
+
+    def test_placeholder_when_flight_disabled(self):
+        machine = MissionStateMachine()
+        machine.handle_boot_params(True)
+        machine.handle_preconditions(True)
+        success, message = machine.request_start(flight_enabled=False)
+        self.assertTrue(success)
+        self.assertIn("飞行态未启用", message)
+        self.assertEqual(machine.state, MissionState.WAIT_START)
+        self.assertFalse(machine.active)
+
+    def test_full_cycle_takeoff_to_complete(self):
+        machine = self._fly()
+        expected = [MissionState.TRANSIT, MissionState.SEARCH_TAG,
+                    MissionState.ALIGN_TAG, MissionState.RELEASE,
+                    MissionState.RETURN, MissionState.LAND]
+        for state in expected:
+            ok, _ = machine.stage_done()
+            self.assertTrue(ok)
+            self.assertEqual(machine.state, state)
+            self.assertTrue(machine.active)
+        ok, _ = machine.stage_done()   # LAND -> COMPLETE
+        self.assertTrue(ok)
+        self.assertEqual(machine.state, MissionState.COMPLETE)
+        self.assertEqual(machine.result, MissionResult.SAFE_LANDING)
+        self.assertFalse(machine.active)
+
+    def test_stage_done_invalid_outside_flight(self):
+        machine = MissionStateMachine()
+        machine.handle_boot_params(True)
+        ok, _ = machine.stage_done()
+        self.assertFalse(ok)
+
+    def test_abort_during_flight_records_root_cause(self):
+        machine = self._fly()
+        machine.stage_done()   # TRANSIT
+        machine.abort("绕障超时")
+        self.assertEqual(machine.state, MissionState.ABORT_LAND)
+        self.assertIn("绕障超时", machine.result)
+        machine.confirm_landed()
+        self.assertEqual(machine.state, MissionState.COMPLETE)
+        self.assertIn("绕障超时", machine.result)   # 首个根因保留
+
+    def test_stop_during_flight_enters_abort_land(self):
+        machine = self._fly()
+        success, _ = machine.request_stop()
+        self.assertTrue(success)
+        self.assertEqual(machine.state, MissionState.ABORT_LAND)
+
+    def test_reset_rejected_during_flight(self):
+        machine = self._fly()
+        success, message = machine.request_reset()
+        self.assertFalse(success)
+        self.assertIn("stop", message)
+
+    def test_confirm_landed_clears_active(self):
+        machine = self._fly()
+        machine.abort("安全门")
+        machine.confirm_landed()
+        self.assertFalse(machine.active)
+
+
 if __name__ == "__main__":
     unittest.main()
