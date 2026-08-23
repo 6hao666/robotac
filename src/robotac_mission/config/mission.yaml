@@ -13,6 +13,7 @@ frames:
 limits:
   field_min: [0.0, 0.0, 0.0]     # 有效飞行区下界（规则几何，待 map 原点标定校准）
   field_max: [4.0, 5.0, 3.0]     # 有效飞行区上界 4.00m x 5.00m x 3.00m
+  field_tolerance: 0.1           # 边界容差 m（2026-08-23：防 map_to_field 浮点误差误报越界）
   max_speed: 0.5                 # 待实机验证
 
 obstacle:                        # 固定障碍（规则几何，参考值）
@@ -91,5 +92,5 @@ payload:
   retry_count: 0
 
 mission:
-  dry_run: true                  # true=interfaces 不发送任何控制（G1/拆桨联调）；真飞必须 false
-  flight_enabled: false          # true=start 进入 TAKEOFF 触发飞行态（真飞/拆桨联调）；false=骨架占位
+  dry_run: false                 # true=interfaces 不发送任何控制（G1/拆桨联调）；真飞必须 false
+  flight_enabled: true           # true=start 进入 TAKEOFF 触发飞行态（真飞/拆桨联调）；false=骨架占位

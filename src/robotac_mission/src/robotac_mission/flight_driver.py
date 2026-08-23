@@ -61,9 +61,14 @@ class FlightDriver(object):
     def _stage_takeoff(self):
         timing = self.config["timing"]
         control = self.config["control"]
+        # 起飞目标捕获一次固定（相对当前 z + 高度），防止每 tick 重算导致目标
+        # 跟着飞机一起涨、永远追不上（2026-08-23 事故：一直爬升不停）。
+        if self._takeoff_map is None:
+            self._takeoff_map = self._relative_takeoff_target()
+        takeoff = self._takeoff_map
         if not self._takeoff_armed:
             if self._now() - self._stage_start < control["prestream_seconds"]:
-                self._send(self.takeoff_target)
+                self._send(takeoff, is_map=True)
                 return
             ok, reason = self.interfaces.set_mode("OFFBOARD")
             if ok:
@@ -73,11 +78,25 @@ class FlightDriver(object):
                 return
             self._takeoff_armed = True
             self._stage_start = self._now()
-        self._send(self.takeoff_target)
-        if self._arrived(self.takeoff_target, timing["takeoff_hold"]):
+        self._send(takeoff, is_map=True)
+        if self._arrived_map(takeoff, timing["takeoff_hold"]):
             self._advance()
         elif self._stage_timeout(timing["stage_timeout"]["takeoff"]):
             self._abort("起飞超时")
+
+    def _relative_takeoff_target(self):
+        """起飞目标：相对当前 FC 位置爬升（跟示例 begin(height) 一致，抗 z 漂移）。
+
+        2026-08-23 修复：FC z 估计漂移使 home_map_z 失效，绝对场地坐标的起飞
+        setpoint z 偏低（实测最高 0.15m，应为 1.0m）→ 飞控只看到小爬升误差 →
+        油门不够不升空 → 起飞超时。改为每 tick 按当前 FC z + 起飞高度发目标。"""
+        target = list(self.takeoff_target)  # [x, y, z] 场地坐标（x/y=起飞点）
+        if self.ctx.pose is not None:
+            # 场地 z 映射为 map z：当前 FC z + 起飞高度（相对爬升）
+            target[0] = self.ctx.pose.pose.position.x
+            target[1] = self.ctx.pose.pose.position.y
+            target[2] = self.ctx.pose.pose.position.z + target[2]
+        return target
 
     def _stage_search(self):
         timing = self.config["timing"]
@@ -196,19 +215,40 @@ class FlightDriver(object):
             (self.ctx.pose.pose.position.x, self.ctx.pose.pose.position.y,
              self.ctx.pose.pose.position.z))
 
-    def _send(self, target_field):
+    def _send(self, target_field, is_map=False):
         # 速度限幅：单 tick 位移 ≤ max_speed/rate（M5），令 limits.max_speed 生效
         max_step = (self.config["limits"]["max_speed"] /
                     self.config["control"]["rate_hz"])
         target = target_field
         pose_field = self._field_pose()
-        if pose_field is not None:
+        if pose_field is not None and not is_map:
             target = limit_step(pose_field, target_field, max_step)
-        target_map = self.coord.field_to_map(target)
+        if is_map:
+            # 直接 map 坐标（相对爬升等，不走 field_to_map——home_map_z 会漂移）
+            target_map = tuple(target)
+        else:
+            target_map = self.coord.field_to_map(target)
         self.interfaces.send_position(
             target_map, self.coord.home_yaw,
             self.config["frames"]["mission_frame"])
         self._last_target = (target_map, self.coord.home_yaw)
+
+    def _arrived_map(self, target_map, hold):
+        """相对 map 目标到达判定（用于相对爬升起飞）。"""
+        if self.ctx.pose is None:
+            return False
+        current = (self.ctx.pose.pose.position.x,
+                   self.ctx.pose.pose.position.y,
+                   self.ctx.pose.pose.position.z)
+        tolerance = self.config["control"]["position_tolerance"]
+        if math.dist(current, target_map[:3]) <= tolerance:
+            if self._reached_since is None:
+                self._reached_since = self._now()
+            if self._now() - self._reached_since >= hold:
+                return True
+        else:
+            self._reached_since = None
+        return False
 
     def _arrived(self, target_field, hold):
         pose_field = self._field_pose()
@@ -236,6 +276,7 @@ class FlightDriver(object):
 
     def _reset_stage(self):
         self._takeoff_armed = False
+        self._takeoff_map = None
         self._servo_called = False
         self._land_requested = False
         self._index = 0

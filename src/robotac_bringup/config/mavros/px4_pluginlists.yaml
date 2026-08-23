@@ -5,6 +5,7 @@ plugin_whitelist:
   - imu
   - local_position
   - param
+  - rc_io
   - setpoint_position
   - sys_status
   - sys_time

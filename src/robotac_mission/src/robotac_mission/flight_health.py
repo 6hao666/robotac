@@ -56,9 +56,13 @@ def check(ctx, coord, config, state):
         if not ok:
             return reason
         limits = config["limits"]
+        # 2026-08-23 修复：边界检查加容差。map_to_field 有浮点误差
+        # （实测 z=-6.34e-05，本应 0.0），严格 `>= min` 会误报"超出场地边界"
+        # 导致一启动就 ABORT。容差允许少量越界（防浮点误杀，仍约束真实边界）。
+        tolerance = limits.get("field_tolerance", 0.1)
         pose_field = coord.map_to_field(current)
         for index in range(3):
-            if not (limits["field_min"][index] <= pose_field[index]
-                    <= limits["field_max"][index]):
+            if not (limits["field_min"][index] - tolerance <= pose_field[index]
+                    <= limits["field_max"][index] + tolerance):
                 return "超出场地边界"
     return None

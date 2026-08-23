@@ -11,7 +11,7 @@ pwm_max_duty: 12
 min_command_angle: 0.0
 max_command_angle: 70.0
 blocked_angle: 0.0
-released_angle: 45.0
+released_angle: 50.0
 
 # 动作完成后发送 0% 占空比，避免持续堵转。
 drive_seconds: 0.30

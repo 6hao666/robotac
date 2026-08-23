@@ -59,9 +59,7 @@ if [[ -z "$remote_host" || "$remote_path" != /* || "$remote_path" == *[[:space:]
   echo "目标必须使用 <用户@主机:/不含空格的绝对目录> 格式。" >&2
   exit 64
 fi
-
 workspace=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-
 rsync_args=(
   -a
   --human-readable
@@ -84,6 +82,7 @@ rsync_args=(
   --exclude=docs-site/test-artifacts
   --exclude=docs-site/.build-state.json
   --exclude=docs-site/.content-map.json
+  --exclude=src/robotac_bringup/config/lidar/mid360s.json  # 现场硬件 IP 留飞机本地
 )
 
 if [[ "$include_git" != true ]]; then

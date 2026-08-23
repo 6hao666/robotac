@@ -394,6 +394,10 @@ class MissionNode(object):
             if target is not None:
                 self.interfaces.publish_target(target)
 
+    def publish_all(self):
+        """FlightDriver 状态推进后调用的公共发布入口（委托内部实现）。"""
+        self._publish_all()
+
     def _current_target(self):
         """骨架轮：发布起飞点作为名义目标；飞行轮改为当前计算航点。"""
         if self.config is None:
