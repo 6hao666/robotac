@@ -85,7 +85,7 @@ main() {
   printf '相机检查：%q camera\n' "${workspace}/tools/sensor_setup.py"
   printf '硬件配置文档：%q\n' "${workspace}/docs/03-hardware-and-configuration.md"
   printf '舵机标定文档：%q\n' "${workspace}/docs/10-servo-release-calibration.md"
-  echo "PX4、舵机 udev、雷达持久网络和机械标定仍须按现场文档人工确认。"
+  echo "PX4 串口、相机与舵机 udev、雷达持久网络和机械标定仍须按现场文档人工确认。"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

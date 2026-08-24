@@ -90,8 +90,10 @@ source devel/setup.bash
 
 ## PX4 与 MAVROS
 
-飞控设备使用稳定别名 `<飞控设备>`。`px4_pluginlists.yaml` 只启用命令、IMU、本地位置、
-参数、位置设定点、系统状态、时间同步和外部视觉接口。
+本项目默认通过 `serial:///dev/ttyACM0:921600` 连接飞控。启动前必须确认飞控当前确实枚举为
+`/dev/ttyACM0`；若不是，应先排查 USB 连接和设备枚举情况，或在启动命令中临时覆盖 `fcu_url`。
+`px4_pluginlists.yaml` 只启用命令、IMU、本地位置、参数、位置设定点、系统状态、时间同步和
+外部视觉接口。
 
 飞行前须在目标 PX4 上只读核对：
 
@@ -139,12 +141,14 @@ AprilTag 默认配置为 `Tag36h11 ID 0`，黑色编码区域边长 `0.15 m`。�
 
 ## udev
 
-udev 文件是模板，不得直接安装。先用目标设备属性替换模板中的占位值，再检查不会匹配同类
-非目标设备。建议别名为：
+udev 是 Linux 在 USB 或串口设备出现时应用规则的系统服务。规则可以设置访问权限，或创建
+稳定别名；它不会改变飞控的实际硬件端口、波特率或设备驱动。本项目默认不为 PX4 安装 udev
+规则，而是直接使用 `/dev/ttyACM0`。
 
-- PX4：`/dev/robotac_px4`
-- RGB 相机：`/dev/robotac_rgb_camera`
-- 舵机：`/dev/robotac_servo`
+相机和舵机仍可使用 udev 别名，分别为 `/dev/robotac_rgb_camera` 和
+`/dev/robotac_servo`。只有设备枚举号会变化、且已经确认 USB 厂商 ID、产品 ID 和唯一序列号
+时，才应使用对应模板创建规则。填写模板后安装到 `/etc/udev/rules.d/`，重载规则并重新插拔
+设备；规则的作用是将实际设备映射为别名，不是修改设备本身。
 
 ## 部署前检查
 

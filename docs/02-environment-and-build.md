@@ -61,7 +61,7 @@ source devel/setup.bash
 部署脚本只接受 ARM64 的 Jetson Orin Nano、Nano Super 或 Orin NX（包括设备树显示为
 `NVIDIA Orin NX Developer Kit` 的开发套件），以及 Ubuntu 20.04 和 ROS Noetic 环境，并要求
 由工作空间所有者以普通用户身份运行。它不会启动 ROS 节点、
-不连接飞机、不安装硬件 udev、不写雷达持久网络，也不修改 PX4 参数。脚本完成后，表示依赖
+不连接飞机、不安装相机或舵机 udev、不写雷达持久网络，也不修改 PX4 参数。脚本完成后，表示依赖
 已经安装、工作空间已经构建并完成离线检查；雷达、相机、飞控、舵机和机械机构仍须按硬件配置
 文档逐项确认。旧入口 `./tools/setup_orin_nano_super.sh` 继续保留，并转发到相同的部署流程。
 
