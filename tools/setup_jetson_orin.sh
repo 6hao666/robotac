@@ -15,8 +15,8 @@ validate_environment() {
     fail "工作空间不属于当前用户，请先修正目录所有权。"
   [[ "$architecture" == aarch64 ]] || fail "目标架构必须为 aarch64，当前为 ${architecture}。"
   case "$model" in
-    *"Jetson Orin Nano"*|*"Jetson Orin NX"*) ;;
-    *) fail "目标必须为 NVIDIA Jetson Orin Nano 或 Orin NX，当前型号为 ${model:-未知}。" ;;
+    *"Jetson Orin Nano"*|*"Jetson Orin NX"*|*"NVIDIA Orin NX Developer Kit"*) ;;
+    *) fail "目标必须为受支持的 NVIDIA Jetson Orin Nano 或 Orin NX，当前型号为 ${model:-未知}。" ;;
   esac
   [[ "$os_id" == ubuntu && "$os_version" == 20.04 ]] || \
     fail "目标系统必须为 Ubuntu 20.04，当前为 ${os_id:-未知} ${os_version:-未知}。"

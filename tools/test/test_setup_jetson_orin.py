@@ -59,6 +59,7 @@ class JetsonOrinEnvironmentTest(unittest.TestCase):
             "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super",
             "NVIDIA Jetson Orin NX",
             "NVIDIA Jetson Orin NX Engineering Reference Developer Kit",
+            "NVIDIA Orin NX Developer Kit",
         ]
         for model in models:
             with self.subTest(model=model):
