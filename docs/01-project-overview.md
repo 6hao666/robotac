@@ -39,6 +39,10 @@ Robotac 是 ROS Noetic 教学示例工作空间。它提供定位接入、MAVROS
 
 ![PlantUML：Robotac ROS 数据流与控制边界](./assets/plantuml/project-overview.svg "PlantUML：ROS 数据流与控制边界")
 
+FAST-LIO 先发布 `/Odometry`。当前项目使用的修正程序根据启动阶段的 IMU 数据修正初始倾角，
+并以第一帧里程计作为原点，随后发布 `/sunray/odometry`。该位姿经 MAVROS 送入 PX4，只有
+PX4 estimator 完成融合后，飞行示例才从 `/mavros/local_position/pose` 获得最终本地位置。
+
 定位预览 launch 不向 PX4 发布。`flight_base.launch` 会把外部视觉位姿发送给 PX4，但不会
 控制飞机。需要飞行的示例必须另行调用 `~start`。
 
@@ -46,7 +50,7 @@ Robotac 是 ROS Noetic 教学示例工作空间。它提供定位接入、MAVROS
 
 推荐按以下顺序完成：
 
-1. FCU 状态和本地位姿只读检查；
+1. FCU 状态、定位链路和本地位姿只读检查；
 2. AprilTag 原始检测和本地坐标转换；
 3. 位置设定点与视觉对准预览；
 4. 假飞控仿真；

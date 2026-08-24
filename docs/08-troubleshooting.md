@@ -45,13 +45,31 @@ MAVROS 显示连接成功，只表示已经收到飞控心跳。还需要单独�
 
 ## FAST-LIO 无里程计
 
-按输入顺序检查：
+先区分哪个话题没有数据：
 
 1. Livox 点云与 IMU 均有数据；
 2. 话题名和消息类型符合 `mid360s.yaml`；
 3. 雷达类型、外参和时间同步配置正确；
 4. FAST-LIO 日志没有初始化失败或时间回退；
-5. `/sunray/odometry` 的时间戳、姿态和频率连续。
+5. FAST-LIO 原始 `/Odometry` 的时间戳、姿态和频率连续。
+
+`/Odometry` 有数据而 `/sunray/odometry` 没有数据时，检查 `/livox/imu` 是否持续输入、
+`transform_odom_pointCloud` 是否运行，以及启动后的 200 帧 IMU 初始化是否完成。重新初始化时
+飞机必须上锁并保持静止。
+
+## 修正里程计异常
+
+`/sunray/odometry` 以第一帧 `/Odometry` 为原点，并使用启动时采集的 IMU 平均值修正倾角。
+依次检查：
+
+1. 时间戳持续递增，消息没有间歇停止；
+2. 四元数有效，静止时位置和姿态没有明显跳变；
+3. 向机体前、左、上方向移动时，位置增量方向符合约定；
+4. 改变航向时，姿态变化方向正确；
+5. 初始化期间飞机没有移动或受到振动。
+
+frame 名正确不代表位姿数值已经转换到该坐标系。发现方向错误时应检查外参和修正计算，不能
+只修改 `frame_id`。
 
 ## 外部视觉被拒绝
 
@@ -79,6 +97,30 @@ rostopic echo -n 1 /vision_pose_bridge/healthy
 | `TIMEOUT` | 输入数据中断 |
 
 先修正数据源或标定，不应扩大阈值掩盖问题。
+
+## PX4 未融合外部视觉
+
+先确认 `/mavros/vision_pose/pose` 持续有数据，再读取 `/mavros/estimator_status`。没有外部
+视觉输入时检查桥接状态；有输入但水平或垂直位置状态无效时，检查实际 PX4 固件版本及对应的
+外部视觉融合参数。
+
+新版 PX4 通常使用 `EKF2_EV_CTRL`，旧版固件可能使用 `EKF2_AID_MASK`、`EKF2_HGT_MODE`
+等参数。不要把其他版本的参数值直接写入当前飞控。还应检查外部视觉时间戳、坐标方向、
+高度来源和 estimator 创新量。
+
+## MAVROS 本地位置异常
+
+飞行示例读取 `/mavros/local_position/pose`，而不是直接读取 FAST-LIO 里程计。该话题无数据、
+过期、跳变或方向错误时，按以下顺序检查：
+
+1. `/sunray/odometry` 是否正常；
+2. `/vision_pose_bridge/healthy` 是否为 `true`；
+3. `/mavros/vision_pose/pose` 是否持续发布；
+4. `/mavros/estimator_status` 的位置状态是否有效；
+5. PX4 与 MAVROS 的时间同步是否稳定。
+
+上游里程计有数据而本地位置无效，通常说明问题仍在外部视觉转发、PX4 融合或 MAVROS 输出
+阶段。不要通过放宽飞行示例的数据时限绕过该问题。
 
 ## TF 缺失或方向错误
 

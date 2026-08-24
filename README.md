@@ -101,12 +101,26 @@ source devel/setup.bash
 需要分步排障时，仍可单独执行 `install_ubuntu20.sh`、`test_02_build.sh` 和其他测试脚本。
 详细条件见[环境与构建](docs/02-environment-and-build.md)。
 
+## 位置控制所需条件
+
+`06`、`07`、`08` 和 `10` 使用 PX4 输出的 `/mavros/local_position/pose` 计算当前位置，
+并向 `/mavros/setpoint_position/local` 发送目标。它们不会自行启动雷达、FAST-LIO、MAVROS
+或外部视觉接口，不能只启动示例 launch 后直接执行。
+
+本 Repo 的位置来源依次经过：MID360 点云与 IMU、FAST-LIO `/Odometry`、修正后的
+`/sunray/odometry`、MAVROS 外部视觉输入、PX4 estimator 融合，最后由 MAVROS 输出本地
+位姿。FAST-LIO 有里程计数据，只能说明定位计算已经开始；还需确认外部视觉持续送入 PX4、
+PX4 的位置状态有效，并检查最终本地位姿没有明显漂移、跳变或方向错误。
+
+标准启动和只读检查步骤见[部署与运行](docs/07-deployment-and-operations.md)，定位原理见
+[架构与接口](docs/04-architecture-and-interfaces.md)。
+
 ## 示例顺序
 
 | 编号 | launch | 默认行为 |
 | --- | --- | --- |
 | 01 | `01_fcu_state.launch` | 只读显示 FCU 状态 |
-| 02 | `02_local_pose.launch` | 只读显示本地位姿 |
+| 02 | `02_local_pose.launch` | 只读显示定位链路和本地位姿 |
 | 03 | `03_apriltag_detection.launch` | 显示相机坐标系 Tag 检测 |
 | 04 | `04_apriltag_local_pose.launch` | 发布本地 Tag 位姿和偏差 |
 | 05 | `05_setpoint_preview.launch` | 仅生成目标位姿 |

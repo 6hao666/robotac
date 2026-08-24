@@ -12,6 +12,8 @@ title Robotac ROS 数据流与控制边界
 component "MID360 + IMU" as lidar
 component "livox_ros_driver2" as livox
 component "FAST-LIO" as fastlio
+queue "/Odometry" as rawodom
+component "倾角与起点修正" as correction
 queue "/sunray/odometry" as odom
 component "robotac_localization" as localization
 queue "/mavros/vision_pose/pose" as vision
@@ -25,11 +27,13 @@ component "投放示例" as payload
 component "robotac_servo" as servo
 lidar --> livox
 livox --> fastlio
-fastlio --> odom
+fastlio --> rawodom
+rawodom --> correction
+correction --> odom
 odom --> localization
 localization --> vision
 vision --> px4
-px4 --> local
+px4 --> local : estimator 融合后
 camera --> tag
 tag --> examples
 local --> examples

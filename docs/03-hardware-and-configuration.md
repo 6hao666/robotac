@@ -16,6 +16,7 @@
 ```bash
 # 进入机载工作空间并加载构建环境。
 cd /home/yundrone/robotac
+# 加载当前工作空间的 ROS 环境。
 source devel/setup.bash
 # 发现雷达并比较配置；任何写入都会再次询问。
 ./tools/sensor_setup.py lidar
@@ -86,7 +87,26 @@ source devel/setup.bash
 - 平移与转动时里程计方向；
 - 时间同步和最大可接受数据年龄。
 
-坐标变换能连通不表示外参数值正确。未经实测的零外参不得用于飞行。
+`perception.launch` 除了启动 FAST-LIO，还会启动当前项目使用的
+`transform_odom_pointCloud`。该程序先读取 200 帧 `/livox/imu`，由平均加速度计算初始倾角；
+收到第一帧 FAST-LIO `/Odometry` 后，再以该位姿作为本次启动的原点，发布
+`/sunray/odometry`。从启动 `perception.launch` 到 `/sunray/odometry` 稳定输出期间，飞机
+必须上锁并保持静止。移动、振动或改变放置姿态会影响初始倾角和原点。
+
+当前程序对 FAST-LIO 位姿做倾角和起点修正，但没有根据 frame 名自动查找 TF。把消息的
+`frame_id` 写成 `world`、`odom` 或 `map`，不会自动改变消息中的位置和姿态。坐标名称、轴向、
+外参和实际运动方向必须分别核对。未经实测的零外参不得用于飞行。
+
+建议拆除桨叶后完成以下地面检查：
+
+1. 静止观察 `/Odometry` 和 `/sunray/odometry`，确认时间戳递增且没有明显跳变；
+2. 沿机体前方、左方和上方分别缓慢移动，核对位置增量方向；
+3. 缓慢改变航向，核对姿态变化方向；
+4. 重启定位后重复检查，确认原点和方向的表现一致。
+
+这段修正程序目前位于 `src/fast_lio`。在完成地面数据采集和 PX4 融合验证前，本阶段不调整
+其计算方式；后续可将项目自有部分迁入 `robotac_localization`，并补充静止初始化判断和更
+严格的 frame 检查。
 
 ## PX4 与 MAVROS
 
@@ -103,7 +123,14 @@ source devel/setup.bash
 - 遥控器接管、失联保护和电池保护；
 - MAVROS timesync 往返延迟。
 
-本 Repo 不提供绕过 PX4 安全参数或跳过 estimator 检查的配置。
+PX4 不会因为收到 `/mavros/vision_pose/pose` 就自动采用该位置。新版 PX4 通常通过
+`EKF2_EV_CTRL` 选择外部视觉融合项，旧版固件可能使用分开的 `EKF2_AID_MASK`、
+`EKF2_HGT_MODE` 等参数。参数名称和含义随固件版本变化，应先确认实际 PX4 版本，再按该版本
+文档核对位置、速度、航向和高度来源。本 Repo 不写入一组通用参数值，也不修改目标飞控参数。
+
+完成参数核对后，还需确认 `/mavros/estimator_status` 的姿态、水平相对位置和垂直位置状态
+有效，并检查 `/mavros/local_position/pose` 连续、方向正确。只有外部视觉输入、PX4 融合和
+最终本地位姿均正常，位置控制示例才具备所需的位置来源。
 
 ## RGB 相机与 AprilTag
 
