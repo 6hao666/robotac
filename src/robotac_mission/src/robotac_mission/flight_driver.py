@@ -40,6 +40,10 @@ class FlightDriver(FlightStageMixin):
             self._abort(issue)
             return self.machine.state
         stage = self.machine.state
+        # 借自 agent-fix：C1 已完成后若飞控意外上锁，继续发航点既不安全也不符合自主飞行语义。
+        if stage not in ("TAKEOFF", "LAND") and not self.ctx.fcu_state.armed:
+            self._abort("飞控意外上锁")
+            return self.machine.state
         if stage == "TAKEOFF":
             self._stage_takeoff()
         elif stage == "TRANSIT":
