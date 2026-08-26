@@ -37,6 +37,7 @@ OFFBOARD、解锁和降落；`11` 会操作投放机构。
 | `src/robotac_bringup` | 硬件、感知与基础飞行组件启动 |
 | `src/robotac_localization` | 外部视觉预览与 PX4 输出 |
 | `src/robotac_examples` | 11 个编号教学示例及测试 |
+| `src/robotac_mission` | C1-C5 现场任务状态机、规则约束与运行时安全门 |
 | `src/robotac_servo` | 投放机构串口驱动与地面标定 |
 | `tools` | 安装、构建、测试和同步工具 |
 | `docs` | 中文说明、教程和迁移资料 |

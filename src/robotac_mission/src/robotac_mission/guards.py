@@ -4,7 +4,7 @@
 每个守卫返回 (ok: bool, reason: str)；reason 为空串表示通过。
 
 骨架轮启用的安全门：fcu_connected / not_armed / on_ground / pose_valid /
-estimator_ok / timesync_ok / vision_healthy。mode_ok、window_ok、tf_chain_ok
+estimator_ok / timesync_ok / vision_healthy。mode_ok、tf_chain_ok
 为预留项，飞行轮启用。
 """
 
@@ -110,24 +110,23 @@ def mode_ok(mode, armed=True):
     return True, ""
 
 
-def window_ok(used_seconds, total_window, flight_budget=0.0):
-    """6 分钟共享窗口：剩余必须 ≥ 单次飞行预算（§8.1：total−已用 ≥ budget）。
-
-    首飞记起点；重飞剩余不足 budget 时拒 start——否则注定完不成（M1）。"""
-    if used_seconds is None or used_seconds < 0.0:
-        return False, "窗口时间无效"
-    remaining = total_window - used_seconds
-    if remaining <= 0.0:
-        return False, "6 分钟飞行窗口已用尽"
-    if remaining < flight_budget:
-        return False, "剩余时间不足单次飞行预算"
-    return True, ""
-
-
 def tf_chain_ok(available):
     """定位→相机坐标系链可用（ALIGN_TAG 前置；硬依赖②）。"""
     if not available:
         return False, "定位-相机坐标系链不可用"
+    return True, ""
+
+
+def landing_confirmed(seen_airborne, landed_state, on_ground_state,
+                      age, max_age):
+    """仅接受本轮已离地后、且落地状态消息新鲜的落地确认。"""
+    if not seen_airborne:
+        return False, "本轮尚未确认离地"
+    ok, reason = topic_fresh(age, max_age, label="落地状态")
+    if not ok:
+        return False, reason
+    if landed_state != on_ground_state:
+        return False, "飞机尚未落地"
     return True, ""
 
 

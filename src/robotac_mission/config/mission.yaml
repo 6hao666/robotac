@@ -9,15 +9,18 @@
 frames:
   mission_frame: map
   body_frame: base_link
+  field_yaw: 0.0                # 场地 +x 相对 map +x 的偏航；现场标定后回填，不能用机头朝向代替
+  field_calibrated: false       # 真飞前必须由现场负责人确认；否则 flight_enabled=true 会被拒绝
 
 limits:
   field_min: [0.0, 0.0, 0.0]     # 有效飞行区下界（规则几何，待 map 原点标定校准）
   field_max: [4.0, 5.0, 3.0]     # 有效飞行区上界 4.00m x 5.00m x 3.00m
-  field_tolerance: 0.1           # 边界容差 m（2026-08-23：防 map_to_field 浮点误差误报越界）
+  boundary_margin: 0.10          # 内缩安全裕量 m；规则边线外即越界，绝不向场外放宽
   max_speed: 0.5                 # 待实机验证
 
 obstacle:                        # 固定障碍（规则几何，参考值）
   size: [2.10, 0.15, 2.00]       # 长 x 宽 x 高 m
+  center: [2.00, 2.50]           # 场地中心；用于运行时禁止穿越其水平投影
   cross_gap: 0.95                # 两侧净宽 m
   no_overfly: true               # 禁止从顶部越过
 
@@ -39,7 +42,7 @@ timing:
     vision_state: 2.0            # /vision_pose_bridge/state（fake 周期 0.5s）
   max_rtt_ms: 50.0               # timesync 往返时延上限 ms（实测约 1.78ms，留裕量）
   total_window: 360.0            # 两次飞行共享连续 6 分钟（规则硬性）
-  flight_budget: 150.0           # 单次飞行预算 s，待实机验证
+  flight_budget: 150.0           # 单次飞行规划预算 s，仅供演练，不作为第二次飞行的拒绝条件
   takeoff_hold: 3.0              # C1 起飞稳定保持 >=3s（规则硬性）
   align_hold: 3.0                # C3 对准悬停稳定保持 >=3s（规则硬性）
   waypoint_hold: 1.0             # 绕障/返航每航点稳定保持 s，待实机验证
@@ -67,30 +70,31 @@ tag:
   family: tag36h11
   id: 0
   black_size_m: 0.15             # 黑色编码区边长 m
+  max_range: 1.50                 # Tag 相对机体水平距离上限，超限悬停并等待，待实机验证
   stable_time: 1.0               # 连续稳定时间 s，待实机验证
   stable_samples: 5              # 多样本均值窗口（示例 StableTag 5 样本），待实机验证
 
 waypoints:                       # 名义航点骨架（规则几何参考，map 原点标定后校准）
-  # 桌上方航点（takeoff/mission/return）z 须 ≥ 桌面高 0.75（config 校验）；
-  # C1 起飞稳定保持须 1.0-2.0m，占位取 1.0。绕障航点位于场地中段侧隙、不在桌上。
-  takeoff: [2.0, 0.80, 1.0]      # 起降台上方（C1 保持高度，> 桌面 0.75）
+  # 所有 z 为距场地地面的无人机几何中心高度；桌面高 0.75m。
+  # C1 起飞稳定保持须 1.0-2.0m，这里用 1.25m；绕障全程低于 2m 障碍顶部。
+  takeoff: [2.0, 0.80, 1.25]     # 起降台上方（C1 保持高度）
   obstacle_routing:              # 去程绕障：中线上行 -> 侧隙 -> 穿越 -> 回中线
-    approach: [2.0, 1.5, 0.6]
-    gap_enter: [1.0, 1.5, 0.8]
-    gap_cross: [1.0, 3.5, 0.8]
-    resume: [2.0, 3.5, 0.6]
-  mission: [[2.0, 4.20, 1.0]]    # 投放台正上方（> 桌面 0.75，便于识别 Tag/投放）
+    approach: [2.0, 1.5, 1.25]
+    gap_enter: [0.475, 1.5, 1.25] # 左侧 0.95m 净宽的中线，保留最大横向净空
+    gap_cross: [0.475, 3.5, 1.25]
+    resume: [2.0, 3.5, 1.25]
+  mission: [[2.0, 4.20, 1.25]]   # 投放台正上方，便于识别 Tag/投放
   return_routing:                # 返程绕障（另一侧，结构同上）
-    approach: [2.0, 3.5, 0.6]
-    gap_enter: [3.0, 3.5, 0.8]
-    gap_cross: [3.0, 1.5, 0.8]
-    resume: [2.0, 1.5, 0.6]
-  return: [[2.0, 0.80, 1.0]]     # 起降台上方（> 桌面 0.75）
+    approach: [2.0, 3.5, 1.25]
+    gap_enter: [3.525, 3.5, 1.25] # 右侧净宽中线
+    gap_cross: [3.525, 1.5, 1.25]
+    resume: [2.0, 1.5, 1.25]
+  return: [[2.0, 0.80, 1.25]]    # 起降台正上方，AUTO.LAND 后判定落点
 
 payload:
-  enable: false                  # 本轮固定 false
+  enable: true                   # 正式任务必须由程序调用官方投放机构；台架联调用 dry_run 门控
   retry_count: 0
 
 mission:
-  dry_run: false                 # true=interfaces 不发送任何控制（G1/拆桨联调）；真飞必须 false
-  flight_enabled: true           # true=start 进入 TAKEOFF 触发飞行态（真飞/拆桨联调）；false=骨架占位
+  dry_run: true                  # 默认只预览；真飞须经现场审核后显式改为 false
+  flight_enabled: false          # 默认不进入飞行态；真飞/拆桨联调须经现场审核后显式改为 true

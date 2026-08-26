@@ -7,8 +7,6 @@ YAML（占位），ALIGN/RELEASE 依赖 C3 TF 链 / C4 舵机（硬依赖）。r
 import math
 import time
 
-from mavros_msgs.msg import ExtendedState
-
 from robotac_mission.coordinates import limit_step
 from robotac_mission.flight_health import check as health_check
 from robotac_mission.tag_tracker import TagTracker
@@ -31,16 +29,22 @@ class FlightDriver(object):
         """start 接受后调用：捕获 home（起飞点局部归零，§16.2）。"""
         self.coord.capture_home(
             home_map_xyz, self.config["waypoints"]["takeoff"][:2],
-            yaw=home_yaw)
+            yaw=home_yaw,
+            field_yaw=self.config["frames"]["field_yaw"],
+            home_field_z=self.config["tables"]["height"])
         self._reset_stage()
 
     def tick(self):
         """一个 20Hz 控制步。返回当前机器状态。"""
+        stage = self.machine.state
         issue = health_check(self.ctx, self.coord, self.config, self._health)
         if issue is not None:
             self._abort(issue)
             return self.machine.state
-        stage = self.machine.state
+        # C1 已完成后若飞控意外上锁，继续发送航点既不安全也不符合自主飞行语义。
+        if stage not in ("TAKEOFF", "LAND") and not self.ctx.fcu_state.armed:
+            self._abort("飞控意外上锁")
+            return self.machine.state
         if stage == "TAKEOFF":
             self._stage_takeoff()
         elif stage == "TRANSIT":
@@ -61,8 +65,7 @@ class FlightDriver(object):
     def _stage_takeoff(self):
         timing = self.config["timing"]
         control = self.config["control"]
-        # 起飞目标捕获一次固定（相对当前 z + 高度），防止每 tick 重算导致目标
-        # 跟着飞机一起涨、永远追不上（2026-08-23 事故：一直爬升不停）。
+        # 起飞目标捕获一次固定，避免每 tick 重算导致目标跟着飞机一起涨、永远追不上。
         if self._takeoff_map is None:
             self._takeoff_map = self._relative_takeoff_target()
         takeoff = self._takeoff_map
@@ -85,18 +88,8 @@ class FlightDriver(object):
             self._abort("起飞超时")
 
     def _relative_takeoff_target(self):
-        """起飞目标：相对当前 FC 位置爬升（跟示例 begin(height) 一致，抗 z 漂移）。
-
-        2026-08-23 修复：FC z 估计漂移使 home_map_z 失效，绝对场地坐标的起飞
-        setpoint z 偏低（实测最高 0.15m，应为 1.0m）→ 飞控只看到小爬升误差 →
-        油门不够不升空 → 起飞超时。改为每 tick 按当前 FC z + 起飞高度发目标。"""
-        target = list(self.takeoff_target)  # [x, y, z] 场地坐标（x/y=起飞点）
-        if self.ctx.pose is not None:
-            # 场地 z 映射为 map z：当前 FC z + 起飞高度（相对爬升）
-            target[0] = self.ctx.pose.pose.position.x
-            target[1] = self.ctx.pose.pose.position.y
-            target[2] = self.ctx.pose.pose.position.z + target[2]
-        return target
+        """返回 C1 的绝对场地高度目标（几何中心距地面 1.00-2.00m）。"""
+        return self.coord.field_to_map(self.takeoff_target)
 
     def _stage_search(self):
         timing = self.config["timing"]
@@ -107,6 +100,7 @@ class FlightDriver(object):
             center = self.config["tables"]["delivery_center"]
             radius = self.config["tables"]["search_radius"]
             if math.dist(tag_field[:2], center) <= radius:
+                self.ctx.publish_vision_result("recognized", tag_field)
                 self._advance()
                 return
         if self._stage_timeout(timing["stage_timeout"]["search"]):
@@ -132,11 +126,20 @@ class FlightDriver(object):
         dx = tag_field[0] - pose_field[0]
         dy = tag_field[1] - pose_field[1]
         length = math.hypot(dx, dy)
+        if length > self.config["tag"]["max_range"]:
+            self.ctx.publish_vision_result("out_of_range", tag_field,
+                                           error=(dx, dy))
+            self._send(self.mission_point)
+            if self._stage_timeout(timing["stage_timeout"]["align"]):
+                self._abort("对准阶段 Tag 超出有效距离")
+            return
         scale = 1.0
         if length > control["max_step"]:
             scale = control["max_step"] / length
         self._send([pose_field[0] + dx * scale,
                     pose_field[1] + dy * scale, self.mission_point[2]])
+        self.ctx.publish_vision_result("aligning", tag_field,
+                                       error=(dx, dy))
         if length <= control["position_tolerance"]:
             if self._reached_since is None:
                 self._reached_since = self._now()
@@ -179,9 +182,7 @@ class FlightDriver(object):
             if not ok:
                 self._abort(reason)
                 return
-        extended = self.ctx.extended_state
-        if extended is not None and (
-                extended.landed_state == ExtendedState.LANDED_STATE_ON_GROUND):
+        if self.ctx.landing_confirmed():
             self._advance()
         elif self._stage_timeout(timing["land_confirm"]):
             self._abort("降落超时")

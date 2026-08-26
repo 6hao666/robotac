@@ -16,12 +16,17 @@ def _config(debounce=3):
         "timing": {
             "pose_timeout": 0.5,
             "topic_timeout": {"timesync_status": 2.0,
-                              "vision_healthy": 1.0},
+                              "vision_healthy": 1.0,
+                              "fcu_state": 2.0,
+                              "estimator_status": 3.0,
+                              "vision_state": 2.0},
             "max_rtt_ms": 50.0,
         },
         "control": {"health_debounce": debounce, "pose_jump_limit": 1.0},
         "limits": {"field_min": [0.0, 0.0, 0.0],
                    "field_max": [4.0, 5.0, 3.0]},
+        "obstacle": {"size": [2.10, 0.15, 2.00],
+                     "center": [2.0, 2.5], "no_overfly": True},
     }
 
 
@@ -41,7 +46,9 @@ class FakeCtx(object):
         self.timesync = SimpleNamespace(round_trip_time_ms=1.0)
         self.vision_healthy = True
         self.vision_state = "OK"
-        self.ages = {"pose": 0.1, "timesync": 0.1, "vision_healthy": 0.1}
+        self.ages = {"pose": 0.1, "timesync": 0.1, "vision_healthy": 0.1,
+                     "fcu_state": 0.1, "estimator": 0.1,
+                     "vision_state": 0.1}
 
     def topic_age(self, name):
         return self.ages.get(name, 0.1)
@@ -65,6 +72,10 @@ class FlightHealthTest(unittest.TestCase):
         self.ctx.fcu_state.connected = False
         self.assertEqual(self.check(), "飞控未连接")
 
+    def test_fcu_state_stale(self):
+        self.ctx.ages["fcu_state"] = 3.0
+        self.assertEqual(self.check(), "飞控状态过期")
+
     def test_pose_stale(self):
         self.ctx.ages["pose"] = 1.0
         self.assertEqual(self.check(), "本地位置过期")
@@ -72,6 +83,10 @@ class FlightHealthTest(unittest.TestCase):
     def test_estimator_invalid(self):
         self.ctx.estimator.pos_horiz_rel_status_flag = False
         self.assertIn("estimator", self.check())
+
+    def test_estimator_state_stale(self):
+        self.ctx.ages["estimator"] = 4.0
+        self.assertIn("状态过期", self.check())
 
     def test_offboard_lost(self):
         self.ctx.fcu_state.mode = "POSCTL"
@@ -95,6 +110,15 @@ class FlightHealthTest(unittest.TestCase):
     def test_vision_state_unhealthy(self):
         self.ctx.vision_state = "UNHEALTHY"
         self.assertEqual(self.check(), "外部视觉状态非 OK")
+
+    def test_vision_state_stale(self):
+        self.ctx.ages["vision_state"] = 3.0
+        self.assertEqual(self.check(), "外部视觉状态过期")
+
+    def test_obstacle_horizontal_projection_rejected(self):
+        # home 使 field=(map.x+2, map.y+0.8)；设到障碍中心。
+        self.ctx.pose = _pose(x=0.0, y=1.7, z=1.0)
+        self.assertIn("禁止顶部越障", self.check())
 
 
 if __name__ == "__main__":

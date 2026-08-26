@@ -5,6 +5,7 @@
   重新从磁盘读取，不复用内存缓存。
 """
 
+import math
 import os
 
 import yaml
@@ -58,6 +59,9 @@ def validate(data):
     frames = data["frames"]
     _require_str(frames, "mission_frame")
     _require_str(frames, "body_frame")
+    _require_finite(frames, "field_yaw")
+    if not isinstance(frames.get("field_calibrated"), bool):
+        raise ConfigError("frames.field_calibrated 必须为布尔")
 
     limits = data["limits"]
     field_min = _require_vec(limits, "field_min", 3)
@@ -69,6 +73,7 @@ def validate(data):
 
     obstacle = data["obstacle"]
     _require_vec(obstacle, "size", 3)
+    _require_vec(obstacle, "center", 2)
     _require_positive(obstacle, "cross_gap")
     if not isinstance(obstacle.get("no_overfly"), bool):
         raise ConfigError("obstacle.no_overfly 必须为布尔")
@@ -110,6 +115,7 @@ def validate(data):
     if not isinstance(tag.get("id"), int) or tag["id"] < 0:
         raise ConfigError("tag.id 必须为非负整数")
     _require_positive(tag, "black_size_m")
+    _require_positive(tag, "max_range")
     _require_nonnegative(tag, "stable_time")
     if not isinstance(tag.get("stable_samples"), int) or tag["stable_samples"] < 1:
         raise ConfigError("tag.stable_samples 必须为正整数（多样本均值窗口，§16.10）")
@@ -140,6 +146,10 @@ def validate(data):
     # 返航均在桌面上方稳定，z 低于桌面即撞桌（R5-2；占位值曾为 0.6 < 桌面 0.75）。
     # 不写死裕量（避免现场常量），填正式值须加裕量并在 README §8 注明。
     table_height = tables["height"]
+    if not 1.0 <= takeoff[2] <= 2.0:
+        raise ConfigError(
+            "waypoints.takeoff z=%g 不在 C1 规定的 1.00-2.00m 几何中心高度内"
+            % takeoff[2])
     for label, point in (
             ("waypoints.takeoff", takeoff),
             ("waypoints.mission[0]", waypoints["mission"][0]),
@@ -168,6 +178,10 @@ def validate(data):
         raise ConfigError("mission.dry_run 必须为布尔")
     if not isinstance(mission.get("flight_enabled"), bool):
         raise ConfigError("mission.flight_enabled 必须为布尔")
+    if mission["flight_enabled"] and not frames["field_calibrated"]:
+        raise ConfigError("真飞前必须完成场地坐标标定（frames.field_calibrated=true）")
+    if mission["flight_enabled"] and not payload["enable"]:
+        raise ConfigError("正式任务 flight_enabled=true 时不得跳过 C4 自主投放")
 
 
 def _is_number(value):
@@ -201,6 +215,12 @@ def _require_nonnegative(section, key):
     value = section.get(key)
     if not _is_number(value) or float(value) < 0:
         raise ConfigError("%s 必须为非负数" % key)
+
+
+def _require_finite(section, key):
+    value = section.get(key)
+    if not _is_number(value) or not math.isfinite(float(value)):
+        raise ConfigError("%s 必须为有限数" % key)
 
 
 def _check_in_field(point, field_min, field_max, label):

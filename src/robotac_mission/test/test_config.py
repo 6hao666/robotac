@@ -20,12 +20,15 @@ def _minimal():
 frames:
   mission_frame: map
   body_frame: base_link
+  field_yaw: 0.0
+  field_calibrated: false
 limits:
   field_min: [0, 0, 0]
   field_max: [4, 5, 3]
   max_speed: 0.5
 obstacle:
   size: [2.10, 0.15, 2.00]
+  center: [2.00, 2.50]
   cross_gap: 0.95
   no_overfly: true
 tables:
@@ -58,6 +61,7 @@ tag:
   family: tag36h11
   id: 0
   black_size_m: 0.15
+  max_range: 1.5
   stable_time: 1.0
   stable_samples: 5
 waypoints:
@@ -139,6 +143,12 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             self._load(text)
 
+    def test_takeoff_height_outside_c1_range_rejected(self):
+        text = _minimal().replace("takeoff: [2.0, 0.80, 1.0]",
+                                  "takeoff: [2.0, 0.80, 2.1]")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
     def test_negative_timeout_rejected(self):
         text = _minimal().replace("pose_timeout: 0.5",
                                   "pose_timeout: -1")
@@ -149,6 +159,16 @@ class ConfigTest(unittest.TestCase):
         text = _minimal().replace("  flight_enabled: false\n", "")
         with self.assertRaises(ConfigError):
             self._load(text)
+
+    def test_flight_requires_calibrated_field_and_payload(self):
+        text = _minimal().replace("  flight_enabled: false", "  flight_enabled: true")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+        text = text.replace("field_calibrated: false", "field_calibrated: true")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+        text = text.replace("  enable: false", "  enable: true")
+        self.assertTrue(self._load(text)["payload"]["enable"])
 
     def test_control_section_required(self):
         text = _minimal().replace("control:\n", "")

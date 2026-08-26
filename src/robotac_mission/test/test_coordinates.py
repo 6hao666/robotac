@@ -32,6 +32,20 @@ class CoordinatesTest(unittest.TestCase):
             self.assertAlmostEqual(restored[index], point[index])
         self.assertAlmostEqual(coord.home_yaw, 0.3)
 
+    def test_round_trip_with_field_yaw_and_table_height(self):
+        coord = Coordinates()
+        coord.capture_home((10.0, -5.0, 2.0), (2.0, 0.8),
+                           field_yaw=1.5707963267948966,
+                           home_field_z=0.75)
+        field_point = (2.0, 1.8, 1.25)
+        map_point = coord.field_to_map(field_point)
+        self.assertAlmostEqual(map_point[0], 9.0)
+        self.assertAlmostEqual(map_point[1], -5.0)
+        self.assertAlmostEqual(map_point[2], 2.5)
+        restored = coord.map_to_field(map_point)
+        for actual, expected in zip(restored, field_point):
+            self.assertAlmostEqual(actual, expected)
+
     def test_relative_offsets(self):
         coord = Coordinates()
         coord.capture_home((10.0, 20.0, 30.0), (2.0, 0.8))

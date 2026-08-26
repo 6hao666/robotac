@@ -110,22 +110,21 @@ class GuardTest(unittest.TestCase):
         # 未解锁不判定（不构成模式丢失）
         self.assertTrue(guards.mode_ok("MANUAL", armed=False)[0])
 
-    def test_window_ok(self):
-        self.assertTrue(guards.window_ok(0.0, 360.0)[0])
-        self.assertTrue(guards.window_ok(359.9, 360.0)[0])
-        ok, reason = guards.window_ok(360.0, 360.0)
-        self.assertFalse(ok)
-        self.assertIn("窗口", reason)
-        self.assertFalse(guards.window_ok(None, 360.0)[0])
-        # M1：剩余须 ≥ flight_budget，否则拒重飞（首飞耗 300s、预算 150s 只余 60s）
-        self.assertFalse(guards.window_ok(300.0, 360.0, 150.0)[0])
-        self.assertTrue(guards.window_ok(100.0, 360.0, 150.0)[0])
-
     def test_tf_chain_ok(self):
         self.assertTrue(guards.tf_chain_ok(True)[0])
         ok, reason = guards.tf_chain_ok(False)
         self.assertFalse(ok)
         self.assertIn("坐标系链", reason)
+
+    def test_landing_requires_new_airborne_then_fresh_ground(self):
+        self.assertFalse(guards.landing_confirmed(
+            False, 1, 1, 0.1, 2.0)[0])
+        self.assertFalse(guards.landing_confirmed(
+            True, 1, 1, 3.0, 2.0)[0])
+        self.assertFalse(guards.landing_confirmed(
+            True, 2, 1, 0.1, 2.0)[0])
+        self.assertTrue(guards.landing_confirmed(
+            True, 1, 1, 0.1, 2.0)[0])
 
     def test_pose_jump(self):
         self.assertTrue(guards.pose_jump(None, (1.0, 1.0, 1.0), 1.0)[0])

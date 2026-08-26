@@ -17,10 +17,15 @@ def check(ctx, coord, config, state):
     control = config["control"]
     if ctx.fcu_state is None or not ctx.fcu_state.connected:
         return "飞控未连接"
+    if ctx.topic_age("fcu_state") > timing["topic_timeout"]["fcu_state"]:
+        return "飞控状态过期"
     if ctx.pose is None or ctx.topic_age("pose") > timing["pose_timeout"]:
         return "本地位置过期"
     estimator = ctx.estimator
-    if estimator is None or not guards.estimator_ok({
+    if estimator is None or ctx.topic_age("estimator") > (
+            timing["topic_timeout"]["estimator_status"]):
+        return "PX4 estimator 状态过期"
+    if not guards.estimator_ok({
             "attitude": estimator.attitude_status_flag,
             "pos_horiz_rel": estimator.pos_horiz_rel_status_flag,
             "pos_vert_abs": estimator.pos_vert_abs_status_flag})[0]:
@@ -29,7 +34,10 @@ def check(ctx, coord, config, state):
     if not ok:
         return reason
     # L3：视觉桥 state 持续非 OK 立即中止（硬门，同预启动语义）
-    if ctx.vision_state is not None and ctx.vision_state != "OK":
+    if (ctx.vision_state is None or ctx.topic_age("vision_state") >
+            timing["topic_timeout"]["vision_state"]):
+        return "外部视觉状态过期"
+    if ctx.vision_state != "OK":
         return "外部视觉状态非 OK"
     issue = None
     timesync = ctx.timesync
@@ -56,13 +64,22 @@ def check(ctx, coord, config, state):
         if not ok:
             return reason
         limits = config["limits"]
-        # 2026-08-23 修复：边界检查加容差。map_to_field 有浮点误差
-        # （实测 z=-6.34e-05，本应 0.0），严格 `>= min` 会误报"超出场地边界"
-        # 导致一启动就 ABORT。容差允许少量越界（防浮点误杀，仍约束真实边界）。
-        tolerance = limits.get("field_tolerance", 0.1)
+        # 规则以边线内侧为界，不能为数值误差把允许区域扩大到场外；配置的是
+        # 向内缩的安全裕量。标定误差必须通过 field_yaw/home 标定修正。
+        margin = limits.get("boundary_margin", 0.0)
         pose_field = coord.map_to_field(current)
         for index in range(3):
-            if not (limits["field_min"][index] - tolerance <= pose_field[index]
-                    <= limits["field_max"][index] + tolerance):
+            if not (limits["field_min"][index] + margin <= pose_field[index]
+                    <= limits["field_max"][index] - margin):
                 return "超出场地边界"
+        obstacle = config["obstacle"]
+        if obstacle["no_overfly"]:
+            length, thickness, _height = obstacle["size"]
+            center_x, center_y = obstacle["center"]
+            if (center_x - length * 0.5 <= pose_field[0] <=
+                    center_x + length * 0.5 and
+                    center_y - thickness * 0.5 <= pose_field[1] <=
+                    center_y + thickness * 0.5):
+                # 规则按水平投影判定，飞得比障碍高同样属于顶部越障。
+                return "进入固定障碍物水平投影范围（禁止顶部越障）"
     return None

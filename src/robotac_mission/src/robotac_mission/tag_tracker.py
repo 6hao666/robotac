@@ -8,6 +8,7 @@ SEARCH 超时 → ABORT——结构在、真实行为依赖 C3 TF/外参解锁�
 """
 
 import math
+import time
 
 import rospy
 import tf2_geometry_msgs
@@ -23,6 +24,8 @@ class TagTracker(object):
         self.fresh = False     # 本次 update 是否产生稳定位姿
         self._samples = []     # 未满稳定窗口前的候选样本
         self._last_sample = None
+        self._last_message_stamp = None
+        self._stable_since = None
 
     def update(self, detections, age):
         """处理一次检测数组。age: 最近 tag 消息到达龄（s），防冻结流推进。
@@ -31,9 +34,16 @@ class TagTracker(object):
         self.fresh = False
         if age > self.config["timing"]["tag_timeout"]:
             self._samples = []   # 发布流冻结/超龄：清窗，不推进
+            self._stable_since = None
             return False
         if detections is None or not getattr(detections, "detections", None):
             return False
+        stamp = self._stamp_key(detections)
+        if stamp is not None and stamp == self._last_message_stamp:
+            # FlightDriver 比相机快；同一条 ROS 消息不能被重复计入稳定样本。
+            self.fresh = self.pose_map is not None
+            return self.fresh
+        self._last_message_stamp = stamp
         candidate = self._to_map(detections)
         if candidate is None:
             return False
@@ -41,9 +51,14 @@ class TagTracker(object):
                 self._dist3(candidate, self._last_sample) >
                 self.config["control"]["tag_jump_limit"]):
             self._samples = []   # 场景切换/跳变：重开窗口
+            self._stable_since = None
+        if not self._samples:
+            self._stable_since = time.monotonic()
         self._samples.append(candidate)
         self._last_sample = candidate
-        if len(self._samples) >= self.config["tag"]["stable_samples"]:
+        if (len(self._samples) >= self.config["tag"]["stable_samples"] and
+                time.monotonic() - self._stable_since >=
+                self.config["tag"]["stable_time"]):
             count = len(self._samples)
             self.pose_map = tuple(
                 sum(sample[i] for sample in self._samples) / count
@@ -53,7 +68,11 @@ class TagTracker(object):
 
     def _to_map(self, detections):
         for detection in detections.detections:
-            if detection.id != self.config["tag"]["id"]:
+            ids = getattr(detection, "id", ())
+            if not isinstance(ids, (list, tuple)):
+                ids = (ids,)
+            if not any(int(detected_id) == self.config["tag"]["id"]
+                       for detected_id in ids):
                 continue
             source = PoseStamped()
             source.header = detection.pose.header
@@ -72,6 +91,18 @@ class TagTracker(object):
             return (local.pose.position.x, local.pose.position.y,
                     local.pose.position.z)
         return None
+
+    @staticmethod
+    def _stamp_key(detections):
+        """返回消息时间戳键；没有有效时间戳时退化为 None。"""
+        header = getattr(detections, "header", None)
+        stamp = getattr(header, "stamp", None)
+        if stamp is None:
+            return None
+        try:
+            return (stamp.secs, stamp.nsecs)
+        except AttributeError:
+            return None
 
     @staticmethod
     def _dist3(first, second):

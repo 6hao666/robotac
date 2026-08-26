@@ -13,6 +13,7 @@ BOOT 可重入：mission_reset（ERROR -> BOOT）会重新从磁盘读取 missio
 不得复用进程内存中缓存的旧参数。
 """
 
+import json
 import math
 import threading
 
@@ -62,6 +63,8 @@ class MissionNode(object):
         self.vision_state_received = None
         self.tag = None
         self.tag_received = None
+        self._flight_started = None
+        self._seen_airborne = False
 
         self.state_pub = rospy.Publisher("/robotac_mission/state", String,
                                          queue_size=1, latch=True)
@@ -73,6 +76,9 @@ class MissionNode(object):
                                           PoseStamped, queue_size=1, latch=True)
         self.result_pub = rospy.Publisher("/robotac_mission/result", String,
                                           queue_size=1, latch=True)
+        self.vision_result_pub = rospy.Publisher(
+            "/robotac_mission/vision_result", String, queue_size=10,
+            latch=True)
 
         rospy.Service("/robotac_mission/start", Trigger, self._on_start)
         rospy.Service("/robotac_mission/stop", Trigger, self._on_stop)
@@ -107,7 +113,6 @@ class MissionNode(object):
             "~camera_frame", "camera_rgb_optical_frame")
         self.driver = None
         self.flight_enabled = False
-        self._window_started = None   # 6 分钟共享窗口起点（首次 start）
         self._abort_land_issued = False
         self._boot()
         rospy.Timer(rospy.Duration(0.2), self._on_timer)
@@ -145,6 +150,9 @@ class MissionNode(object):
     def _cb_extended(self, message):
         self.extended_state = message
         self.extended_received = rospy.Time.now()
+        if (self._flight_started is not None and
+                message.landed_state == ExtendedState.LANDED_STATE_IN_AIR):
+            self._seen_airborne = True
 
     def _cb_pose(self, message):
         self.pose = message
@@ -252,7 +260,11 @@ class MissionNode(object):
         """FlightDriver 用：按名字取话题到达时刻龄（秒）。"""
         received = getattr(self, {"pose": "pose_received",
                                   "timesync": "timesync_received",
+                                  "fcu_state": "fcu_received",
+                                  "estimator": "estimator_received",
                                   "vision_healthy": "vision_healthy_received",
+                                  "vision_state": "vision_state_received",
+                                  "extended": "extended_received",
                                   "tag": "tag_received"
                                   }.get(name, ""), None)
         return self._topic_age(received)
@@ -270,12 +282,7 @@ class MissionNode(object):
                 ok, failed = self._evaluate_preconditions()
                 reason = "；".join(failed) if failed else "前置条件满足"
                 self.machine.handle_preconditions(ok, reason)
-                # 前置通过才查窗口：失败尝试不得消耗 6 分钟共享窗口（规则硬性）
                 if ok and self.flight_enabled:
-                    ok, reason = self._check_window()
-                    if not ok:
-                        self._publish_all()
-                        return TriggerResponse(success=False, message=reason)
                     if self.pose is None:
                         self._publish_all()
                         return TriggerResponse(success=False,
@@ -285,6 +292,8 @@ class MissionNode(object):
                 flight_enabled=self.flight_enabled)
             if success and self.flight_enabled:
                 # 进入 TAKEOFF：用捕获的 home 构造飞行驱动（起飞点局部归零）
+                self._flight_started = rospy.Time.now()
+                self._seen_airborne = False
                 self.driver = FlightDriver(self, self.machine,
                                            self.interfaces, self.coord,
                                            self.config)
@@ -302,10 +311,15 @@ class MissionNode(object):
     def _on_reset(self, unused_request):
         del unused_request
         with self._lock:
+            if self.machine.state == MissionState.ABORT_LAND:
+                return TriggerResponse(
+                    success=False, message="中止降落中；请等待确认落地或人工接管")
             success, message = self.machine.request_reset()
             if success:
                 self.driver = None
                 self._abort_land_issued = False
+                self._flight_started = None
+                self._seen_airborne = False
             if self.machine.state == MissionState.BOOT:
                 # ERROR -> BOOT：从磁盘重读参数（BOOT 可重入）
                 self._boot()
@@ -326,9 +340,7 @@ class MissionNode(object):
                 self.machine.handle_preconditions(ok, reason)
             elif self.machine.state == MissionState.ABORT_LAND:
                 # 中止落地确认 -> COMPLETE（首个根因保留在 result）
-                if (self.extended_state is not None and
-                        self.extended_state.landed_state ==
-                        ExtendedState.LANDED_STATE_ON_GROUND):
+                if self.landing_confirmed():
                     self.machine.confirm_landed()
             self._publish_all()
 
@@ -347,16 +359,6 @@ class MissionNode(object):
                 if not ok:
                     rospy.logwarn("中止降落模式请求失败: %s", reason)
 
-    def _check_window(self):
-        """6 分钟共享窗口：首次 start 记起点，此后校验剩余 ≥ flight_budget（M1）。"""
-        timing = self.config["timing"]
-        if self._window_started is None:
-            self._window_started = rospy.Time.now()
-            return True, ""
-        used = (rospy.Time.now() - self._window_started).to_sec()
-        return guards.window_ok(used, timing["total_window"],
-                                timing["flight_budget"])
-
     def _on_manual_takeover(self, unused_request):
         """人工接管确认：仅 ABORT_LAND 态可用（空中断连/AUTO.LAND 失败时
         操作员接管后的唯一出口，M4）。"""
@@ -369,6 +371,16 @@ class MissionNode(object):
             self.machine.confirm_manual_takeover()
             self._publish_all()
         return TriggerResponse(success=True, message="已确认人工接管")
+
+    def landing_confirmed(self):
+        """返回本轮已离地后、由新鲜落地状态确认的安全落地结果。"""
+        if self.config is None or self.extended_state is None:
+            return False
+        return guards.landing_confirmed(
+            self._seen_airborne, self.extended_state.landed_state,
+            ExtendedState.LANDED_STATE_ON_GROUND,
+            self._topic_age(self.extended_received),
+            self.config["timing"]["topic_timeout"]["extended_state"])[0]
 
     def _capture_home(self):
         """起飞时刻 map 位姿 + 偏航（起飞点局部归零锚点）。"""
@@ -397,6 +409,19 @@ class MissionNode(object):
     def publish_all(self):
         """FlightDriver 状态推进后调用的公共发布入口（委托内部实现）。"""
         self._publish_all()
+
+    def publish_vision_result(self, status, tag_field, error=None):
+        """发布与本次飞行绑定的 C3 可核验视觉结果。"""
+        result = {
+            "state": status,
+            "mission_state": self.machine.state,
+            "tag_id": self.config["tag"]["id"],
+            "target_position_field_m": [round(value, 3) for value in tag_field],
+        }
+        if error is not None:
+            result["center_error_field_m"] = [round(value, 3) for value in error]
+        self.vision_result_pub.publish(
+            String(data=json.dumps(result, ensure_ascii=False, sort_keys=True)))
 
     def _current_target(self):
         """骨架轮：发布起飞点作为名义目标；飞行轮改为当前计算航点。"""

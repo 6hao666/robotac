@@ -18,8 +18,8 @@ COMPLETE / ERROR）。`mission.flight_enabled=false`（默认）时 start 保持
 - **所有阈值来自 YAML**，代码不写现场常量；YAML 加载/校验失败进入 `ERROR`。
 - **BOOT 可重入**：`mission_reset`（ERROR -> BOOT）会重新从磁盘读取
   `mission.yaml`，不复用进程内存缓存。
-- **坐标系**：起飞点局部归零（`coordinates.py`，方案 §16.2）——start 捕获 home，
-  `field_to_map` 发 setpoint、`map_to_field` 做边界/桌区判定。
+- **坐标系**：start 捕获起降台桌面上的 home，`field_to_map` 发 setpoint、
+  `map_to_field` 做边界/桌区判定；`frames.field_yaw` 必须由现场标定，不能拿机头朝向代替。
 
 ## 2. 输入话题（骨架轮启用安全门）
 
@@ -38,9 +38,9 @@ COMPLETE / ERROR）。`mission.flight_enabled=false`（默认）时 start 保持
 > Bool/String）统一按**节点收到时刻**判龄，阈值见 `timing.topic_timeout`；某话题
 > 停止发布后守卫变红，避免"最后一条消息"长期放行。
 
-飞行态安全门（20Hz，`flight_health.py`）：`mode_ok`（OFFBOARD 丢失）、
-`window_ok`（6 分钟共享窗口，start 时校验）、`pose_jump`（位姿跳变）、场地边界
-（`map_to_field` 后）、软项去抖（`health_debounce` 次）。`tf_chain_ok`（定位→相机
+飞行态安全门（20Hz，`flight_health.py`）：OFFBOARD 丢失、位姿跳变、内缩后的
+场地边界、固定障碍物水平投影（禁止顶部越障）和软项去抖
+（`health_debounce` 次）。`tf_chain_ok`（定位→相机
 坐标系链）为 ALIGN_TAG 前置（硬依赖②），TF 不可用时 Tag 恒 None → SEARCH 超时中止。
 
 ## 3. 输出话题与服务
@@ -56,26 +56,27 @@ COMPLETE / ERROR）。`mission.flight_enabled=false`（默认）时 start 保持
 | `/robotac_mission/active` | std_msgs/Bool | 任务执行中为 True（TAKEOFF→LAND；预启动恒 False） |
 | `/robotac_mission/target` | geometry_msgs/PoseStamped | 当前名义目标（预启动发布起飞点；飞行态由 FlightDriver 转发实际 setpoint） |
 | `/robotac_mission/result` | std_msgs/String | 成功/中止/首个故障原因（飞行中止记首个根因，如"任务中止：绕障超时"） |
+| `/robotac_mission/vision_result` | std_msgs/String（JSON） | C3 可核验输出：本次飞行的 Tag ID、场地坐标及对准中心偏差 |
 
 ## 4. mission.yaml 字段
 
 `config/mission.yaml` 为参数模板，全部数值为**占位值**：
 
-- `frames`：坐标系（mission_frame / body_frame）。
-- `limits`：场地边界 `field_min/max`、最大速度。
-- `obstacle`：固定障碍几何（规则参考）与 `no_overfly`。
+- `frames`：坐标系及场地相对 map 的标定偏航 `field_yaw`；只有现场负责人确认
+  `field_calibrated=true` 后，才允许启用飞行态。
+- `limits`：场地边界、向内的安全裕量 `boundary_margin`、最大速度。
+- `obstacle`：固定障碍几何、场地中心和 `no_overfly`。
 - `tables`：两桌圆心（两桌同 Tag ID 0 的判别依据）、桌面高、搜索半径。
 - `timing`：数据年龄阈值（`pose_timeout` / `tag_timeout` / 各启动门话题
-  `topic_timeout`）、时延阈值 `max_rtt_ms`、6 分钟共享窗口 `total_window`、单次
+  `topic_timeout`）、时延阈值 `max_rtt_ms`、6 分钟共享窗口 `total_window`、演练规划
   预算 `flight_budget`、C1/C3 稳定保持（`takeoff_hold`/`align_hold`）、航点/释放
   保持（`waypoint_hold`/`release_hold`）、`land_confirm`、各阶段超时 `stage_timeout`。
 - `control`：飞行控制策略占位（`rate_hz`/`position_tolerance`/`max_step`/
   `prestream_seconds`/`health_debounce`/`tag_jump_limit`/`pose_jump_limit`，
   随 07/09/10 回填）。
-- `tag`：Tag 族 / ID / 边长 / 稳定时间；`stable_samples` 多样本均值窗口（默认 5）。
-- `waypoints`：起飞点、去程/返程绕障路径、任务点（名义骨架，map 原点标定后校准）。
-- `payload`：`enable: false` 时 RELEASE 跳过舵机（空投，便于 E 段无硬件联调）；
-  `retry_count` 为舵机释放重试上限。
+- `tag`：Tag 族 / ID / 边长 / 有效距离 / 稳定时间；`stable_samples` 多样本均值窗口（默认 5）。
+- `waypoints`：起飞点、去程/返程绕障路径、任务点；所有 z 都是距地面的无人机几何中心高度。
+- `payload`：正式任务应启用；`dry_run` 时不会真的调用舵机；`retry_count` 为释放重试上限。
 - `mission.dry_run`：`true` 时 interfaces 不发送任何控制（G1/拆桨联调）；真飞须 `false`。
 - `mission.flight_enabled`：`false`（默认）时 start 为骨架占位，不进入飞行态；
   `true` 后 start 进入 TAKEOFF（真飞/拆桨 dry_run 联调）。
@@ -129,6 +130,8 @@ rostest robotac_mission mission_sim.test
   或在无操作员确认时自动调用 `start`。
 - 飞行中止（安全门/阶段超时）一律 → `ABORT_LAND`：节点放下 AUTO.LAND（离地时），
   落地确认 → `COMPLETE`（首个根因保留在 result）。
+- 落地确认必须在本轮已观测到 `IN_AIR` 后，收到新鲜的 `ON_GROUND`；中止降落中拒绝
+  `reset`，只能等待该确认或由安全操作员确认人工接管。
 - 舵机释放单次调用（`payload.retry_count` 内），禁无限重试；`/dev/robotac_servo`
   缺失时 RELEASE 必中止——C4 硬阻塞，真机 E 段前须解锁。
 
@@ -156,6 +159,5 @@ rostest robotac_mission mission_sim.test
   真实桥若只在启动时 latch 发一次，2s 后门即红、真机进不了 WAIT_START。须实测
   state 话题真实重发频率；若一次性发布，须调高 `vision_state` 阈值或仅对 healthy
   判龄（state 只验值）。
-- **桌上方航点 z ≥ 桌面高 0.75**（config 校验，R5-2）：takeoff / mission / return
-  在桌面上方稳定，z 低于桌面即撞桌；C1 起飞稳定保持须 1.0-2.0m，占位取 1.0。
-  绕障航点位于场地中段侧隙、不在桌上，不受此约束。填正式值在桌面高之上再加裕量。
+- **场地标定与高度语义**：`field_yaw` 未标定不可真飞；所有航点 z 是相对地面的几何中心
+  高度。`takeoff` 还会被强制校验在 C1 的 1.0-2.0m 内；桌上方航点必须高于 0.75m。
