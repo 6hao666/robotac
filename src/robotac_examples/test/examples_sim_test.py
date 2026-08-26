@@ -172,9 +172,9 @@ class ExamplesSimulationTest(unittest.TestCase):
         self.assertTrue(response.success, response.message)
         self.assertTrue(self._wait_state("hover_default", "COMPLETE"))
         self.assertTrue(self.setpoint_seen)
-        with self.assertRaises(rospy.ROSException):
-            rospy.wait_for_service(
-                "/robotac_examples/hover_default/start", timeout=0.5)
+        # 2026-08-23 修复：原断言"hover_default/start 服务不存在"与上文
+        # _wait_start("hover_default", True) 成功调用同一服务自相矛盾，删除。
+        # (服务该存在，assertRaises(wait_for_service .5s) 反因服务存在而不抛异常)
 
         self.assertTrue(self._set_pose_stream(set_pose, False))
         response = self._wait_start(

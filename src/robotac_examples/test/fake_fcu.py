@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """教学示例测试使用的简化假飞控，不连接任何硬件。"""
 
+import math
+
 import rospy
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import EstimatorStatus, ExtendedState, State, TimesyncStatus
@@ -22,6 +24,10 @@ class FakeFcu(object):
         self.estimator_ok = True
         self.pose_stream = True
         self.setpoint_count = 0
+        # 2026-08-23 setpoint 到达平滑化：缓存目标，_publish 按 max_velocity 步进逼近，
+        # 避免"setpoint 直接当 pose"的瞬跳触发真机保险 too_fast 误杀（仿真专用，真机保险不动）。
+        self.setpoint_target = None
+        self.max_velocity = 3.0
         self.state_pub = rospy.Publisher("/mavros/state", State, queue_size=5)
         self.extended_pub = rospy.Publisher("/mavros/extended_state",
                                             ExtendedState, queue_size=5)
@@ -51,7 +57,8 @@ class FakeFcu(object):
 
     def _setpoint_cb(self, message):
         self.setpoint_count += 1
-        self.pose.pose = message.pose
+        # 仅缓存目标位置，实际位置由 _publish 平滑逼近（模拟真机速度上限）。
+        self.setpoint_target = message.pose
         self.count_pub.publish(Bool(data=True))
 
     def _set_mode(self, request):
@@ -92,10 +99,36 @@ class FakeFcu(object):
     def _publish(self, unused_event):
         del unused_event
         self.pose.header.stamp = rospy.Time.now()
+        self._approach_setpoint()
         self.state_pub.publish(self.state)
         self.extended_pub.publish(self.extended)
         if self.pose_stream:
             self.pose_pub.publish(self.pose)
+
+    def _approach_setpoint(self):
+        """按 max_velocity（3.0 m/s）把 pose 向 setpoint_target 平滑逼近。
+
+        仿真专用：模拟真机的位置速率上限，防止 setpoint 瞬跳触真机 too_fast
+        保险误杀。真机 flight_safety 不动。
+        """
+        if not self.pose_stream or self.setpoint_target is None:
+            return
+        cur = self.pose.pose.position
+        tgt = self.setpoint_target.position
+        # 上一 tick 距当前目标的位移，dt=0.05s。
+        step = self.max_velocity * 0.05
+        dx = tgt.x - cur.x
+        dy = tgt.y - cur.y
+        dz = tgt.z - cur.z
+        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if dist <= step or dist <= 1e-6:
+            cur.x = tgt.x
+            cur.y = tgt.y
+            cur.z = tgt.z
+        else:
+            cur.x += step * dx / dist
+            cur.y += step * dy / dist
+            cur.z += step * dz / dist
         estimator = EstimatorStatus()
         estimator.attitude_status_flag = self.estimator_ok
         estimator.pos_horiz_rel_status_flag = self.estimator_ok
