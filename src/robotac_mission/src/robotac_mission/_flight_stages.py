@@ -125,11 +125,25 @@ class FlightStageMixin(object):
                     return
             else:
                 self.interfaces.log_action("release_skipped")   # 空投（M2）
-        self._send(self.mission_point)   # 释放后保持，等待货物脱离
-        if self._arrived(self.mission_point, timing["release_hold"]):
+        release = self._release_target()   # 投放点 = mission_point + 舵机偏移补偿
+        self._send(release)
+        if self._arrived(release, timing["release_hold"]):
             self._advance()
         elif self._stage_timeout(timing["stage_timeout"]["release"]):
             self._abort("投放等待超时")
+
+    def _release_target(self):
+        """投放目标：舵机偏移补偿。
+
+        mission_point 是投放台中心正上方（飞机几何中心对准）。舵机相对 body
+        有水平偏移 payload.offset（2026-08-26 实测：机尾 -0.04m），若飞机几何
+        中心对准投放中心，舵机落点会偏 4cm。补偿：飞机往反方向偏 offset 的水平
+        分量，使舵机正好在投放中心正上方（C4 落点精度）。
+        """
+        offset = self.config["payload"].get("offset", [0.0, 0.0, 0.0])
+        return [self.mission_point[0] - offset[0],
+                self.mission_point[1] - offset[1],
+                self.mission_point[2]]
 
     def _stage_land(self):
         timing = self.config["timing"]

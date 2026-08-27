@@ -90,6 +90,7 @@ waypoints:                       # 名义航点骨架（规则几何参考，map
 payload:
   enable: false                  # 本轮固定 false
   retry_count: 0
+  offset: [-0.04, 0.0, -0.09]    # 舵机相对 body 偏移 [x,y,z]（2026-08-26 实测：机尾 4cm、机下 9cm、中轴线 y=0）
 
 mission:
   dry_run: false                 # true=interfaces 不发送任何控制（G1/拆桨联调）；真飞必须 false

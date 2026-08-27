@@ -7,9 +7,12 @@
        tag -> map 完整 TF 链（09/10/C3 依赖）。 -->
   <arg name="parent_frame" default="body" />
   <arg name="child_frame" default="camera_rgb_optical_frame" />
-  <arg name="x" default="0.0" />
+  <!-- 2026-08-26 实测（body 帧，原点=雷达/IMU）：
+       x=+0.06 相机在雷达前方(机头方向)6cm；z=-0.09 相机在雷达下方9cm。
+       y=0 在机体中轴线上。pitch=180° 光轴朝下（tag 居中标定）。 -->
+  <arg name="x" default="0.06" />
   <arg name="y" default="0.0" />
-  <arg name="z" default="0.0" />
+  <arg name="z" default="-0.09" />
   <arg name="roll" default="0.0" />
   <arg name="pitch" default="3.14159" />
   <arg name="yaw" default="0.0" />
