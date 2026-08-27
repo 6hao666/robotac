@@ -44,21 +44,51 @@ OFFBOARD、解锁和降落；`11` 会操作投放机构。
 `mavros`、`apriltag`、`apriltag_ros`、`fast_lio`、`livox_ros_driver2`、`Livox-SDK2`
 和 `web_cam` 为固定版本的第三方源码，参赛开发通常不需要修改。
 
-## 安装与构建
+## 获取源码与安装
+
+目标机须预先安装 Ubuntu 20.04 和 ROS Noetic。先安装 Git：
 
 ```bash
-# 进入工作空间目录。
-cd ~/robotac_ws
-# 在已安装 ROS Noetic 的 Orin Nano Super 上完成预检、安装、比赛构建和离线测试。
-./tools/setup_orin_nano_super.sh
+# 更新软件包索引。
+sudo apt update
+# 安装 Git。
+sudo apt install -y git
+# 返回当前用户主目录，仓库将保存为 ~/robotac。
+cd ~
+```
+
+GitHub 和 Gitee 选择一种即可。网络能够稳定访问 GitHub 时使用：
+
+```bash
+# 从 GitHub 获取 Robotac 源码。
+git clone https://github.com/YunDrone-Team/robotac.git
+```
+
+网络条件不佳时使用 Gitee 镜像：
+
+```bash
+# 从 Gitee 镜像获取 Robotac 源码。
+git clone https://gitee.com/yundrone_sunray2023/robotac.git
+```
+
+仓库根目录 `~/robotac` 本身就是 catkin 工作空间，不需要另外创建工作空间目录，也不要将
+本仓库放入另一个 catkin 工作空间。完成 clone 后执行：
+
+```bash
+# 进入 Robotac 仓库根目录。
+cd ~/robotac
+# 在已安装 ROS Noetic 的 Jetson Orin Nano、Nano Super 或 NX 上完成软件部署。
+./tools/setup_jetson_orin.sh
 # 加载当前工作空间的 ROS 环境。
 source devel/setup.bash
 ```
 
-目标机必须预先安装 Ubuntu 20.04 和 ROS Noetic。一条龙脚本不会配置真实硬件，也不会启动
-ROS 节点；脚本成功仅表示软件就绪，雷达网络、稳定设备别名和机械标定仍须按现场文档确认。
+部署脚本不会配置真实硬件，也不会启动 ROS 节点。脚本完成后，表示依赖已经安装、工作空间
+已经构建并完成离线检查；这不表示雷达网络、
+稳定设备别名、飞控连接或投放机构标定已经完成。上述项目仍须按现场文档逐项确认。
+旧入口 `./tools/setup_orin_nano_super.sh` 继续保留，并转发到相同的部署流程。
 
-默认比赛模式的增量构建执行：
+日常增量构建使用：
 
 ```bash
 # 执行一次增量构建。
@@ -71,12 +101,26 @@ ROS 节点；脚本成功仅表示软件就绪，雷达网络、稳定设备别�
 需要分步排障时，仍可单独执行 `install_ubuntu20.sh`、`test_02_build.sh` 和其他测试脚本。
 详细条件见[环境与构建](docs/02-environment-and-build.md)。
 
+## 位置控制所需条件
+
+`06`、`07`、`08` 和 `10` 使用 PX4 输出的 `/mavros/local_position/pose` 计算当前位置，
+并向 `/mavros/setpoint_position/local` 发送目标。它们不会自行启动雷达、FAST-LIO、MAVROS
+或外部视觉接口，不能只启动示例 launch 后直接执行。
+
+本 Repo 的位置来源依次经过：MID360 点云与 IMU、FAST-LIO `/Odometry`、修正后的
+`/sunray/odometry`、MAVROS 外部视觉输入、PX4 estimator 融合，最后由 MAVROS 输出本地
+位姿。FAST-LIO 有里程计数据，只能说明定位计算已经开始；还需确认外部视觉持续送入 PX4、
+PX4 的位置状态有效，并检查最终本地位姿没有明显漂移、跳变或方向错误。
+
+标准启动和只读检查步骤见[部署与运行](docs/07-deployment-and-operations.md)，定位原理见
+[架构与接口](docs/04-architecture-and-interfaces.md)。
+
 ## 示例顺序
 
 | 编号 | launch | 默认行为 |
 | --- | --- | --- |
 | 01 | `01_fcu_state.launch` | 只读显示 FCU 状态 |
-| 02 | `02_local_pose.launch` | 只读显示本地位姿 |
+| 02 | `02_local_pose.launch` | 只读显示定位链路和本地位姿 |
 | 03 | `03_apriltag_detection.launch` | 显示相机坐标系 Tag 检测 |
 | 04 | `04_apriltag_local_pose.launch` | 发布本地 Tag 位姿和偏差 |
 | 05 | `05_setpoint_preview.launch` | 仅生成目标位姿 |

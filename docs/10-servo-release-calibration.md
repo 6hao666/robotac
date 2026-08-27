@@ -53,7 +53,7 @@ source devel/setup.bash
 roslaunch robotac_servo servo_angle_tuner.launch
 ```
 
-这是裸舵机点动的标准入口。点动阶段不得安装舵盘、齿轮、连杆、挂钩或其他旋转附件。工具
+这是裸舵机点动的推荐命令。点动阶段不得安装舵盘、齿轮、连杆、挂钩或其他旋转附件。工具
 会自动尝试 `/dev/robotac_servo`、`/dev/ttyUSB0` 和 `/dev/ttyUSB1`。安全提示输入 `YES` 或
 `Y` 后进入界面；连接成功后仍不会自动发送角度，必须按方向键或 `r` 才会点动。
 

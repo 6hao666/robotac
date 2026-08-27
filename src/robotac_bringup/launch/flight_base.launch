@@ -1,5 +1,5 @@
 <launch>
-  <arg name="fcu_url" default="serial:///dev/robotac_px4:921600" />
+  <arg name="fcu_url" default="serial:///dev/ttyACM0:921600" />
   <arg name="vision_config"
        default="$(find robotac_localization)/config/vision_pose.yaml" />
 

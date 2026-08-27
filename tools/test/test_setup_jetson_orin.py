@@ -3,13 +3,15 @@
 import os
 import pathlib
 import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SETUP_SCRIPT = ROOT / "tools/setup_orin_nano_super.sh"
+SETUP_SCRIPT = ROOT / "tools/setup_jetson_orin.sh"
+LEGACY_SETUP_SCRIPT = ROOT / "tools/setup_orin_nano_super.sh"
 INSTALL_SCRIPT = ROOT / "tools/install_ubuntu20.sh"
 
 
@@ -26,7 +28,7 @@ def run_bash(script, command, env=None):
     )
 
 
-class OrinEnvironmentTest(unittest.TestCase):
+class JetsonOrinEnvironmentTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.temporary.name)
@@ -51,13 +53,24 @@ class OrinEnvironmentTest(unittest.TestCase):
             shlex.quote(value) for value in values)
         return run_bash(SETUP_SCRIPT, command)
 
-    def test_valid_environment_passes(self):
-        self.assertEqual(self.validate().returncode, 0)
+    def test_supported_models_pass(self):
+        models = [
+            "NVIDIA Jetson Orin Nano",
+            "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super",
+            "NVIDIA Jetson Orin NX",
+            "NVIDIA Jetson Orin NX Engineering Reference Developer Kit",
+            "NVIDIA Orin NX Developer Kit",
+        ]
+        for model in models:
+            with self.subTest(model=model):
+                self.assertEqual(self.validate(model=model).returncode, 0)
 
     def test_invalid_platform_conditions_fail(self):
         cases = [
             {"architecture": "x86_64"},
             {"model": "NVIDIA Jetson AGX Orin"},
+            {"model": "NVIDIA Jetson Xavier NX"},
+            {"model": "Generic ARM64 Computer"},
             {"os_id": "debian"},
             {"version": "22.04"},
             {"uid": "0", "owner": "0"},
@@ -77,6 +90,45 @@ class OrinEnvironmentTest(unittest.TestCase):
         result = run_bash(SETUP_SCRIPT, "main unexpected-argument")
         self.assertEqual(result.returncode, 64)
         self.assertIn("用法", result.stderr)
+
+    def test_legacy_entry_preserves_argument_rejection(self):
+        result = subprocess.run(
+            [str(LEGACY_SETUP_SCRIPT), "unexpected-argument"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+        self.assertEqual(result.returncode, 64)
+        self.assertIn("用法", result.stderr)
+
+    def test_legacy_entry_forwards_build_jobs(self):
+        workspace = self.root / "workspace"
+        tools = workspace / "tools"
+        tools.mkdir(parents=True)
+        legacy = tools / LEGACY_SETUP_SCRIPT.name
+        generic = tools / SETUP_SCRIPT.name
+        shutil.copy2(LEGACY_SETUP_SCRIPT, legacy)
+        generic.write_text(
+            "#!/usr/bin/env bash\n"
+            "printf '%s\\n' \"${ROBOTAC_BUILD_JOBS:-missing}\"\n",
+            encoding="utf-8",
+        )
+        generic.chmod(0o755)
+        env = os.environ.copy()
+        env["ROBOTAC_BUILD_JOBS"] = "7"
+        result = subprocess.run(
+            [str(legacy)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            env=env,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "7")
 
 
 class LivoxInstallationTest(unittest.TestCase):

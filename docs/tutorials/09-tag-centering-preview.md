@@ -2,11 +2,11 @@
 
 ![PlantUML：Tag 对准目标仅进入预览话题](../assets/plantuml/tutorial-09-tag-centering-preview.svg "PlantUML：Tag 对准预览边界")
 
-## 目的
+## 本教程的作用
 
 根据本地 Tag 位置计算水平对准目标，只发布预览，不控制飞机。
 
-## 前置条件
+## 开始前确认
 
 - 示例 04 已确认 Tag 本地位置和偏差方向正确。
 - 本地位姿与 Tag 检测连续。
@@ -19,7 +19,7 @@
 roslaunch robotac_examples 09_tag_centering_preview.launch tag_id:=0
 ```
 
-## 预期输出
+## 正常结果
 
 ```bash
 # 查看视觉对准目标预览。
@@ -30,7 +30,7 @@ rostopic echo /robotac_examples/tag/error
 
 预览目标的水平位置与 Tag 一致，高度和航向保持当前飞机值。`active` 保持为假。
 
-## 失败判断
+## 需要停止并检查的情况
 
 - 状态长期为 `WAITING_TAG`：检查检测、稳定窗口、本地位姿和 TF。
 - 预览修正方向错误：检查外参和偏差定义，不得进入实飞对准。

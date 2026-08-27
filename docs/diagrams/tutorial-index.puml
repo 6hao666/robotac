@@ -10,8 +10,8 @@ skinparam componentBorderColor #24528C
 left to right direction
 title 编号教程的风险等级与学习顺序
 package "只读" #FFFFFF {
-  [01 FCU 状态] --> [02 本地位姿]
-  [02 本地位姿] --> [03 Tag 检测]
+  [01 FCU 状态] --> [02 定位链路与本地位姿]
+  [02 定位链路与本地位姿] --> [03 Tag 检测]
   [03 Tag 检测] --> [04 Tag 本地位姿]
 }
 package "预览" #FFFFFF {

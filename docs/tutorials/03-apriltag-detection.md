@@ -2,11 +2,11 @@
 
 ![PlantUML：AprilTag 原始检测数据流](../assets/plantuml/tutorial-03-apriltag-detection.svg "PlantUML：AprilTag 原始检测数据流")
 
-## 目的
+## 本教程的作用
 
 显示检测到的 Tag ID、相机坐标系位置和检测消息时间。
 
-## 前置条件
+## 开始前确认
 
 - RGB 相机和 `apriltag_ros` 已启动。
 - 使用 `Tag36h11 ID 0` 测试标志。
@@ -19,12 +19,12 @@
 roslaunch robotac_examples 03_apriltag_detection.launch
 ```
 
-## 预期输出
+## 正常结果
 
 Tag 进入画面后，终端显示 ID、相机 frame、三轴位置和检测时间。移动 Tag 时位置变化方向应
 符合相机光学坐标定义。
 
-## 失败判断
+## 需要停止并检查的情况
 
 - 始终无检测：检查图像、相机内参、Tag 家族、ID、尺寸、曝光和打印质量。
 - ID 不为 0：确认测试标志和检测器配置。

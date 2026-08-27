@@ -10,11 +10,36 @@
 | `perception.launch` | 启动 FAST-LIO 与 AprilTag | 只产生定位和检测结果 |
 | `flight_base.launch` | 启动 MAVROS 与外部视觉 PX4 输出 | 不解锁、不发布飞行设定点 |
 
-底层 launch 包括 `lidar_mid360s.launch`、`camera_rgb.launch`、`fastlio_mid360s.launch`、
-`apriltag_rgb.launch`、`camera_extrinsics.launch` 和 `mavros_px4.launch`。需要单独检查某个
-组件时，可直接启动相应的底层 launch。
+可单独启动的组件包括 `lidar_mid360s.launch`、`camera_rgb.launch`、`fastlio_mid360s.launch`、
+`apriltag_rgb.launch`、`camera_extrinsics.launch` 和 `mavros_px4.launch`。排查某个组件时，
+直接启动对应的 launch 即可。
 
-## 定位入口
+三个入口互不包含，编号示例也不会启动它们。需要位置控制时，应按传感器、感知定位、飞控
+基础链路的顺序分别启动，并在每一步检查输出。
+
+## 位置数据如何进入飞行示例
+
+位置控制使用以下数据链：
+
+| 阶段 | 输入 | 输出 | 作用 |
+| --- | --- | --- | --- |
+| Livox 驱动 | MID360 数据 | `/livox/lidar`、`/livox/imu` | 提供点云和 IMU |
+| FAST-LIO | 点云和 IMU | `/Odometry` | 计算连续的激光惯性里程计 |
+| 里程计修正程序 | `/Odometry`、前 200 帧 IMU | `/sunray/odometry` | 修正初始倾角，并以第一帧里程计作为原点 |
+| `vision_pose_bridge.py` | `/sunray/odometry` | `/mavros/vision_pose/pose` | 检查时间戳、数值和跳变后转发位姿 |
+| PX4 estimator | 外部视觉及飞控传感器 | PX4 本地位置状态 | 按飞控参数融合外部视觉 |
+| MAVROS | PX4 本地位置 | `/mavros/local_position/pose` | 向 ROS 提供融合后的本地位姿 |
+| 飞行示例 | 本地位姿 | `/mavros/setpoint_position/local` | 根据当前位置计算并发送目标 |
+
+FAST-LIO 负责估计运动，不负责执行航点。`vision_pose_bridge.py` 也不根据 TF 重新计算坐标，
+它只检查并复制输入位姿，再按配置修改输出消息的 frame 名称。实际坐标方向由传感器安装、
+FAST-LIO 外参和里程计修正共同决定。
+
+PX4 estimator 是位置链路中的必要环节。`/sunray/odometry` 或
+`/mavros/vision_pose/pose` 有数据，不等于 PX4 已采用该数据。飞行示例最终读取的是
+`/mavros/local_position/pose`，因此还必须确认 PX4 的外部视觉融合设置及 estimator 状态。
+
+## 外部视觉入口
 
 | launch | 输入 | 输出 |
 | --- | --- | --- |
@@ -22,13 +47,15 @@
 | `vision_to_px4.launch` | `/sunray/odometry` | 预览话题和 `/mavros/vision_pose/pose` |
 
 两者使用同一实现。输入时间戳、四元数、速度跳变和空间范围检查通过后才发布。
+`vision_preview.launch` 只产生预览；`flight_base.launch` 包含 `vision_to_px4.launch`，会将
+位姿送往 MAVROS。它们都不会启动 MID360 或 FAST-LIO。
 
 ## 编号示例
 
 | 编号 | 节点脚本 | 主要输入 | 主要输出或动作 |
 | --- | --- | --- | --- |
 | 01 | `01_fcu_state.py` | FCU 与落地状态 | 只读日志 |
-| 02 | `02_local_pose.py` | 本地位姿 | 位置、姿态、频率、数据年龄 |
+| 02 | `02_local_pose.py` | 修正里程计、桥接状态、estimator、本地位姿 | 四级定位状态、位置、姿态、频率、数据年龄 |
 | 03 | `03_apriltag_detection.py` | `/tag_detections` | Tag ID、相机坐标位置、检测时间 |
 | 04 | `04_apriltag_local_pose.py` | Tag、TF、本地位姿 | Tag 本地位置和水平偏差 |
 | 05 | `05_setpoint_preview.py` | 参数 | `~target`，不发往 MAVROS |
@@ -82,4 +109,5 @@ TagTracker 只选择配置的 ID。连续检测结果跳变过大时，需要重
 - 相对位移示例的 `x` 为起始航向前方，`y` 为左方，`z` 为上方。
 - Tag 本地位置依赖 `map` 到相机光学坐标系的有效 TF。
 
-TF 名称、方向和数值必须分别验证。
+设置或改写 `frame_id` 只是标明数据属于哪个坐标系，并不会对数值执行旋转或平移。TF 名称、
+方向、外参数值和手动移动时的位置变化必须分别验证。

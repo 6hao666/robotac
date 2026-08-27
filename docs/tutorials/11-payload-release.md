@@ -2,11 +2,11 @@
 
 ![PlantUML：投放机构单次动作状态机](../assets/plantuml/tutorial-11-payload-release.svg "PlantUML：投放机构单次动作状态机")
 
-## 目的
+## 本教程的作用
 
 手动启动后调用一次舵机服务，完成阻挡或释放动作，不与飞行示例联动。
 
-## 前置条件
+## 开始前确认
 
 - 飞行动力断开，桨叶拆除，机构固定在地面台架。
 - 如果本次是在调试或标定舵机，必须先拆下输出轴上的舵盘、齿轮、连杆、挂钩和其他旋转附件；
@@ -28,12 +28,12 @@ rosservice call /robotac_examples/payload_release/start "{}"
 
 阻挡动作将 `released` 改为 `false`。每次节点运行只执行一次。
 
-## 预期输出
+## 正常结果
 
 `~state` 从 `IDLE` 进入 `RUNNING`，成功后为 `COMPLETE`。同时检查
 `/robotac_servo/connected`、`/robotac_servo/state` 和 `/robotac_servo/command_ok`。
 
-## 失败判断
+## 需要停止并检查的情况
 
 - 串口不可用或被占用：服务失败，状态进入 `ABORT`。
 - 重复动作被拒绝：重新确认实际机构位置后重启节点，不得连续强制调用。

@@ -193,10 +193,11 @@ def check_hardware_defaults():
         if value in discover_source:
             fail("Livox 发现器包含设备修改或数据流接口：%s" % value)
 
-    mavros_launch = (ROOT / "src/robotac_bringup/launch/mavros_px4.launch")
-    mavros_source = mavros_launch.read_text(encoding="utf-8")
-    if "serial:///dev/robotac_px4:921600" not in mavros_source:
-        fail("MAVROS 默认入口必须使用稳定 PX4 设备别名")
+    for launch_name in ("mavros_px4.launch", "flight_base.launch"):
+        launch_path = ROOT / "src/robotac_bringup/launch" / launch_name
+        launch_source = launch_path.read_text(encoding="utf-8")
+        if "serial:///dev/ttyACM0:921600" not in launch_source:
+            fail("%s 默认入口必须使用 /dev/ttyACM0:921600" % launch_name)
 
     servo_path = ROOT / "src/robotac_servo/config/servo.yaml"
     with servo_path.open(encoding="utf-8") as stream:

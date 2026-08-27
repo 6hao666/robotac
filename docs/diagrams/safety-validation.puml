@@ -8,7 +8,7 @@ skinparam ArrowColor #4B5563
 skinparam rectangleBackgroundColor #FFFFFF
 skinparam rectangleBorderColor #24528C
 left to right direction
-title 从离线检查到受控实飞的安全门禁
+title 从离线检查到受控实飞的检查顺序
 rectangle "1 源码与\n单元测试" as source
 rectangle "通过?" as sourceGate
 rectangle "2 简化仿真" as simulation
@@ -19,7 +19,7 @@ rectangle "4 拆桨\n地面联调" as bench
 rectangle "接管与中止\n均确认?" as benchGate
 rectangle "5 封闭场地\n受控实飞" as flight
 rectangle "持续保留\n人工接管" as takeover
-rectangle "停止并修复\n当前门禁" as stop
+rectangle "停止并修复\n当前问题" as stop
 source --> sourceGate
 sourceGate --> simulation : 是
 simulation --> simulationGate
