@@ -77,8 +77,9 @@ COMPLETE / ERROR）。`mission.flight_enabled=false`（默认）时 start 保持
   随 07/09/10 回填）。
 - `tag`：Tag 族 / ID / 边长 / 稳定时间；`stable_samples` 多样本均值窗口（默认 5）。
 - `waypoints`：起飞点、去程/返程绕障路径、任务点（名义骨架，map 原点标定后校准）。
-- `payload`：`enable: false` 时 RELEASE 跳过舵机（空投，便于 E 段无硬件联调）；
-  `retry_count` 为舵机释放重试上限。
+- `payload`：控制终点投放开关与重试上限。正式固定点投放使用
+  `/robotac_servo/set_released(true)`；舵机的 50 度释放角由
+  `robotac_servo/config/servo.yaml` 标定。
 - `mission.dry_run`：`true` 时 interfaces 不发送任何控制（G1/拆桨联调）；真飞须 `false`。
 - `mission.flight_enabled`：`false`（默认）时 start 为骨架占位，不进入飞行态；
   `true` 后 start 进入 TAKEOFF（真飞/拆桨 dry_run 联调）。
@@ -159,6 +160,8 @@ rostest robotac_mission mission_sim.test
   真实桥若只在启动时 latch 发一次，2s 后门即红、真机进不了 WAIT_START。须实测
   state 话题真实重发频率；若一次性发布，须调高 `vision_state` 阈值或仅对 healthy
   判龄（state 只验值）。
-- **桌上方航点 z ≥ 桌面高 0.75**（config 校验，R5-2）：takeoff / mission / return
-  在桌面上方稳定，z 低于桌面即撞桌；C1 起飞稳定保持须 1.0-2.0m，占位取 1.0。
+- **全部飞行航点 z ≥ 桌面高 + 0.55 m**（config 校验）：当前桌高 `0.75 m`，
+  所以起飞、绕障、终点与返航航点统一使用场地 `z=1.30 m`；固定点投放不读取 Tag，
+  `payload.drop_target` 是载荷目标，最后一个飞机航点先按舵机偏移补偿，到点后才释放，
+  再沿原返航/降落链路继续。
   绕障航点位于场地中段侧隙、不在桌上，不受此约束。填正式值在桌面高之上再加裕量。

@@ -72,19 +72,19 @@ tag:
   stable_time: 1.0
   stable_samples: 5
 waypoints:
-  takeoff: [2.0, 0.80, 1.0]
+  takeoff: [2.0, 0.80, 1.30]
   obstacle_routing:
-    approach: [0.475, 1.75, 0.6]
-    gap_enter: [0.475, 2.30, 0.8]
-    gap_cross: [0.475, 2.70, 0.8]
-    resume: [0.475, 3.25, 0.6]
-  mission: [[2.0, 4.20, 1.0]]
+    approach: [0.475, 1.75, 1.30]
+    gap_enter: [0.475, 2.30, 1.30]
+    gap_cross: [0.475, 2.70, 1.30]
+    resume: [0.475, 3.25, 1.30]
+  mission: [[2.0, 4.20, 1.30]]
   return_routing:
-    approach: [0.475, 3.25, 0.6]
-    gap_enter: [0.475, 2.70, 0.8]
-    gap_cross: [0.475, 2.30, 0.8]
-    resume: [0.475, 1.75, 0.6]
-  return: [[2.0, 0.80, 1.0]]
+    approach: [0.475, 3.25, 1.30]
+    gap_enter: [0.475, 2.70, 1.30]
+    gap_cross: [0.475, 2.30, 1.30]
+    resume: [0.475, 1.75, 1.30]
+  return: [[2.0, 0.80, 1.30]]
 payload:
   enable: false
   retry_count: 0
@@ -157,15 +157,34 @@ class ConfigTest(unittest.TestCase):
             config["timing"]["topic_timeout"]["estimator_status"], 2.0)
 
     def test_waypoint_out_of_field(self):
-        text = _minimal().replace("takeoff: [2.0, 0.80, 1.0]",
-                                  "takeoff: [2.0, 9.0, 1.0]")
+        text = _minimal().replace("takeoff: [2.0, 0.80, 1.30]",
+                                  "takeoff: [2.0, 9.0, 1.30]")
         with self.assertRaises(ConfigError):
             self._load(text)
 
     def test_tabletop_waypoint_below_table_rejected(self):
-        # R5-2：桌上方航点 z 低于桌面高（0.75）→ 撞桌，须拒绝
-        text = _minimal().replace("takeoff: [2.0, 0.80, 1.0]",
-                                  "takeoff: [2.0, 0.80, 0.5]")
+        # 飞行航点必须保留桌面上方 0.55m 的固定净空。
+        text = _minimal().replace("takeoff: [2.0, 0.80, 1.30]",
+                                  "takeoff: [2.0, 0.80, 1.29]")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_fixed_point_drop_must_be_bool(self):
+        text = _minimal().replace("  flight_enabled: false\n",
+                                  "  flight_enabled: false\n  fixed_point_drop: enabled\n")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_fixed_point_drop_and_route_only_are_exclusive(self):
+        text = _minimal().replace(
+            "  flight_enabled: false\n",
+            "  flight_enabled: false\n  route_only: true\n  fixed_point_drop: true\n")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_fixed_point_drop_requires_payload_target(self):
+        text = _minimal().replace("  flight_enabled: false\n",
+                                  "  flight_enabled: false\n  fixed_point_drop: true\n")
         with self.assertRaises(ConfigError):
             self._load(text)
 

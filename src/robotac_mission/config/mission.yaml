@@ -83,31 +83,32 @@ tag:
   stable_time: 1.0               # 连续稳定时间 s，待实机验证
   stable_samples: 5              # 多样本均值窗口（示例 StableTag 5 样本），待实机验证
 
-waypoints:                       # 名义航点骨架（规则几何参考，map 原点标定后校准）
-  # 桌上方航点（takeoff/mission/return）z 须 ≥ 桌面高 0.75（config 校验）；
-  # C1 起飞稳定保持须 1.0-2.0m，占位取 1.0。绕障航点位于场地中段侧隙、不在桌上。
-  takeoff: [2.0, 0.80, 1.0]      # 起降台上方（C1 保持高度，> 桌面 0.75）
+waypoints:                       # 场地坐标；全部保持桌面上方 0.55m（z=0.75+0.55=1.30m）
+  takeoff: [2.0, 0.80, 1.30]     # 起降台正上方
   # 障碍物横跨场地中部：x=[0.95, 3.05]、y=[2.425, 2.575]。
   # 左侧侧隙 x=[0, 0.95]；常规航点 x=0.475，靠障碍的两个点内移 10cm 至 0.575。
   obstacle_routing:
-    approach: [0.475, 1.75, 0.8]
-    gap_enter: [0.575, 2.30, 0.8]
-    gap_cross: [0.575, 2.70, 0.8]
-    resume: [0.475, 3.25, 0.8]
-  # route_only 可在终点用三个近距离航点形成约3s悬停；普通流程只取首点。
-  mission: [[2.0, 4.20, 1.0], [2.0, 4.22, 1.0], [2.0, 4.24, 1.0]]
+    approach: [0.475, 1.75, 1.30]
+    gap_enter: [0.575, 2.30, 1.30]
+    gap_cross: [0.575, 2.70, 1.30]
+    resume: [0.475, 3.25, 1.30]
+  # 固定点投放：三个终点航点各保持 1s；最后一个是按舵机偏移补偿后的飞机中心位置。
+  mission: [[2.0, 4.20, 1.30], [2.0, 4.22, 1.30], [2.04, 4.24, 1.30]]
   return_routing:                # 返程：沿同一左侧通道反向绕障
-    approach: [0.475, 3.25, 0.8]
-    gap_enter: [0.575, 2.70, 0.8]
-    gap_cross: [0.575, 2.30, 0.8]
-    resume: [0.475, 1.75, 0.8]
-  return: [[2.0, 0.80, 1.0]]     # 起降台上方（> 桌面 0.75）
+    approach: [0.475, 3.25, 1.30]
+    gap_enter: [0.575, 2.70, 1.30]
+    gap_cross: [0.575, 2.30, 1.30]
+    resume: [0.475, 1.75, 1.30]
+  return: [[2.0, 0.80, 1.30]]    # 起降台正上方
 
 payload:
-  enable: false                  # 本轮固定 false
+  enable: true                   # 固定终点投放必须启用
   retry_count: 0
   offset: [-0.04, 0.0, -0.09]    # 舵机相对 body 偏移 [x,y,z]（2026-08-26 实测：机尾 4cm、机下 9cm、中轴线 y=0）
+  drop_target: [2.0, 4.24, 1.30] # 载荷的固定落点；飞机中心终点按 offset 反向补偿
 
 mission:
   dry_run: false                 # true=interfaces 不发送任何控制（G1/拆桨联调）；真飞必须 false
   flight_enabled: true           # true=start 进入 TAKEOFF 触发飞行态（真飞/拆桨联调）；false=骨架占位
+  route_only: false              # false=不跳过投放
+  fixed_point_drop: true         # 不读取 Tag；终点航点到达后直接进入 RELEASE

@@ -87,21 +87,12 @@ class FlightStageMixin(object):
         timing = self.config["timing"]
         if self.config["mission"].get("route_only", False):
             # 空载路线仍飞至投放台，验证完整去程；不要求 Tag，也绝不进入投放。
-            # 终点可配置为多个近距离航点；每个点独立保持，形成可核验的悬停时长。
-            mission_points = getattr(self, "mission_points", [self.mission_point])
-            index = getattr(self, "_mission_index", 0)
-            target = mission_points[index]
-            self._send(target)
-            if self._arrived(target, timing["waypoint_hold"]):
-                if index + 1 < len(mission_points):
-                    self._mission_index = index + 1
-                    # _arrived 的计时必须对下一个近距离点重新开始；否则因
-                    # position_tolerance 大于点间距会被同一段时间立即放行。
-                    self._reached_since = None
-                else:
-                    self._advance()
-            elif self._stage_timeout(timing["stage_timeout"]["search"]):
-                self._abort("空载路线抵达投放台超时")
+            self._follow_mission_points("空载路线抵达投放台超时")
+            return
+        if self.config["mission"].get("fixed_point_drop", False):
+            # 固定点投放：仍经过既有 SEARCH_TAG 状态，但不读取 Tag/TF；逐个抵达
+            # 终点航点后按原状态机推进到 ALIGN_TAG，再由该阶段无感通过至 RELEASE。
+            self._follow_mission_points("固定投放点抵达超时")
             return
         self.tag.update(self.ctx.tag, self.ctx.topic_age("tag"))
         self._send(self.mission_point)   # 投放台上方悬停扫描
@@ -115,7 +106,28 @@ class FlightStageMixin(object):
         if self._stage_timeout(timing["stage_timeout"]["search"]):
             self._abort("搜索 Tag 超时")
 
+    def _follow_mission_points(self, timeout_reason):
+        """依次到达终点航点；每个近距离点都须独立满足保持时间。"""
+        timing = self.config["timing"]
+        mission_points = getattr(self, "mission_points", [self.mission_point])
+        index = getattr(self, "_mission_index", 0)
+        target = mission_points[index]
+        self._send(target)
+        if self._arrived(target, timing["waypoint_hold"]):
+            if index + 1 < len(mission_points):
+                self._mission_index = index + 1
+                # position_tolerance 大于点间距时，也必须重新计时。
+                self._reached_since = None
+            else:
+                self._advance()
+        elif self._stage_timeout(timing["stage_timeout"]["search"]):
+            self._abort(timeout_reason)
+
     def _stage_align(self):
+        if self.config["mission"].get("fixed_point_drop", False):
+            # 固定航点已是投放目标，不需要视觉闭环对准；状态图保持不变。
+            self._advance()
+            return
         timing = self.config["timing"]
         control = self.config["control"]
         self.tag.update(self.ctx.tag, self.ctx.topic_age("tag"))
@@ -169,7 +181,7 @@ class FlightStageMixin(object):
             if not ok:
                 self._abort(reason)
                 return
-        release = self._release_target()   # 投放点 = mission_point - 舵机偏移（补偿）
+        release = self._release_target()   # 投放点 = 终点航点 - 舵机偏移（补偿）
         self._send(release)                # 释放后保持，等待货物脱离
         if not self.ctx.payload_confirmed_after(self._release_sequence):
             if self._stage_timeout(timing["stage_timeout"]["release"]):
@@ -183,15 +195,16 @@ class FlightStageMixin(object):
     def _release_target(self):
         """投放目标：舵机偏移补偿。
 
-        mission_point 是投放台中心正上方（飞机几何中心对准）。舵机相对 body
+        drop_point 是载荷落点；最后一个终点航点已预先按此偏移补偿，飞机到达
+        后才会进入 RELEASE。舵机相对 body
         有水平偏移 payload.offset（2026-08-26 实测：机尾 -0.04m），若飞机几何
         中心对准投放中心，舵机落点会偏 4cm。补偿：飞机往反方向偏 offset 的水平
         分量，使舵机正好在投放中心正上方（C4 落点精度）。
         """
         offset = self.config["payload"].get("offset", [0.0, 0.0, 0.0])
-        return [self.mission_point[0] - offset[0],
-                self.mission_point[1] - offset[1],
-                self.mission_point[2]]
+        return [self.drop_point[0] - offset[0],
+                self.drop_point[1] - offset[1],
+                self.drop_point[2]]
 
     def _stage_land(self):
         self.ctx.begin_landing(self._last_target)

@@ -32,6 +32,9 @@ _TOPIC_TIMEOUT_KEYS = (
 
 _ROUTING_KEYS = ("approach", "gap_enter", "gap_cross", "resume")
 
+# 当前场地约定：机体所有飞行航点保持在桌面上方 0.55m。
+_TABLE_FLIGHT_CLEARANCE = 0.55
+
 
 def load_config(path):
     """读取并校验 mission.yaml。失败抛 ConfigError。"""
@@ -173,24 +176,35 @@ def validate(data):
         obstacle_center, obstacle_size, obstacle["route_clearance"],
         "返程")
 
-    # 桌上方航点（takeoff / mission / return 首个）z 不得低于桌面高：起飞/对准投放/
-    # 返航均在桌面上方稳定，z 低于桌面即撞桌（R5-2；占位值曾为 0.6 < 桌面 0.75）。
-    # 不写死裕量（避免现场常量），填正式值须加裕量并在 README §8 注明。
+    # 全部飞行航点均须保持在桌面上方 0.55m：降低顶部防护网碰撞风险，同时
+    # 保留对桌面的固定净空，不再把旧的 0.75m 直接当作飞行高度下限。
     table_height = tables["height"]
-    for label, point in (
-            ("waypoints.takeoff", takeoff),
-            ("waypoints.mission[0]", waypoints["mission"][0]),
-            ("waypoints.return[0]", waypoints["return"][0])):
-        if point[2] < table_height:
+    minimum_flight_height = table_height + _TABLE_FLIGHT_CLEARANCE
+    flight_points = [("waypoints.takeoff", takeoff)]
+    for name in ("obstacle_routing", "return_routing"):
+        flight_points.extend(
+            ("waypoints.%s.%s" % (name, key), waypoints[name][key])
+            for key in _ROUTING_KEYS)
+    for name in ("mission", "return"):
+        flight_points.extend(
+            ("waypoints.%s[%d]" % (name, index), point)
+            for index, point in enumerate(waypoints[name]))
+    for label, point in flight_points:
+        if point[2] < minimum_flight_height:
             raise ConfigError(
-                "%s z=%g 低于桌面高 %g：桌上方航点须在桌面之上（C1 保持 1.0-2.0m）"
-                % (label, point[2], table_height))
+                "%s z=%g 低于桌面上方 %.2fm 的最低飞行高度 %g"
+                % (label, point[2], _TABLE_FLIGHT_CLEARANCE,
+                   minimum_flight_height))
 
     payload = data["payload"]
     if not isinstance(payload.get("enable"), bool):
         raise ConfigError("payload.enable 必须为布尔")
     if not isinstance(payload.get("retry_count"), int) or payload["retry_count"] < 0:
         raise ConfigError("payload.retry_count 必须为非负整数")
+    if "drop_target" in payload:
+        drop_target = _require_vec(payload, "drop_target", 3)
+        _check_in_field(drop_target, field_min, field_max,
+                        "payload.drop_target")
 
     control = data["control"]
     for key in ("rate_hz", "position_tolerance", "max_step",
@@ -207,6 +221,15 @@ def validate(data):
         raise ConfigError("mission.flight_enabled 必须为布尔")
     if "route_only" in mission and not isinstance(mission["route_only"], bool):
         raise ConfigError("mission.route_only 必须为布尔")
+    if ("fixed_point_drop" in mission and
+            not isinstance(mission["fixed_point_drop"], bool)):
+        raise ConfigError("mission.fixed_point_drop 必须为布尔")
+    if (mission.get("route_only", False) and
+            mission.get("fixed_point_drop", False)):
+        raise ConfigError("mission.route_only 与 fixed_point_drop 不能同时启用")
+    if (mission.get("fixed_point_drop", False) and
+            "drop_target" not in payload):
+        raise ConfigError("固定点投放必须配置 payload.drop_target")
 
 
 def _is_number(value):

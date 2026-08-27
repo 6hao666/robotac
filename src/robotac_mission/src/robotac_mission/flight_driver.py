@@ -23,6 +23,9 @@ class FlightDriver(FlightStageMixin):
         self.takeoff_target = config["waypoints"]["takeoff"]
         self.mission_points = config["waypoints"]["mission"]
         self.mission_point = self.mission_points[0]
+        # 固定点投放的载荷落点可与飞机几何中心航点不同，用于舵机偏移补偿。
+        self.drop_point = config["payload"].get(
+            "drop_target", self.mission_points[-1])
         self.return_point = config["waypoints"]["return"][0]
         self.tag = TagTracker(config, ctx.tf_buffer)
         self._health = {"soft_bad": 0, "prev_pose": None}
