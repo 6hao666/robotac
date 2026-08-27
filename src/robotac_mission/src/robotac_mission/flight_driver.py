@@ -32,7 +32,8 @@ class FlightDriver(FlightStageMixin):
         """start 接受后调用：捕获 home（起飞点局部归零，§16.2）。"""
         self.coord.capture_home(
             home_map_xyz, self.config["waypoints"]["takeoff"][:2],
-            yaw=home_yaw)
+            yaw=home_yaw,
+            field_yaw=self.config["frames"]["field_yaw"])
         self._reset_stage()
 
     def tick(self):

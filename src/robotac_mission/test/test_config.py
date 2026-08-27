@@ -20,6 +20,7 @@ def _minimal():
 frames:
   mission_frame: map
   body_frame: base_link
+  field_yaw: -1.5707963267948966
 limits:
   field_min: [0, 0, 0]
   field_max: [4, 5, 3]
@@ -112,6 +113,18 @@ class ConfigTest(unittest.TestCase):
     def test_field_bounds_must_increase(self):
         text = _minimal().replace("field_max: [4, 5, 3]",
                                   "field_max: [0, 5, 3]")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_field_yaw_required(self):
+        text = _minimal().replace(
+            "  field_yaw: -1.5707963267948966\n", "")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_field_yaw_must_be_finite_number(self):
+        text = _minimal().replace(
+            "field_yaw: -1.5707963267948966", "field_yaw: north")
         with self.assertRaises(ConfigError):
             self._load(text)
 

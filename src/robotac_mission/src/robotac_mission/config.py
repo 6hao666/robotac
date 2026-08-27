@@ -5,6 +5,7 @@
   重新从磁盘读取，不复用内存缓存。
 """
 
+import math
 import os
 
 import yaml
@@ -58,6 +59,9 @@ def validate(data):
     frames = data["frames"]
     _require_str(frames, "mission_frame")
     _require_str(frames, "body_frame")
+    field_yaw = frames.get("field_yaw")
+    if not _is_number(field_yaw) or not math.isfinite(float(field_yaw)):
+        raise ConfigError("frames.field_yaw 必须为有限数值（弧度）")
 
     limits = data["limits"]
     field_min = _require_vec(limits, "field_min", 3)

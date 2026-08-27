@@ -1,4 +1,3 @@
-field_yaw: 0.0   # 2026-08-27晚: map系(MAVROS local ENU)=场地系, field_yaw应为0(纯平移)。π/2旋转把绕障方向转反(西北→东北)致不往前走
 # robotac_mission 参数模板（骨架轮）。
 # 说明：
 # - 数值为占位值：规则几何值（场地/圆桌/障碍，来自 2026-8-12 C 组规则）可直接参考，
@@ -10,6 +9,9 @@ field_yaw: 0.0   # 2026-08-27晚: map系(MAVROS local ENU)=场地系, field_yaw�
 frames:
   mission_frame: map
   body_frame: base_link
+  # 2026-08-27 飞行日志：机头朝场地 +y，map +x 朝机头，map +y 朝机身左侧。
+  # 因此场地 (dx,dy) -> map (dy,-dx)，固定旋转 -90°，不使用 home_yaw 代替。
+  field_yaw: -1.5707963267948966
 
 limits:
   field_min: [0.0, 0.0, 0.0]     # 有效飞行区下界（规则几何，待 map 原点标定校准）

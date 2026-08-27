@@ -1,0 +1,16 @@
+<launch>
+  <!-- 示例 12：前后左右水平移动排查（起飞到 ~height，按机头方向移动 ~step） -->
+  <arg name="height" default="0.3" />
+  <arg name="step" default="0.5" />
+  <arg name="timeout" default="20.0" />
+  <arg name="hold" default="2.0" />
+  <group ns="robotac_examples">
+    <node pkg="robotac_examples" type="12_move_cardinal.py"
+          name="move_cardinal" output="screen" required="true">
+      <param name="height" value="$(arg height)" />
+      <param name="step" value="$(arg step)" />
+      <param name="timeout" value="$(arg timeout)" />
+      <param name="hold" value="$(arg hold)" />
+    </node>
+  </group>
+</launch>

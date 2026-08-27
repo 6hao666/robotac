@@ -19,7 +19,8 @@ COMPLETE / ERROR）。`mission.flight_enabled=false`（默认）时 start 保持
 - **BOOT 可重入**：`mission_reset`（ERROR -> BOOT）会重新从磁盘读取
   `mission.yaml`，不复用进程内存缓存。
 - **坐标系**：起飞点局部归零（`coordinates.py`，方案 §16.2）——start 捕获 home，
-  `field_to_map` 发 setpoint、`map_to_field` 做边界/桌区判定。
+  `field_to_map` 发 setpoint、`map_to_field` 做边界/桌区判定；`frames.field_yaw`
+  是场地 +x 轴相对 map +x 轴的固定标定角，不与飞机 `home_yaw` 混用。
 
 ## 2. 输入话题（骨架轮启用安全门）
 
@@ -61,7 +62,8 @@ COMPLETE / ERROR）。`mission.flight_enabled=false`（默认）时 start 保持
 
 `config/mission.yaml` 为参数模板，全部数值为**占位值**：
 
-- `frames`：坐标系（mission_frame / body_frame）。
+- `frames`：坐标系（`mission_frame` / `body_frame`）及固定场地标定角
+  `field_yaw`（弧度）。当前实测为 `-π/2`：场地 `(dx,dy)` 映射为 map `(dy,-dx)`。
 - `limits`：场地边界 `field_min/max`、最大速度。
 - `obstacle`：固定障碍几何（规则参考）与 `no_overfly`。
 - `tables`：两桌圆心（两桌同 Tag ID 0 的判别依据）、桌面高、搜索半径。

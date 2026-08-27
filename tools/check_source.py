@@ -23,7 +23,7 @@ EXAMPLE_NAMES = [
     "fcu_state", "local_pose", "apriltag_detection",
     "apriltag_local_pose", "setpoint_preview", "hover",
     "move_relative", "waypoints", "tag_centering_preview",
-    "tag_centering_flight", "payload_release",
+    "tag_centering_flight", "payload_release", "move_cardinal",
 ]
 
 

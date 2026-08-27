@@ -27,6 +27,7 @@ catkin_install_python(PROGRAMS
   scripts/09_tag_centering_preview.py
   scripts/10_tag_centering_flight.py
   scripts/11_payload_release.py
+  scripts/12_move_cardinal.py
   test/fake_fcu.py
   test/fake_tag.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

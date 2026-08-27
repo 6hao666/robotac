@@ -9,6 +9,9 @@
 frames:
   mission_frame: map
   body_frame: base_link
+  # 实测：机头朝场地 +y 时 MAVROS map +x 朝机头、map +y 朝机身左侧。
+  # 场地偏移 (dx,dy) -> map 偏移 (dy,-dx)，即场地 +x 相对 map +x 为 -90°。
+  field_yaw: -1.5707963267948966
 
 limits:
   field_min: [0.0, 0.0, 0.0]     # 有效飞行区下界（规则几何，待 map 原点标定校准）
