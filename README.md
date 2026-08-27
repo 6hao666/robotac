@@ -126,6 +126,8 @@ AprilTag 默认采用 `Tag36h11 ID 0`，黑色编码区域边长为 `0.15 m`；�
 - [故障排查](docs/08-troubleshooting.md)
 - [开发与上游](docs/09-development-and-upstream.md)
 - [舵机投放机构标定](docs/10-servo-release-calibration.md)
+- [C 组比赛背景与 mission 代码现状基线](docs/11-competition-background-and-mission-status.md)
+- [`robotac_mission` 全面问题审计报告](docs/12-mission-comprehensive-audit-report.md)
 
 ## 许可证
 

@@ -12,6 +12,8 @@
 5. [教程索引](tutorials/README.md)
 6. [安全与验证](06-safety-and-validation.md)
 7. [规则与示例的对应关系](05-competition-examples.md)
+8. [C 组比赛背景与 mission 代码现状基线](11-competition-background-and-mission-status.md)
+9. [`robotac_mission` 全面问题审计报告](12-mission-comprehensive-audit-report.md)
 
 ## 文档目录
 
@@ -27,6 +29,8 @@
 | [08 故障排查](08-troubleshooting.md) | 常见故障和拒绝启动的原因 |
 | [09 开发与上游](09-development-and-upstream.md) | 可修改的代码、工具、测试和第三方版本 |
 | [10 舵机标定](10-servo-release-calibration.md) | 投放机构地面点动和参数记录 |
+| [11 比赛背景与 mission 现状](11-competition-background-and-mission-status.md) | 正式规则、平台资料、状态机实现、规则映射、验证边界和审计入口 |
+| [12 mission 全面问题审计](12-mission-comprehensive-audit-report.md) | 41 项状态机、控制、坐标、配置、ROS、测试和取证问题及修复验收顺序 |
 
 ## 教程
 
