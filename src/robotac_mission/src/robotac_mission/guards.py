@@ -16,6 +16,10 @@ REQUIRED_ESTIMATOR_FLAGS = ("attitude", "pos_horiz_rel", "pos_vert_abs")
 # 外部视觉桥 state 取值（vision_pose_bridge）
 VISION_STATE_OK = "OK"
 
+# PX4 的这些模式代表操作员已拥有控制权。进入其中任一模式后 mission 不得再请求
+# OFFBOARD 或 AUTO.LAND；未知模式仍由 mode_ok 走故障中止路径。
+MANUAL_MODES = ("MANUAL", "ACRO", "STABILIZED", "ALTCTL", "POSCTL")
+
 
 def fcu_connected(connected):
     """/mavros/state.connected 必须为 True。"""
@@ -108,6 +112,11 @@ def mode_ok(mode, armed=True):
     if bool(armed) and mode not in ("OFFBOARD", "AUTO.LAND"):
         return False, "OFFBOARD 模式丢失"
     return True, ""
+
+
+def manual_mode_active(mode, armed=True):
+    """返回是否已进入明确的人工飞行模式。"""
+    return bool(armed) and mode in MANUAL_MODES
 
 
 def window_ok(used_seconds, total_window, flight_budget=0.0):

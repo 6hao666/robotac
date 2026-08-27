@@ -25,8 +25,10 @@ limits:
   field_max: [4, 5, 3]
   max_speed: 0.5
 obstacle:
+  center: [2.00, 2.50]
   size: [2.10, 0.15, 2.00]
   cross_gap: 0.95
+  route_clearance: 0.20
   no_overfly: true
 tables:
   takeoff_center: [2.00, 0.80]
@@ -46,6 +48,13 @@ timing:
   release_hold: 1.0
   land_confirm: 30.0
   stage_timeout: {takeoff: 20, transit: 30, search: 30, align: 20, release: 10, return: 30, land: 20}
+landing:
+  mode_retry_seconds: 1.0
+  mode_retry_count: 3
+  confirm_samples: 3
+  max_height: 0.25
+  max_vertical_speed: 0.10
+  velocity_timeout: 0.5
 control:
   rate_hz: 20.0
   position_tolerance: 0.15
@@ -63,16 +72,16 @@ tag:
 waypoints:
   takeoff: [2.0, 0.80, 1.0]
   obstacle_routing:
-    approach: [2.0, 1.5, 0.6]
-    gap_enter: [1.0, 1.5, 0.8]
-    gap_cross: [1.0, 3.5, 0.8]
-    resume: [2.0, 3.5, 0.6]
+    approach: [0.475, 1.75, 0.6]
+    gap_enter: [0.475, 2.30, 0.8]
+    gap_cross: [0.475, 2.70, 0.8]
+    resume: [0.475, 3.25, 0.6]
   mission: [[2.0, 4.20, 1.0]]
   return_routing:
-    approach: [2.0, 3.5, 0.6]
-    gap_enter: [3.0, 3.5, 0.8]
-    gap_cross: [3.0, 1.5, 0.8]
-    resume: [2.0, 1.5, 0.6]
+    approach: [0.475, 3.25, 0.6]
+    gap_enter: [0.475, 2.70, 0.8]
+    gap_cross: [0.475, 2.30, 0.8]
+    resume: [0.475, 1.75, 0.6]
   return: [[2.0, 0.80, 1.0]]
 payload:
   enable: false
@@ -136,6 +145,18 @@ class ConfigTest(unittest.TestCase):
         # R5-2：桌上方航点 z 低于桌面高（0.75）→ 撞桌，须拒绝
         text = _minimal().replace("takeoff: [2.0, 0.80, 1.0]",
                                   "takeoff: [2.0, 0.80, 0.5]")
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_routing_through_obstacle_clearance_rejected(self):
+        text = _minimal().replace(
+            "gap_cross: [0.475, 2.70, 0.8]",
+            "gap_cross: [2.0, 2.70, 0.8]", 1)
+        with self.assertRaises(ConfigError):
+            self._load(text)
+
+    def test_missing_landing_confirmation_settings_rejected(self):
+        text = _minimal().replace("landing:\n", "")
         with self.assertRaises(ConfigError):
             self._load(text)
 

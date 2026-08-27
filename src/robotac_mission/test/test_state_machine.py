@@ -119,6 +119,16 @@ class StartStopResetTest(unittest.TestCase):
         self.assertEqual(machine.state, MissionState.WAIT_READY)
         self.assertEqual(machine.result, "")
 
+    def test_reset_rejected_while_abort_landing_is_active(self):
+        machine = self._ready()
+        machine.request_start(flight_enabled=True)
+        machine.request_stop()
+        self.assertEqual(machine.state, MissionState.ABORT_LAND)
+        success, message = machine.request_reset()
+        self.assertFalse(success)
+        self.assertIn("安全降落", message)
+        self.assertTrue(machine.active)
+
     def test_reset_from_manual_takeover_returns_to_wait_ready(self):
         machine = self._ready()
         machine.abort("飞控断连")
@@ -259,6 +269,13 @@ class FlightStateMachineTest(unittest.TestCase):
         machine = self._fly()
         machine.abort("安全门")
         machine.confirm_landed()
+        self.assertFalse(machine.active)
+
+    def test_manual_takeover_can_stop_any_flight_stage(self):
+        machine = self._fly()
+        machine.confirm_manual_takeover()
+        self.assertEqual(machine.state, MissionState.COMPLETE)
+        self.assertEqual(machine.result, MissionResult.MANUAL_TAKEOVER)
         self.assertFalse(machine.active)
 
 

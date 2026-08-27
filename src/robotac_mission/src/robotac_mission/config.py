@@ -16,7 +16,7 @@ class ConfigError(ValueError):
 
 _REQUIRED_SECTIONS = (
     "frames", "limits", "obstacle", "tables", "timing",
-    "tag", "waypoints", "payload", "control", "mission",
+    "landing", "tag", "waypoints", "payload", "control", "mission",
 )
 
 _STAGE_TIMEOUT_KEYS = (
@@ -68,8 +68,14 @@ def validate(data):
     _require_positive(limits, "max_speed")
 
     obstacle = data["obstacle"]
-    _require_vec(obstacle, "size", 3)
+    obstacle_center = _require_vec(obstacle, "center", 2)
+    obstacle_size = _require_vec(obstacle, "size", 3)
+    if any(value <= 0.0 for value in obstacle_size):
+        raise ConfigError("obstacle.size 必须全部为正数")
+    _check_in_field(obstacle_center + [0.0], field_min, field_max,
+                    "obstacle.center")
     _require_positive(obstacle, "cross_gap")
+    _require_positive(obstacle, "route_clearance")
     if not isinstance(obstacle.get("no_overfly"), bool):
         raise ConfigError("obstacle.no_overfly 必须为布尔")
 
@@ -105,6 +111,18 @@ def validate(data):
             raise ConfigError("timing.topic_timeout 缺少 %s" % key)
         _require_positive(topic_timeout, key)
 
+    landing = data["landing"]
+    _require_positive(landing, "mode_retry_seconds")
+    if (not isinstance(landing.get("mode_retry_count"), int) or
+            landing["mode_retry_count"] < 1):
+        raise ConfigError("landing.mode_retry_count 必须为正整数")
+    if (not isinstance(landing.get("confirm_samples"), int) or
+            landing["confirm_samples"] < 2):
+        raise ConfigError("landing.confirm_samples 必须为至少 2 的整数")
+    _require_positive(landing, "max_height")
+    _require_positive(landing, "max_vertical_speed")
+    _require_positive(landing, "velocity_timeout")
+
     tag = data["tag"]
     _require_str(tag, "family")
     if not isinstance(tag.get("id"), int) or tag["id"] < 0:
@@ -135,6 +153,18 @@ def validate(data):
             point = _require_vec_raw(point, "waypoints.%s[%d]" % (name, index), 3)
             _check_in_field(point, field_min, field_max,
                             "waypoints.%s[%d]" % (name, index))
+
+    _check_route_clearance(
+        [takeoff] + [waypoints["obstacle_routing"][key]
+                     for key in _ROUTING_KEYS] + [waypoints["mission"][0]],
+        obstacle_center, obstacle_size, obstacle["route_clearance"],
+        "去程")
+    _check_route_clearance(
+        [waypoints["mission"][0]] + [waypoints["return_routing"][key]
+                                       for key in _ROUTING_KEYS] +
+        [waypoints["return"][0]],
+        obstacle_center, obstacle_size, obstacle["route_clearance"],
+        "返程")
 
     # 桌上方航点（takeoff / mission / return 首个）z 不得低于桌面高：起飞/对准投放/
     # 返航均在桌面上方稳定，z 低于桌面即撞桌（R5-2；占位值曾为 0.6 < 桌面 0.75）。
@@ -207,3 +237,40 @@ def _check_in_field(point, field_min, field_max, label):
     for index in range(3):
         if not (field_min[index] <= point[index] <= field_max[index]):
             raise ConfigError("%s 坐标 %g 超出场地边界" % (label, point[index]))
+
+
+def _check_route_clearance(points, center, size, clearance, label):
+    """拒绝水平航段穿过障碍物及其机体/定位裕量膨胀包围盒。"""
+    half_x = size[0] * 0.5 + clearance
+    half_y = size[1] * 0.5 + clearance
+    minimum = (center[0] - half_x, center[1] - half_y)
+    maximum = (center[0] + half_x, center[1] + half_y)
+    for index, (start, end) in enumerate(zip(points, points[1:])):
+        if _segment_intersects_box(start[:2], end[:2], minimum, maximum):
+            raise ConfigError(
+                "%s航段[%d] 穿过障碍物安全裕量包围盒" % (label, index))
+
+
+def _segment_intersects_box(start, end, minimum, maximum):
+    """二维线段与闭合 AABB 是否相交（Liang-Barsky 裁剪）。"""
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    lower, upper = 0.0, 1.0
+    for p, q in ((-dx, start[0] - minimum[0]),
+                 (dx, maximum[0] - start[0]),
+                 (-dy, start[1] - minimum[1]),
+                 (dy, maximum[1] - start[1])):
+        if p == 0.0:
+            if q < 0.0:
+                return False
+            continue
+        value = q / p
+        if p < 0.0:
+            if value > upper:
+                return False
+            lower = max(lower, value)
+        else:
+            if value < lower:
+                return False
+            upper = min(upper, value)
+    return True
