@@ -7,6 +7,7 @@ YAML（占位），ALIGN/RELEASE 依赖 C3 TF 链 / C4 舵机（硬依赖）。r
 import math
 import time
 
+from robotac_mission import guards
 from robotac_mission._flight_stages import FlightStageMixin
 from robotac_mission.coordinates import limit_step
 from robotac_mission.flight_health import check as health_check
