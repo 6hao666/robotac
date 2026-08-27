@@ -376,7 +376,9 @@ class MissionNode(object):
         with self._lock:
             if self.config is None:
                 return
-            if self._manual_mode_active():
+            if (self._manual_mode_active() and not
+                    (self.driver is not None and
+                     self.driver.awaiting_offboard_confirmation())):
                 self.machine.confirm_manual_takeover()
                 self.cancel_landing()
                 self._publish_all()

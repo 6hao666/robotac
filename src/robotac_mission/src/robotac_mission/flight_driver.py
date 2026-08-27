@@ -39,7 +39,8 @@ class FlightDriver(FlightStageMixin):
         """一个 20Hz 控制步。返回当前机器状态。"""
         if (self.ctx.fcu_state is not None and
                 guards.manual_mode_active(self.ctx.fcu_state.mode,
-                                          self.ctx.fcu_state.armed)):
+                                          self.ctx.fcu_state.armed) and
+                not self.awaiting_offboard_confirmation()):
             self.machine.confirm_manual_takeover()
             self.ctx.cancel_landing()
             self.ctx.publish_all()
@@ -150,7 +151,11 @@ class FlightDriver(FlightStageMixin):
         return False
 
     def _advance(self):
-        ok, message = self.machine.stage_done()
+        if (self.machine.state == "SEARCH_TAG" and
+                self.config["mission"].get("route_only", False)):
+            ok, message = self.machine.skip_to_return()
+        else:
+            ok, message = self.machine.stage_done()
         if not ok:
             self._abort(message)
             return
@@ -167,6 +172,9 @@ class FlightDriver(FlightStageMixin):
 
     def _reset_stage(self):
         self._takeoff_armed = False
+        self._takeoff_offboard_requested = False
+        self._takeoff_offboard_confirmed = False
+        self._takeoff_arm_requested = False
         self._takeoff_map = None
         self._servo_called = False
         self._land_requested = False
@@ -178,6 +186,12 @@ class FlightDriver(FlightStageMixin):
 
     def _stage_timeout(self, seconds):
         return self._now() - self._stage_start > seconds
+
+    def awaiting_offboard_confirmation(self):
+        """OFFBOARD 请求已发出但飞控尚未确认的短暂窗口。"""
+        return (self.machine.state == "TAKEOFF" and
+                self._takeoff_offboard_requested and
+                not self._takeoff_offboard_confirmed)
 
     @staticmethod
     def _now():
