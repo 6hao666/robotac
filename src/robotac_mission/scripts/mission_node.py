@@ -148,6 +148,7 @@ class MissionNode(object):
                 self.config.get("mission", {}).get("dry_run", True))
             self.flight_enabled = bool(
                 self.config.get("mission", {}).get("flight_enabled", False))
+            self.coord.field_yaw = float(self.config.get("field_yaw", 0.0))
             self._landing_confirmation = LandingConfirmation(
                 self.config["landing"]["confirm_samples"])
             self.machine.handle_boot_params(True, "参数校验通过")
@@ -308,11 +309,12 @@ class MissionNode(object):
                 reason = "；".join(failed) if failed else "前置条件满足"
                 self.machine.handle_preconditions(ok, reason)
                 if ok and self.flight_enabled:
-                    if not self.config["payload"]["enable"]:
+                    if (not self.config["payload"]["enable"] and
+                            not self.config["mission"].get("route_only", False)):
                         self._publish_all()
                         return TriggerResponse(
                             success=False,
-                            message="正式任务禁止 payload.enable=false")
+                            message="正式任务禁止 payload.enable=false（非空载路线测试）")
                     if self.payload_release_confirmed:
                         self._publish_all()
                         return TriggerResponse(

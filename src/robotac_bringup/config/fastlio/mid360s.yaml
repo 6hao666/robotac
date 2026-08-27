@@ -16,7 +16,7 @@ mapping:
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
     fov_degree: 360
-    det_range: 100.0
+    det_range: 40.0    # 2026-08-27: 100→40 修复比赛场 FAST-LIO 锁歪/高度漂移（40m 外远噪点拉歪 EKF）
     extrinsic_est_en: false     # true 表示在线估计 IMU 与雷达外参。
     extrinsic_T: [-0.011, -0.02329, 0.04412]
     extrinsic_R: [1, 0, 0,
