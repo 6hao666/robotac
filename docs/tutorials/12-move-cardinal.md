@@ -10,7 +10,7 @@
 
 - 示例 07 已在同一飞机和场地通过，机头航向定义与 `relative_point` 约定一致。
 - 定位链路已重新检查，当前原点、航向和各轴方向正确；`map` 系与场地系的旋转标定
-  （`frames.field_yaw`）已核对。
+  （`frames.field_yaw_offset`，与启动 `home_yaw` 合成）已核对。
 - 前后左右四个方向 `step` 距离（默认 0.5 m）均在场内、无碰撞风险，满足人工接管条件。
 
 ## 定位启动顺序
@@ -53,10 +53,11 @@ rosservice call /robotac_examples/move_cardinal/start "{}"
 
 ## 需要停止并检查的情况
 
-- 某方向移动方向与机头标称方向不一致：停止测试，检查航向与坐标系（`field_yaw` 标定）。
+- 某方向移动方向与机头标称方向不一致：停止测试，检查机头是否对准场地 +y，
+  以及 `field_yaw_offset` 标定。
 - 某方向移动超时或无位移：检查该轴响应、setpoint 发布与定位跟踪。
 - 本地位姿消息过期或跳变：中止测试，逐级检查里程计、外部视觉转发和 PX4 融合。
 
 ## 下一步
 
-四个方向移动与返回均稳定后，进入完整[任务状态机](../robotac_mission/README.md)。
+四个方向移动与返回均稳定后，进入完整[任务状态机](../../src/robotac_mission/README.md)。

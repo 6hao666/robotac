@@ -112,6 +112,46 @@ class RouteOnlyStageTest(unittest.TestCase):
         self.assertEqual(driver.sent[-1], ((2.0, 4.2, 0.8), False))
         self.assertEqual(advanced, [True])
 
+    def test_nearby_route_only_mission_points_each_hold_independently(self):
+        driver = _Driver()
+        driver.config.update({
+            "mission": {"route_only": True},
+            "timing": {"waypoint_hold": 1.0,
+                       "stage_timeout": {"search": 20.0}},
+        })
+        driver.mission_point = [2.0, 4.2, 0.8]
+        driver.mission_points = ([2.0, 4.20, 0.8],
+                                 [2.0, 4.22, 0.8],
+                                 [2.0, 4.24, 0.8])
+        driver._mission_index = 0
+        driver.tag = SimpleNamespace(update=lambda *unused: (_ for _ in ()).throw(
+            AssertionError("route_only must not read Tag")))
+        driver._reached_since = None
+
+        def arrived(unused_target, hold):
+            if driver._reached_since is None:
+                driver._reached_since = driver.now
+            return driver.now - driver._reached_since >= hold
+
+        driver._arrived = arrived
+        advanced_at = []
+        driver._advance = lambda: advanced_at.append(driver.now)
+
+        # 按实际 20Hz 推进。三个点即使都在 0.15m 到达容差内，也必须各保持 1 秒。
+        for step in range(80):
+            driver.now = step * 0.05
+            driver._stage_search()
+            if advanced_at:
+                break
+
+        self.assertEqual(driver._mission_index, 2)
+        self.assertEqual(len(advanced_at), 1)
+        self.assertGreaterEqual(advanced_at[0], 3.0)
+        self.assertLess(advanced_at[0], 3.3)
+        sent_targets = [entry[0] for entry in driver.sent]
+        for target in driver.mission_points:
+            self.assertIn(tuple(target), sent_targets)
+
 
 if __name__ == "__main__":
     unittest.main()

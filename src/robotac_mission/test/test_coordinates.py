@@ -4,7 +4,8 @@
 import math
 import unittest
 
-from robotac_mission.coordinates import Coordinates, limit_step
+from robotac_mission.coordinates import (Coordinates, field_yaw_from_home,
+                                         limit_step)
 
 
 class CoordinatesTest(unittest.TestCase):
@@ -70,6 +71,17 @@ class CoordinatesTest(unittest.TestCase):
         north_field = coord.map_to_field((11.0, 20.0, 30.0))
         self.assertAlmostEqual(north_field[0], 2.0)
         self.assertAlmostEqual(north_field[1], 1.8)
+
+    def test_field_forward_follows_home_yaw(self):
+        # 机头对准场地 +y 时，场地前方始终映射到本次启动的机头方向。
+        for home_yaw in (0.0, math.pi / 2, math.pi, -math.pi / 2, 0.37):
+            coord = Coordinates()
+            field_yaw = field_yaw_from_home(home_yaw, -math.pi / 2)
+            coord.capture_home((10.0, 20.0, 30.0), (2.0, 0.8),
+                               yaw=home_yaw, field_yaw=field_yaw)
+            forward = coord.field_to_map((2.0, 1.8, 0.0))
+            self.assertAlmostEqual(forward[0] - 10.0, math.cos(home_yaw))
+            self.assertAlmostEqual(forward[1] - 20.0, math.sin(home_yaw))
 
     def test_capture_validates_length(self):
         coord = Coordinates()

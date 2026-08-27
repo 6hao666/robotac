@@ -87,9 +87,19 @@ class FlightStageMixin(object):
         timing = self.config["timing"]
         if self.config["mission"].get("route_only", False):
             # 空载路线仍飞至投放台，验证完整去程；不要求 Tag，也绝不进入投放。
-            self._send(self.mission_point)
-            if self._arrived(self.mission_point, timing["waypoint_hold"]):
-                self._advance()
+            # 终点可配置为多个近距离航点；每个点独立保持，形成可核验的悬停时长。
+            mission_points = getattr(self, "mission_points", [self.mission_point])
+            index = getattr(self, "_mission_index", 0)
+            target = mission_points[index]
+            self._send(target)
+            if self._arrived(target, timing["waypoint_hold"]):
+                if index + 1 < len(mission_points):
+                    self._mission_index = index + 1
+                    # _arrived 的计时必须对下一个近距离点重新开始；否则因
+                    # position_tolerance 大于点间距会被同一段时间立即放行。
+                    self._reached_since = None
+                else:
+                    self._advance()
             elif self._stage_timeout(timing["stage_timeout"]["search"]):
                 self._abort("空载路线抵达投放台超时")
             return

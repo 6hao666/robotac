@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """config 加载/校验单元测试（纯 Python）。"""
 
+import math
 import os
 import tempfile
 import unittest
@@ -20,7 +21,7 @@ def _minimal():
 frames:
   mission_frame: map
   body_frame: base_link
-  field_yaw: -1.5707963267948966
+  field_yaw_offset: -1.5707963267948966
 limits:
   field_min: [0, 0, 0]
   field_max: [4, 5, 3]
@@ -116,17 +117,24 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             self._load(text)
 
-    def test_field_yaw_required(self):
+    def test_field_yaw_offset_required(self):
         text = _minimal().replace(
-            "  field_yaw: -1.5707963267948966\n", "")
+            "  field_yaw_offset: -1.5707963267948966\n", "")
         with self.assertRaises(ConfigError):
             self._load(text)
 
-    def test_field_yaw_must_be_finite_number(self):
+    def test_field_yaw_offset_must_be_finite_number(self):
         text = _minimal().replace(
-            "field_yaw: -1.5707963267948966", "field_yaw: north")
+            "field_yaw_offset: -1.5707963267948966",
+            "field_yaw_offset: north")
         with self.assertRaises(ConfigError):
             self._load(text)
+
+    def test_legacy_field_yaw_is_normalized_as_offset(self):
+        text = _minimal().replace("field_yaw_offset:", "field_yaw:")
+        config = self._load(text)
+        self.assertAlmostEqual(config["frames"]["field_yaw_offset"],
+                               -math.pi / 2)
 
     def test_missing_stage_timeout_key(self):
         text = _minimal().replace(", land: 20", "")

@@ -9,7 +9,7 @@ import time
 
 from robotac_mission import guards
 from robotac_mission._flight_stages import FlightStageMixin
-from robotac_mission.coordinates import limit_step
+from robotac_mission.coordinates import field_yaw_from_home, limit_step
 from robotac_mission.flight_health import check as health_check
 from robotac_mission.tag_tracker import TagTracker
 
@@ -21,7 +21,8 @@ class FlightDriver(FlightStageMixin):
         self.coord = coord
         self.config = config
         self.takeoff_target = config["waypoints"]["takeoff"]
-        self.mission_point = config["waypoints"]["mission"][0]
+        self.mission_points = config["waypoints"]["mission"]
+        self.mission_point = self.mission_points[0]
         self.return_point = config["waypoints"]["return"][0]
         self.tag = TagTracker(config, ctx.tf_buffer)
         self._health = {"soft_bad": 0, "prev_pose": None}
@@ -30,10 +31,14 @@ class FlightDriver(FlightStageMixin):
 
     def start(self, home_map_xyz, home_yaw):
         """start 接受后调用：捕获 home（起飞点局部归零，§16.2）。"""
+        frames = self.config["frames"]
+        # 兼容飞机独立 YAML 中的旧 field_yaw 键；新配置使用 offset 命名。
+        field_yaw_offset = frames.get(
+            "field_yaw_offset", frames.get("field_yaw"))
         self.coord.capture_home(
             home_map_xyz, self.config["waypoints"]["takeoff"][:2],
             yaw=home_yaw,
-            field_yaw=self.config["frames"]["field_yaw"])
+            field_yaw=field_yaw_from_home(home_yaw, field_yaw_offset))
         self._reset_stage()
 
     def tick(self):
@@ -180,6 +185,8 @@ class FlightDriver(FlightStageMixin):
         self._servo_called = False
         self._land_requested = False
         self._index = 0
+        # route_only 终点可配置为多个近距离航点；每次进入 SEARCH 从首点开始。
+        self._mission_index = 0
         # _last_target 是速度限幅的积分起点，跨阶段保留才能避免新航点首帧跳变。
         # 新 FlightDriver 在 start 前创建，初始值仍为 None。
         self._reached_since = None

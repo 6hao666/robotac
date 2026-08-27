@@ -3,7 +3,7 @@
 FAST-LIO map 原点随启动漂移（实测 -5.23,-8.06），场地几何（起降台/投放台/障碍）
 是场地坐标。本模块把 home（起飞时刻的 map 位姿）作为 map→field 变换锚点：
 home_field = 起降台圆心（waypoints.takeoff 的 xy）+ 地面 z=0，并使用现场标定的
-``field_yaw`` 描述场地 +x 轴相对 map +x 轴的固定偏航。
+``field_yaw`` 描述场地 +x 轴相对 map +x 轴的本次有效偏航。
 
 - field_to_map：场地航点 -> map setpoint（发布 /mavros/setpoint_position/local 用）。
 - map_to_field：实时 map 位姿 -> 场地坐标（场地边界 / 桌区 / 到达判定用）。
@@ -12,6 +12,16 @@ home_field = 起降台圆心（waypoints.takeoff 的 xy）+ 地面 z=0，并使�
 """
 
 import math
+
+
+def field_yaw_from_home(home_yaw, field_yaw_offset):
+    """由启动航向和机头到场地轴的偏置计算本次有效偏航。
+
+    摆放约定为机头对准场地 +y，因此场地 +x 在机头右侧 90 度，默认偏置为
+    ``-pi/2``。结果归一化到 [-pi, pi]。
+    """
+    angle = float(home_yaw) + float(field_yaw_offset)
+    return math.atan2(math.sin(angle), math.cos(angle))
 
 
 def limit_step(current, target, max_step):
@@ -35,7 +45,7 @@ class Coordinates(object):
         self.home_map = None    # (x, y, z) 起飞时刻 map 位姿
         self.home_field = None  # (x, y, z) home 对应场地坐标（地面 z=0）
         self.home_yaw = 0.0     # 起飞时刻偏航（全程保持，示例模式）
-        self.field_yaw = 0.0    # 场地 +x 相对 map +x 的固定标定偏航
+        self.field_yaw = 0.0    # 场地 +x 相对 map +x 的本次有效偏航
 
     @property
     def ready(self):

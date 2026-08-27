@@ -59,9 +59,12 @@ def validate(data):
     frames = data["frames"]
     _require_str(frames, "mission_frame")
     _require_str(frames, "body_frame")
-    field_yaw = frames.get("field_yaw")
-    if not _is_number(field_yaw) or not math.isfinite(float(field_yaw)):
-        raise ConfigError("frames.field_yaw 必须为有限数值（弧度）")
+    field_yaw_offset = frames.get("field_yaw_offset", frames.get("field_yaw"))
+    if (not _is_number(field_yaw_offset) or
+            not math.isfinite(float(field_yaw_offset))):
+        raise ConfigError("frames.field_yaw_offset 必须为有限数值（弧度）")
+    # 统一暴露新键，便于运行层和工具读取；旧键仍可迁移加载。
+    frames["field_yaw_offset"] = float(field_yaw_offset)
 
     limits = data["limits"]
     field_min = _require_vec(limits, "field_min", 3)
