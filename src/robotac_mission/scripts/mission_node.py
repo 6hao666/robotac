@@ -148,7 +148,6 @@ class MissionNode(object):
                 self.config.get("mission", {}).get("dry_run", True))
             self.flight_enabled = bool(
                 self.config.get("mission", {}).get("flight_enabled", False))
-            self.coord.field_yaw = float(self.config.get("field_yaw", 0.0))
             self._landing_confirmation = LandingConfirmation(
                 self.config["landing"]["confirm_samples"])
             self.machine.handle_boot_params(True, "参数校验通过")
@@ -378,7 +377,9 @@ class MissionNode(object):
         with self._lock:
             if self.config is None:
                 return
-            if self._manual_mode_active():
+            if (self._manual_mode_active() and not
+                    (self.driver is not None and
+                     self.driver.awaiting_offboard_confirmation())):
                 self.machine.confirm_manual_takeover()
                 self.cancel_landing()
                 self._publish_all()

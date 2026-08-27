@@ -26,19 +26,40 @@ class FlightStageMixin(object):
                                        self.coord.home_map[1],
                                        self.ctx.pose.pose.position.z)
         takeoff = self._takeoff_map
-        if not self._takeoff_armed:
+        # 从预流开始到解锁确认前都持续发送同一个安全 setpoint。MAVROS 服务
+        # 成功只代表请求已被接收，不代表 PX4 已实际切入 OFFBOARD / 已解锁。
+        self._send(takeoff, is_map=True)
+        if not self._takeoff_offboard_requested:
             if self._now() - self._stage_start < control["prestream_seconds"]:
-                self._send(takeoff, is_map=True)
                 return
             ok, reason = self.interfaces.set_mode("OFFBOARD")
-            if ok:
-                ok, reason = self.interfaces.arm(True)
             if not ok:
                 self._abort(reason)
                 return
-            self._takeoff_armed = True
-            self._stage_start = self._now()
-        self._send(takeoff, is_map=True)
+            self._takeoff_offboard_requested = True
+            return
+        if not self._takeoff_offboard_confirmed:
+            if (self.ctx.fcu_state is not None and
+                    self.ctx.fcu_state.mode == "OFFBOARD"):
+                self._takeoff_offboard_confirmed = True
+            elif self._stage_timeout(timing["stage_timeout"]["takeoff"]):
+                self._abort("OFFBOARD 模式未获飞控确认")
+            return
+        if not self._takeoff_arm_requested:
+            ok, reason = self.interfaces.arm(True)
+            if not ok:
+                self._abort(reason)
+                return
+            self._takeoff_arm_requested = True
+            return
+        if not self._takeoff_armed:
+            if (self.ctx.fcu_state is not None and
+                    self.ctx.fcu_state.mode == "OFFBOARD" and
+                    self.ctx.fcu_state.armed):
+                self._takeoff_armed = True
+            elif self._stage_timeout(timing["stage_timeout"]["takeoff"]):
+                self._abort("解锁状态未获飞控确认")
+            return
         if self._arrived_map(takeoff, timing["takeoff_hold"]):
             self._advance()
         elif self._stage_timeout(timing["stage_timeout"]["takeoff"]):
@@ -64,6 +85,14 @@ class FlightStageMixin(object):
 
     def _stage_search(self):
         timing = self.config["timing"]
+        if self.config["mission"].get("route_only", False):
+            # 空载路线仍飞至投放台，验证完整去程；不要求 Tag，也绝不进入投放。
+            self._send(self.mission_point)
+            if self._arrived(self.mission_point, timing["waypoint_hold"]):
+                self._advance()
+            elif self._stage_timeout(timing["stage_timeout"]["search"]):
+                self._abort("空载路线抵达投放台超时")
+            return
         self.tag.update(self.ctx.tag, self.ctx.topic_age("tag"))
         self._send(self.mission_point)   # 投放台上方悬停扫描
         if self.tag.fresh:

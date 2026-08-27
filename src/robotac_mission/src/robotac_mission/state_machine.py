@@ -171,6 +171,13 @@ class MissionStateMachine(object):
         self._enter(next_state, "阶段完成，进入 %s" % next_state)
         return True, next_state
 
+    def skip_to_return(self):
+        """空载路线到达投放台后跳过 Tag、对准和投放，直接返航。"""
+        if self.state != MissionState.SEARCH_TAG:
+            return False, "当前状态不可空载返航：" + self.state
+        self._enter(MissionState.RETURN, "空载路线到达投放台，跳过 Tag/投放并返航")
+        return True, MissionState.RETURN
+
     def abort(self, reason=""):
         """飞行活动态收到 stop 或安全门触发 -> ABORT_LAND。
 

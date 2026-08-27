@@ -30,11 +30,10 @@ def limit_step(current, target, max_step):
 
 
 class Coordinates(object):
-    def __init__(self, field_yaw=0.0):
+    def __init__(self):
         self.home_map = None    # (x, y, z) 起飞时刻 map 位姿
         self.home_field = None  # (x, y, z) home 对应场地坐标（地面 z=0）
-        self.home_yaw = 0.0     # 起飞时刻 map 系偏航
-        self.field_yaw = float(field_yaw)  # 起飞时机头在场地系朝向（rad；机头朝场地+y=pi/2）
+        self.home_yaw = 0.0     # 起飞时刻偏航（全程保持，示例模式）
 
     @property
     def ready(self):
@@ -51,29 +50,18 @@ class Coordinates(object):
                            float(home_field_xy[1]), 0.0)
         self.home_yaw = float(yaw)
 
-    def _rot_xy(self, dx, dy, theta):
-        """绕 z 旋转 (dx,dy) 角度 theta（rad），map↔field 用。"""
-        c, s = math.cos(theta), math.sin(theta)
-        return (c * dx - s * dy, s * dx + c * dy)
-
     def map_to_field(self, point):
         """map -> 场地坐标。home 未捕获抛 ValueError。"""
         if not self.ready:
             raise ValueError("home 未捕获，无法变换")
-        dx = point[0] - self.home_map[0]
-        dy = point[1] - self.home_map[1]
-        rx, ry = self._rot_xy(dx, dy, self.field_yaw - self.home_yaw)
-        return (self.home_field[0] + rx,
-                self.home_field[1] + ry,
-                self.home_field[2] + (point[2] - self.home_map[2]))
+        return (point[0] - self.home_map[0] + self.home_field[0],
+                point[1] - self.home_map[1] + self.home_field[1],
+                point[2] - self.home_map[2] + self.home_field[2])
 
     def field_to_map(self, point):
         """场地坐标 -> map（发布 setpoint）。home 未捕获抛 ValueError。"""
         if not self.ready:
             raise ValueError("home 未捕获，无法变换")
-        dx = point[0] - self.home_field[0]
-        dy = point[1] - self.home_field[1]
-        rx, ry = self._rot_xy(dx, dy, self.home_yaw - self.field_yaw)
-        return (self.home_map[0] + rx,
-                self.home_map[1] + ry,
-                self.home_map[2] + (point[2] - self.home_field[2]))
+        return (point[0] + self.home_map[0] - self.home_field[0],
+                point[1] + self.home_map[1] - self.home_field[1],
+                point[2] + self.home_map[2] - self.home_field[2])

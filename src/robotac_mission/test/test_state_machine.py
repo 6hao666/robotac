@@ -243,6 +243,16 @@ class FlightStateMachineTest(unittest.TestCase):
         ok, _ = machine.stage_done()
         self.assertFalse(ok)
 
+    def test_route_only_can_skip_tag_and_payload_after_reaching_table(self):
+        machine = self._fly()
+        machine.stage_done()  # TAKEOFF -> TRANSIT
+        machine.stage_done()  # TRANSIT -> SEARCH_TAG
+        ok, state = machine.skip_to_return()
+        self.assertTrue(ok)
+        self.assertEqual(state, MissionState.RETURN)
+        self.assertEqual(machine.state, MissionState.RETURN)
+        self.assertTrue(machine.active)
+
     def test_abort_during_flight_records_root_cause(self):
         machine = self._fly()
         machine.stage_done()   # TRANSIT
