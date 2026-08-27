@@ -7,8 +7,8 @@
 从开发机同步到机载 Ubuntu 主机：
 
 ```bash
-# 将工作空间同步到机载 Ubuntu 主机。
-./tools/sync_workspace.sh <用户>@<飞机地址>:<工作空间目录>
+# 将当前 Robotac 仓库同步到机载主机的 /home/<用户>/robotac。
+./tools/sync_workspace.sh <用户>@<飞机地址>:/home/<用户>/robotac
 ```
 
 同步脚本排除 `.git`、`build`、`devel`、`install` 和 `log`，也不会删除远端已有的其他文件。
@@ -19,10 +19,10 @@
 ```bash
 # 预览文件更新、旧源码删除、构建目录清理和环境文件初始化。
 ./tools/sync_workspace.sh --mirror --dry-run \
-  <用户>@<飞机地址>:<工作空间绝对目录>
+  <用户>@<飞机地址>:/home/<用户>/robotac
 # 执行完整镜像；该操作会同步 .git 并删除远端多余源码。
 ./tools/sync_workspace.sh --mirror \
-  <用户>@<飞机地址>:<工作空间绝对目录>
+  <用户>@<飞机地址>:/home/<用户>/robotac
 ```
 
 镜像模式不会上传或删除已有的 `.env`、`.env.local`。仓库只同步 `.env.template`；使用
@@ -32,11 +32,11 @@
 ## 机载构建
 
 ```bash
-# 进入机载工作空间。
-cd <工作空间目录>
+# 进入机载 Robotac 仓库根目录。
+cd /home/<用户>/robotac
 # 检查源码和文档链接。
 ./tools/test_01_source.sh
-# 执行默认比赛构建并检查包发现情况。
+# 执行比赛运行构建并检查包发现情况。
 ./tools/test_02_build.sh
 # 加载构建后的 ROS 环境。
 source devel/setup.bash
@@ -47,12 +47,12 @@ source devel/setup.bash
 ```
 
 构建和仿真阶段不连接设备，不启动真实硬件 launch。
-默认比赛构建使用系统 MAVROS 和 AprilTag ROS。只有验证第三方源码时才执行
+比赛运行构建使用系统 MAVROS 和 AprilTag ROS。只有验证第三方源码时才执行
 `./tools/build_full.sh`；其环境位于 `devel_full/setup.bash`，不得替代日常比赛环境。
 
 ## 单独验证传感器
 
-首次配置或排障时，先分别启动低层节点。雷达终端执行：
+首次配置或排障时，先分别启动需要检查的组件。雷达终端执行：
 
 ```bash
 # 发现并比较现场地址；需要时按提示确认写入配置。
@@ -66,8 +66,9 @@ roslaunch robotac_bringup lidar_mid360s.launch
 ```bash
 # 确认 FAST-LIO 所需的自定义点云类型。
 rostopic type /livox/lidar
-# 分别观察点云与 IMU 接收频率。
+# 观察点云接收频率。
 rostopic hz /livox/lidar
+# 观察 IMU 接收频率。
 rostopic hz /livox/imu
 # 读取一帧 IMU，检查时间戳和 frame。
 rostopic echo -n 1 /livox/imu
@@ -88,45 +89,102 @@ roslaunch robotac_bringup camera_rgb.launch
 另一个终端检查 `/camera/rgb/image_raw` 和 `/camera/rgb/camera_info` 的类型、频率、
 `frame_id`、宽高以及标定尺寸。不要把相机 metadata 节点传给 `video_device`。
 
-## 启动基础组件
+## 建立位置来源
 
-分别在已加载工作空间环境的终端启动：
+`06`、`07`、`08` 和 `10` 需要 PX4 提供连续的本地位置。三个基础 launch 互不包含，飞行
+示例也不会自动启动它们。以下步骤分别在已加载工作空间环境的终端执行。
+
+### 1. 启动传感器
 
 ```bash
-# 启动 MID360 和 RGB 相机。
+# 启动 MID360 和 RGB 相机，只产生传感器数据。
 roslaunch robotac_bringup sensors.launch
-# 启动 FAST-LIO 和 AprilTag。
+```
+
+在另一个终端确认 FAST-LIO 的两项输入：
+
+```bash
+# 观察 MID360 点云频率，不发布任何消息。
+rostopic hz /livox/lidar
+# 观察 MID360 内置 IMU 频率，不发布任何消息。
+rostopic hz /livox/imu
+```
+
+点云和 IMU 都应连续输出。仅有点云时不能继续启动 FAST-LIO。
+
+### 2. 启动 FAST-LIO 和里程计修正
+
+将飞机放在水平、稳固的位置并保持上锁。启动后的前 200 帧 IMU 用于计算初始倾角，随后
+第一帧 FAST-LIO 里程计会成为本次启动的原点；初始化期间不要移动或触碰飞机。
+
+```bash
+# 启动 FAST-LIO、里程计修正和 AprilTag，不向 PX4 发送位姿。
 roslaunch robotac_bringup perception.launch
-# 启动 MAVROS 和外部视觉输出。
+```
+
+待输出稳定后检查 FAST-LIO 原始里程计和修正后的里程计：
+
+```bash
+# 观察 FAST-LIO 原始里程计频率。
+rostopic hz /Odometry
+# 读取一帧原始里程计，检查时间戳、frame 和位姿。
+rostopic echo -n 1 /Odometry
+# 观察修正后的里程计频率。
+rostopic hz /sunray/odometry
+# 读取一帧修正后的里程计，检查时间戳、frame 和位姿。
+rostopic echo -n 1 /sunray/odometry
+```
+
+静止时数据应连续且没有明显跳变。拆除桨叶后，沿机体前、左、上方向缓慢移动飞机，并缓慢
+改变航向，核对 `/sunray/odometry` 的位置和姿态变化。方向错误或漂移明显时不要进入下一步。
+
+### 3. 启动 MAVROS 并将位姿送入 PX4
+
+```bash
+# 启动 MAVROS 和外部视觉转发，不解锁飞机，也不发送位置目标。
 roslaunch robotac_bringup flight_base.launch
 ```
 
-排障时只启动对应的低层 launch。不要用多个终端重复启动同一设备节点。
-`sensors.launch` 会同时启动 MID360 和 RGB 相机；它不负责发现地址或安装 udev 规则。
+`flight_base.launch` 将 `/sunray/odometry` 检查后发布到 `/mavros/vision_pose/pose`。PX4
+是否采用该数据，取决于目标飞控的固件版本和 estimator 参数。
 
-## 只读检查
+### 4. 检查 PX4 融合结果
 
-基础组件全部启动后执行：
+```bash
+# 确认外部视觉位姿持续送到 MAVROS。
+rostopic hz /mavros/vision_pose/pose
+# 读取外部视觉桥接状态。
+rostopic echo -n 1 /vision_pose_bridge/state
+# 读取外部视觉桥接是否正常。
+rostopic echo -n 1 /vision_pose_bridge/healthy
+# 读取 PX4 estimator 状态。
+rostopic echo -n 1 /mavros/estimator_status
+# 观察 PX4 融合后的 MAVROS 本地位姿频率。
+rostopic hz /mavros/local_position/pose
+# 读取一帧最终本地位姿，检查位置、姿态和时间戳。
+rostopic echo -n 1 /mavros/local_position/pose
+```
+
+`/mavros/vision_pose/pose` 有数据不表示 PX4 已经完成融合。必须同时确认 estimator 的姿态、
+水平相对位置和垂直位置状态有效，并再次完成静止漂移、手动平移、轴向和航向核对。
+
+### 5. 运行定位链路观察器
+
+```bash
+# 同时观察修正里程计、外部视觉转发、PX4 位置状态和最终本地位姿。
+roslaunch robotac_examples 02_local_pose.launch
+```
+
+四项状态都正常，且最终本地位姿的方向、连续性和漂移满足现场要求后，才进入位置控制示例。
+需要读取全部真实设备和 ROS 话题时，可以执行：
 
 ```bash
 # 读取真实设备和 ROS 数据，不发送控制命令。
 ./tools/test_05_hardware_readonly.sh
 ```
 
-随后人工检查：
-
-```bash
-# 查看 FAST-LIO 里程计频率。
-rostopic hz /sunray/odometry
-# 查看 MAVROS 本地位姿频率。
-rostopic hz /mavros/local_position/pose
-# 读取外部视觉桥接状态。
-rostopic echo -n 1 /vision_pose_bridge/state
-# 读取飞控连接状态。
-rostopic echo -n 1 /mavros/state
-```
-
-只读检查不得调用飞控服务。
+以上检查均为只读操作，不得在该阶段调用飞控模式或解锁服务。排障时只启动对应组件，不要在
+多个终端重复启动同一设备节点。
 
 ## 示例运行
 

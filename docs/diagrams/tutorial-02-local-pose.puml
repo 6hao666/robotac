@@ -7,14 +7,19 @@ skinparam defaultFontName SansSerif
 skinparam ArrowColor #4B5563
 skinparam sequenceParticipantBackgroundColor #FFFFFF
 skinparam sequenceParticipantBorderColor #24528C
-title 示例 02：本地位姿只读检查链路
+title 示例 02：定位链路与本地位姿只读检查
+participant "/sunray/odometry" as odom
+participant "vision_pose_bridge" as bridge
 participant "PX4 estimator" as estimator
 participant "MAVROS" as mavros
 participant "02_local_pose" as example
 actor "操作员" as operator
+odom -> example : 修正后的里程计
+bridge -> example : healthy
+estimator -> example : estimator_status
 estimator -> mavros : 本地位置与姿态
 mavros -> example : /mavros/local_position/pose
-example -> example : 计算频率与消息年龄
-example --> operator : x / y / z / 姿态 / 频率 / 年龄
+example -> example : 判断四级状态并计算频率、年龄
+example --> operator : 链路状态 / 位置 / 姿态 / 频率 / 年龄
 note over example : 只读，不发布控制命令
 @enduml

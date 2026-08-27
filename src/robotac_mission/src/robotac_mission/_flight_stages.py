@@ -111,22 +111,27 @@ class FlightStageMixin(object):
         timing = self.config["timing"]
         if not self._servo_called:
             self._servo_called = True
-            if self.config["payload"]["enable"]:
-                attempts = 0
-                ok = False
-                reason = "舵机释放失败"
-                while attempts <= self.config["payload"]["retry_count"]:
-                    ok, reason = self.interfaces.release_payload(True)
-                    if ok:
-                        break
-                    attempts += 1
-                if not ok:
-                    self._abort(reason)
-                    return
-            else:
-                self.interfaces.log_action("release_skipped")   # 空投（M2）
-        release = self._release_target()   # 投放点 = mission_point + 舵机偏移补偿
-        self._send(release)
+            if not self.config["payload"]["enable"]:
+                self._abort("payload 未启用，禁止跳过投放")
+                return
+            self._release_sequence = self.ctx.payload_release_sequence
+            attempts = 0
+            ok = False
+            reason = "舵机释放失败"
+            while attempts <= self.config["payload"]["retry_count"]:
+                ok, reason = self.interfaces.release_payload(True)
+                if ok:
+                    break
+                attempts += 1
+            if not ok:
+                self._abort(reason)
+                return
+        release = self._release_target()   # 投放点 = mission_point - 舵机偏移（补偿）
+        self._send(release)                # 释放后保持，等待货物脱离
+        if not self.ctx.payload_confirmed_after(self._release_sequence):
+            if self._stage_timeout(timing["stage_timeout"]["release"]):
+                self._abort("投放后未收到货物完全脱离确认")
+            return
         if self._arrived(release, timing["release_hold"]):
             self._advance()
         elif self._stage_timeout(timing["stage_timeout"]["release"]):
@@ -146,16 +151,4 @@ class FlightStageMixin(object):
                 self.mission_point[2]]
 
     def _stage_land(self):
-        timing = self.config["timing"]
-        if not self._land_requested:
-            self._land_requested = True
-            ok, reason = self.interfaces.set_mode("AUTO.LAND")
-            if not ok:
-                self._abort(reason)
-                return
-        extended = self.ctx.extended_state
-        if extended is not None and (
-                extended.landed_state == ExtendedState.LANDED_STATE_ON_GROUND):
-            self._advance()
-        elif self._stage_timeout(timing["land_confirm"]):
-            self._abort("降落超时")
+        self.ctx.begin_landing(self._last_target)

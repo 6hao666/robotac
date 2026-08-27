@@ -35,6 +35,13 @@ class FlightDriver(FlightStageMixin):
 
     def tick(self):
         """一个 20Hz 控制步。返回当前机器状态。"""
+        if (self.ctx.fcu_state is not None and
+                guards.manual_mode_active(self.ctx.fcu_state.mode,
+                                          self.ctx.fcu_state.armed)):
+            self.machine.confirm_manual_takeover()
+            self.ctx.cancel_landing()
+            self.ctx.publish_all()
+            return self.machine.state
         issue = health_check(self.ctx, self.coord, self.config, self._health)
         if issue is not None:
             self._abort(issue)
@@ -142,11 +149,15 @@ class FlightDriver(FlightStageMixin):
         if not ok:
             self._abort(message)
             return
+        if self.machine.state == "LAND":
+            self.ctx.begin_landing(self._last_target)
         self._reset_stage()
         self.ctx.publish_all()
 
     def _abort(self, reason):
         self.machine.abort(reason)
+        if self.machine.state == "ABORT_LAND":
+            self.ctx.begin_landing(self._last_target)
         self.ctx.publish_all()
 
     def _reset_stage(self):

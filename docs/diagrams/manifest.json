@@ -3,9 +3,9 @@
   "renderer": "PlantUML 1.2026.6",
   "files": {
     "architecture-interfaces.puml": {
-      "sourceSha256": "17b26be1e36d7c81d978c1d7603ba025607f48fa660f07994baa644503fb40c1",
+      "sourceSha256": "c4cfda6394c2ae0a8edc37d0fa10899d1ea2f327e900b4494e767a4029b43891",
       "svg": "../assets/plantuml/architecture-interfaces.svg",
-      "svgSha256": "a3908550e83748f3daf884053bd02540b8e48142d990b2f705b367f9661b4fc3"
+      "svgSha256": "a2bd4849f7e2d49caa414e4bf2ea96e6f924bc3088ba269c62f82aed926eb9d0"
     },
     "competition-examples.puml": {
       "sourceSha256": "59a646f99faa8bbc9ab95c4d378331f34951dba99d06a4b80a14b4344e7e3285",
@@ -33,14 +33,14 @@
       "svgSha256": "626e4c7dacde31985a3747539c903cc510786381302e41f84e3c3cc491e2d0ef"
     },
     "project-overview.puml": {
-      "sourceSha256": "ac165ec261ea0c97c623d3c3bab8650baeff8f5aa0a2d5cad4e868f6d7dc20d0",
+      "sourceSha256": "1562242dc398f5a3f1d00ab79455e6e0dd189081f25bf4d8369bb5fcc0c67ace",
       "svg": "../assets/plantuml/project-overview.svg",
-      "svgSha256": "b7e8741d608d3d37b6a145655239c67f475b064b544680dfae70e1a023e18f5c"
+      "svgSha256": "892380e91f75f04ce466c0ea816126192bf715b5bda1f58432c6927ff6f146c4"
     },
     "safety-validation.puml": {
-      "sourceSha256": "81e216422e514ced225bc90d4e198d936e1970a1770354d162a8e6347110e9aa",
+      "sourceSha256": "e7579162bce849bc3b48f2fc16703f65adfbf831579f25b9f32f31736b5b5586",
       "svg": "../assets/plantuml/safety-validation.svg",
-      "svgSha256": "49715976d85465b594be60cbcb5c898fca43b6742bd4f46b5abe6a5262e93df1"
+      "svgSha256": "c14c3b3cf5545728b2c0a9488c6d21aee7fa244f032cbac051af5ef9c8a6f34f"
     },
     "servo-calibration.puml": {
       "sourceSha256": "116598f857c64f88f3afa95b3c4d41bf0dc63625b4427323b0ee306a94a59f8e",
@@ -58,9 +58,9 @@
       "svgSha256": "0012ac2f228086bd2fde319523ee659b8431b4af3cd91ceba37791b659c42b72"
     },
     "tutorial-02-local-pose.puml": {
-      "sourceSha256": "77b04826ed0462d340c936feb008f63d6a2d22c0a004b186bca2b07969fd7d41",
+      "sourceSha256": "e8358203f8123a250b5ae0ad3d749f302d4f0d5b4eaac7d6995540ff4acfa978",
       "svg": "../assets/plantuml/tutorial-02-local-pose.svg",
-      "svgSha256": "8c7ce26d4ccd62362d60882fd0f2db76ca1fafe314b404dbfafeaaf2965e5d1b"
+      "svgSha256": "02c7aef6537430222fed665f00687c3d26f3c5404e439ae57785090d51d0e535"
     },
     "tutorial-03-apriltag-detection.puml": {
       "sourceSha256": "eeaa0e55dfa96b0fef4410353196fc79c7b676eadd81e1ad751c8642daed984f",
@@ -108,9 +108,9 @@
       "svgSha256": "9f3264be9c1e012f884c1027986005e4dcfa07ed0e1e8724d24c9d0489100ab4"
     },
     "tutorial-index.puml": {
-      "sourceSha256": "6b24f7503709848f789c11f6ab15f5476efe1223990627ee3acf11c2d2c45ab2",
+      "sourceSha256": "02b07df453d86ca2b922710a4427f2a8522cba61120411e35cfbbe90b8d5d3ec",
       "svg": "../assets/plantuml/tutorial-index.svg",
-      "svgSha256": "88d3dc0fc7fc580faee17faa904b0be8b3f8b0041e1732d5179a65002a081e28"
+      "svgSha256": "7d26a65094526d63399b5673938ccaa6a4d575647b6740da67ccd1af19c8b96c"
     }
   }
 }

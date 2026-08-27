@@ -129,16 +129,21 @@ class MissionStateMachine(object):
         return True, "已进入 ABORT_LAND"
 
     def request_reset(self):
-        """reset 服务。终态 -> 新一轮：COMPLETE/ABORT_LAND -> WAIT_READY；
-        ERROR -> BOOT（由节点重读参数）；预启动态幂等。"""
+        """reset 服务。只允许确认落地后的 COMPLETE 进入下一轮。
+
+        ABORT_LAND 仍可能在空中执行安全降落，绝不可通过 reset 清掉其 driver。
+        ERROR -> BOOT（由节点重读参数）；预启动态幂等。
+        """
         if self.state == MissionState.BOOT:
             return True, "引导中，reset 幂等"
         if self.state in (MissionState.WAIT_READY, MissionState.WAIT_START):
             return True, "任务尚未开始，reset 幂等"
-        if self.state in (MissionState.COMPLETE, MissionState.ABORT_LAND):
+        if self.state == MissionState.COMPLETE:
             self._clear_result()
             self._enter(MissionState.WAIT_READY, "mission_reset，准备下一次飞行")
             return True, "已重置到 WAIT_READY"
+        if self.state == MissionState.ABORT_LAND:
+            return False, "正在执行安全降落，确认落地或人工接管后才能 reset"
         if self.state == MissionState.ERROR:
             self._clear_result()
             self._enter(MissionState.BOOT, "mission_reset，重读参数")
@@ -187,8 +192,8 @@ class MissionStateMachine(object):
         return self.state
 
     def confirm_manual_takeover(self):
-        """ABORT_LAND 人工接管 -> COMPLETE（结果：人工接管）。"""
-        if self.state != MissionState.ABORT_LAND:
+        """人工接管优先于自动控制，可从任一飞行态或 ABORT_LAND 退出。"""
+        if self.state not in MissionState.FLIGHT + (MissionState.ABORT_LAND,):
             return self.state
         self._enter(MissionState.COMPLETE, "人工接管")
         self._set_result(MissionResult.MANUAL_TAKEOVER)

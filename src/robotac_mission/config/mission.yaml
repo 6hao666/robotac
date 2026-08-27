@@ -17,8 +17,10 @@ limits:
   max_speed: 0.2                 # 待实机验证（2026-08-23 降速：FAST-LIO 运动时地图不稳，慢速让地图跟上）
 
 obstacle:                        # 固定障碍（规则几何，参考值）
+  center: [2.00, 2.50]           # 场地中部；结合 2.10m 长度与两侧 0.95m 净宽确定
   size: [2.10, 0.15, 2.00]       # 长 x 宽 x 高 m
   cross_gap: 0.95                # 两侧净宽 m
+  route_clearance: 0.20          # 机体外廓、定位误差和控制超调的最小合并裕量；实机复核后才可缩小
   no_overfly: true               # 禁止从顶部越过
 
 tables:                          # 两桌同 Tag 判别依据（规则几何参考值）
@@ -54,6 +56,14 @@ timing:
     return: 30.0
     land: 20.0
 
+landing:                         # AUTO.LAND 握手与落地事实确认（安全关键）
+  mode_retry_seconds: 1.0        # 未见 FCU 实际进入 AUTO.LAND 前的模式请求间隔
+  mode_retry_count: 3            # 有限重试；耗尽后保持 setpoint 并要求人工接管
+  confirm_samples: 3             # 请求之后连续的新鲜 ON_GROUND 样本数
+  max_height: 0.25               # field z 不得高于此值（允许落到地面时为负的现有高度口径）
+  max_vertical_speed: 0.10       # m/s，落地确认时须基本静止
+  velocity_timeout: 0.5          # /mavros/local_position/velocity_local 数据年龄上限 s
+
 control:                         # 飞行控制策略（占位，随 07/09/10 回填；示例源码值）
   rate_hz: 20.0                  # setpoint 流频率（示例默认 20Hz）
   position_tolerance: 0.15       # 到达/对准收敛容差 m（示例默认 0.15）
@@ -74,17 +84,19 @@ waypoints:                       # 名义航点骨架（规则几何参考，map
   # 桌上方航点（takeoff/mission/return）z 须 ≥ 桌面高 0.75（config 校验）；
   # C1 起飞稳定保持须 1.0-2.0m，占位取 1.0。绕障航点位于场地中段侧隙、不在桌上。
   takeoff: [2.0, 0.80, 1.0]      # 起降台上方（C1 保持高度，> 桌面 0.75）
-  obstacle_routing:              # 去程：中线直行（2026-08-23 场地未放障碍，直行找 tag；比赛放障碍时改回侧隙）
-    approach: [2.0, 1.5, 0.8]
-    gap_enter: [2.0, 2.0, 0.8]
-    gap_cross: [2.0, 3.0, 0.8]
-    resume: [2.0, 3.5, 0.8]
+  # 障碍物横跨场地中部：x=[0.95, 3.05]、y=[2.425, 2.575]。
+  # 左侧侧隙 x=[0, 0.95]；x=0.475 是该侧隙中心，去返程均从此绕行。
+  obstacle_routing:
+    approach: [0.475, 1.75, 0.8]
+    gap_enter: [0.475, 2.30, 0.8]
+    gap_cross: [0.475, 2.70, 0.8]
+    resume: [0.475, 3.25, 0.8]
   mission: [[2.0, 4.20, 1.0]]    # 投放台正上方（> 桌面 0.75，便于识别 Tag/投放）
-  return_routing:                # 返程：中线直行（同上去除侧隙）
-    approach: [2.0, 3.5, 0.8]
-    gap_enter: [2.0, 3.0, 0.8]
-    gap_cross: [2.0, 2.0, 0.8]
-    resume: [2.0, 1.5, 0.8]
+  return_routing:                # 返程：沿同一左侧通道反向绕障
+    approach: [0.475, 3.25, 0.8]
+    gap_enter: [0.475, 2.70, 0.8]
+    gap_cross: [0.475, 2.30, 0.8]
+    resume: [0.475, 1.75, 0.8]
   return: [[2.0, 0.80, 1.0]]     # 起降台上方（> 桌面 0.75）
 
 payload:

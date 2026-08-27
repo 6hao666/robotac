@@ -19,15 +19,21 @@ package "robotac_examples" {
   component "投放 11" as release
 }
 queue "/sunray/odometry" as odom
+queue "/mavros/vision_pose/pose" as vision
+component "PX4 estimator" as estimator
+queue "/mavros/local_position/pose" as local
 queue "/robotac_examples/tag/*" as tag
 queue "/mavros/setpoint_position/local" as target
 queue "/robotac_servo/set_released" as setreleased
 sensors --> perception
 perception --> odom
 odom --> base
+base --> vision
+vision --> estimator
+estimator --> local
+local --> flight
 perception --> tag
 tag --> preview
-base --> flight
 flight --> target
 release --> setreleased
 note bottom of flight

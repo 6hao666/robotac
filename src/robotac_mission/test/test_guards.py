@@ -110,6 +110,11 @@ class GuardTest(unittest.TestCase):
         # 未解锁不判定（不构成模式丢失）
         self.assertTrue(guards.mode_ok("MANUAL", armed=False)[0])
 
+    def test_manual_mode_active(self):
+        self.assertTrue(guards.manual_mode_active("POSCTL", armed=True))
+        self.assertFalse(guards.manual_mode_active("OFFBOARD", armed=True))
+        self.assertFalse(guards.manual_mode_active("POSCTL", armed=False))
+
     def test_window_ok(self):
         self.assertTrue(guards.window_ok(0.0, 360.0)[0])
         self.assertTrue(guards.window_ok(359.9, 360.0)[0])

@@ -19,7 +19,7 @@ import threading
 import rospy
 import tf2_ros
 from apriltag_ros.msg import AprilTagDetectionArray
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from mavros_msgs.msg import EstimatorStatus, ExtendedState, State, TimesyncStatus
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger, TriggerResponse
@@ -29,6 +29,7 @@ from robotac_mission.config import ConfigError, load_config
 from robotac_mission.coordinates import Coordinates
 from robotac_mission.flight_driver import FlightDriver
 from robotac_mission.interfaces import MissionInterfaces
+from robotac_mission.landing import LandingConfirmation
 from robotac_mission.state_machine import MissionState, MissionStateMachine
 
 
@@ -50,8 +51,11 @@ class MissionNode(object):
         self.fcu_received = None
         self.extended_state = None
         self.extended_received = None
+        self.extended_sequence = 0
         self.pose = None
         self.pose_received = None
+        self.velocity = None
+        self.velocity_received = None
         self.estimator = None
         self.estimator_received = None
         self.timesync = None
@@ -62,6 +66,9 @@ class MissionNode(object):
         self.vision_state_received = None
         self.tag = None
         self.tag_received = None
+        self.payload_release_confirmed = False
+        self.payload_release_received = None
+        self.payload_release_sequence = 0
 
         self.state_pub = rospy.Publisher("/robotac_mission/state", String,
                                          queue_size=1, latch=True)
@@ -86,6 +93,8 @@ class MissionNode(object):
                          self._cb_extended, queue_size=5)
         rospy.Subscriber("/mavros/local_position/pose", PoseStamped,
                          self._cb_pose, queue_size=10)
+        rospy.Subscriber("/mavros/local_position/velocity_local", TwistStamped,
+                         self._cb_velocity, queue_size=10)
         rospy.Subscriber("/mavros/estimator_status", EstimatorStatus,
                          self._cb_estimator, queue_size=5)
         rospy.Subscriber("/mavros/timesync_status", TimesyncStatus,
@@ -96,6 +105,8 @@ class MissionNode(object):
                          self._cb_vision_state, queue_size=1)
         rospy.Subscriber("/tag_detections", AprilTagDetectionArray,
                          self._cb_tag, queue_size=5)
+        rospy.Subscriber("/robotac_servo/release_confirmed", Bool,
+                         self._cb_payload_release_confirmed, queue_size=5)
 
         self.interfaces = MissionInterfaces(
             dry_run=True, target_sink=self.target_pub.publish)
@@ -107,8 +118,15 @@ class MissionNode(object):
             "~camera_frame", "camera_rgb_optical_frame")
         self.driver = None
         self.flight_enabled = False
-        self._window_started = None   # 6 分钟共享窗口起点（首次 start）
-        self._abort_land_issued = False
+        self._landing_confirmation = None
+        self._landing_active = False
+        self._landing_target = None
+        self._landing_started = None
+        self._landing_last_request = None
+        self._landing_requests = 0
+        self._landing_mode_confirmed = False
+        self._landing_confirmation_started = False
+        self._landing_failure_reported = False
         self._boot()
         rospy.Timer(rospy.Duration(0.2), self._on_timer)
         # L1：飞行控制频率用 config.control.rate_hz（参数校验失败时退回 20Hz）
@@ -123,13 +141,15 @@ class MissionNode(object):
         self.config = None
         self.driver = None
         self.flight_enabled = False
-        self._abort_land_issued = False
+        self.cancel_landing()
         try:
             self.config = load_config(self.config_path)
             self.interfaces.dry_run = bool(
                 self.config.get("mission", {}).get("dry_run", True))
             self.flight_enabled = bool(
                 self.config.get("mission", {}).get("flight_enabled", False))
+            self._landing_confirmation = LandingConfirmation(
+                self.config["landing"]["confirm_samples"])
             self.machine.handle_boot_params(True, "参数校验通过")
         except ConfigError as exc:
             rospy.logerr("mission.yaml 校验失败: %s", exc)
@@ -145,10 +165,15 @@ class MissionNode(object):
     def _cb_extended(self, message):
         self.extended_state = message
         self.extended_received = rospy.Time.now()
+        self.extended_sequence += 1
 
     def _cb_pose(self, message):
         self.pose = message
         self.pose_received = rospy.Time.now()
+
+    def _cb_velocity(self, message):
+        self.velocity = message
+        self.velocity_received = rospy.Time.now()
 
     def _cb_estimator(self, message):
         self.estimator = message
@@ -169,6 +194,11 @@ class MissionNode(object):
     def _cb_tag(self, message):
         self.tag = message
         self.tag_received = rospy.Time.now()
+
+    def _cb_payload_release_confirmed(self, message):
+        self.payload_release_confirmed = bool(message.data)
+        self.payload_release_received = rospy.Time.now()
+        self.payload_release_sequence += 1
 
     # ---- 安全门 ----
 
@@ -251,11 +281,18 @@ class MissionNode(object):
     def topic_age(self, name):
         """FlightDriver 用：按名字取话题到达时刻龄（秒）。"""
         received = getattr(self, {"pose": "pose_received",
+                                  "fcu_state": "fcu_received",
+                                  "extended_state": "extended_received",
+                                  "velocity": "velocity_received",
                                   "timesync": "timesync_received",
                                   "vision_healthy": "vision_healthy_received",
                                   "tag": "tag_received"
                                   }.get(name, ""), None)
         return self._topic_age(received)
+
+    def payload_confirmed_after(self, sequence):
+        return (self.payload_release_confirmed and
+                self.payload_release_sequence > sequence)
 
     # ---- 服务 ----
 
@@ -270,12 +307,17 @@ class MissionNode(object):
                 ok, failed = self._evaluate_preconditions()
                 reason = "；".join(failed) if failed else "前置条件满足"
                 self.machine.handle_preconditions(ok, reason)
-                # 前置通过才查窗口：失败尝试不得消耗 6 分钟共享窗口（规则硬性）
                 if ok and self.flight_enabled:
-                    ok, reason = self._check_window()
-                    if not ok:
+                    if not self.config["payload"]["enable"]:
                         self._publish_all()
-                        return TriggerResponse(success=False, message=reason)
+                        return TriggerResponse(
+                            success=False,
+                            message="正式任务禁止 payload.enable=false")
+                    if self.payload_release_confirmed:
+                        self._publish_all()
+                        return TriggerResponse(
+                            success=False,
+                            message="投放机构已处于释放确认状态，请重新挂载后再启动")
                     if self.pose is None:
                         self._publish_all()
                         return TriggerResponse(success=False,
@@ -296,6 +338,8 @@ class MissionNode(object):
         del unused_request
         with self._lock:
             success, message = self.machine.request_stop()
+            if self.machine.state == MissionState.ABORT_LAND:
+                self.begin_landing()
             self._publish_all()
         return TriggerResponse(success=success, message=message)
 
@@ -305,7 +349,7 @@ class MissionNode(object):
             success, message = self.machine.request_reset()
             if success:
                 self.driver = None
-                self._abort_land_issued = False
+                self.cancel_landing()
             if self.machine.state == MissionState.BOOT:
                 # ERROR -> BOOT：从磁盘重读参数（BOOT 可重入）
                 self._boot()
@@ -324,51 +368,152 @@ class MissionNode(object):
                 ok, failed = self._evaluate_preconditions()
                 reason = "；".join(failed) if failed else "前置条件满足"
                 self.machine.handle_preconditions(ok, reason)
-            elif self.machine.state == MissionState.ABORT_LAND:
-                # 中止落地确认 -> COMPLETE（首个根因保留在 result）
-                if (self.extended_state is not None and
-                        self.extended_state.landed_state ==
-                        ExtendedState.LANDED_STATE_ON_GROUND):
-                    self.machine.confirm_landed()
             self._publish_all()
 
     def _on_flight_timer(self, unused_event):
-        """20Hz 飞行控制：飞行态逐态推进；ABORT_LAND 触发放下 AUTO.LAND。"""
+        """20Hz 飞行控制：飞行推进及可确认的 AUTO.LAND 握手。"""
         del unused_event
         with self._lock:
-            if self.config is None or self.driver is None:
+            if self.config is None:
                 return
-            if self.machine.state in MissionState.FLIGHT:
+            if self._manual_mode_active():
+                self.machine.confirm_manual_takeover()
+                self.cancel_landing()
+                self._publish_all()
+                return
+            if self.driver is not None and self.machine.state in MissionState.FLIGHT:
                 self.driver.tick()
-            elif (self.machine.state == MissionState.ABORT_LAND and
-                    self.machine.active and not self._abort_land_issued):
-                self._abort_land_issued = True
-                ok, reason = self.interfaces.set_mode("AUTO.LAND")
-                if not ok:
-                    rospy.logwarn("中止降落模式请求失败: %s", reason)
-
-    def _check_window(self):
-        """6 分钟共享窗口：首次 start 记起点，此后校验剩余 ≥ flight_budget（M1）。"""
-        timing = self.config["timing"]
-        if self._window_started is None:
-            self._window_started = rospy.Time.now()
-            return True, ""
-        used = (rospy.Time.now() - self._window_started).to_sec()
-        return guards.window_ok(used, timing["total_window"],
-                                timing["flight_budget"])
+            if self.machine.state in (MissionState.LAND,
+                                      MissionState.ABORT_LAND):
+                self._drive_landing()
+            self._publish_all()
 
     def _on_manual_takeover(self, unused_request):
-        """人工接管确认：仅 ABORT_LAND 态可用（空中断连/AUTO.LAND 失败时
-        操作员接管后的唯一出口，M4）。"""
+        """人工接管确认：任一飞行态立即停止 mission 自动控制。"""
         del unused_request
         with self._lock:
-            if self.machine.state != MissionState.ABORT_LAND:
+            if self.machine.state not in (MissionState.FLIGHT +
+                                          (MissionState.ABORT_LAND,)):
                 return TriggerResponse(
                     success=False,
                     message="当前状态不可人工接管：" + self.machine.state)
             self.machine.confirm_manual_takeover()
+            self.cancel_landing()
             self._publish_all()
         return TriggerResponse(success=True, message="已确认人工接管")
+
+    # ---- AUTO.LAND 与落地确认 ----
+
+    def begin_landing(self, target=None):
+        """进入 LAND/ABORT_LAND 时保存当前点，直到 FCU 确认 AUTO.LAND 前持续保持。"""
+        if self._landing_active:
+            return
+        if self.pose is not None:
+            position = self.pose.pose.position
+            target = ((position.x, position.y, position.z), self.coord.home_yaw)
+        if target is None:
+            target = ((0.0, 0.0, 0.0), self.coord.home_yaw)
+        self._landing_active = True
+        self._landing_target = target
+        self._landing_started = rospy.Time.now()
+        self._landing_last_request = None
+        self._landing_requests = 0
+        self._landing_mode_confirmed = False
+        self._landing_confirmation_started = False
+        self._landing_failure_reported = False
+        if self._landing_confirmation is not None:
+            self._landing_confirmation.reset()
+
+    def cancel_landing(self):
+        self._landing_active = False
+        self._landing_target = None
+        self._landing_started = None
+        self._landing_last_request = None
+        self._landing_requests = 0
+        self._landing_mode_confirmed = False
+        self._landing_confirmation_started = False
+        self._landing_failure_reported = False
+        if self._landing_confirmation is not None:
+            self._landing_confirmation.reset()
+
+    def _manual_mode_active(self):
+        return (self.fcu_state is not None and
+                guards.manual_mode_active(self.fcu_state.mode,
+                                          self.fcu_state.armed) and
+                self.machine.state in (MissionState.FLIGHT +
+                                       (MissionState.ABORT_LAND,)))
+
+    def _drive_landing(self):
+        if not self._landing_active:
+            self.begin_landing()
+        landing = self.config["landing"]
+        fcu_fresh = (self.fcu_state is not None and
+                     self.topic_age("fcu_state") <=
+                     self.config["timing"]["topic_timeout"]["fcu_state"])
+        mode_confirmed = (fcu_fresh and self.fcu_state.mode == "AUTO.LAND")
+        if mode_confirmed:
+            self._landing_mode_confirmed = True
+        if not self._landing_mode_confirmed:
+            self.interfaces.send_position(
+                self._landing_target[0], self._landing_target[1],
+                self.config["frames"]["mission_frame"])
+            now = rospy.Time.now()
+            due = (self._landing_last_request is None or
+                   (now - self._landing_last_request).to_sec() >=
+                   landing["mode_retry_seconds"])
+            if due and self._landing_requests < landing["mode_retry_count"]:
+                if not self._landing_confirmation_started:
+                    self._landing_confirmation.begin(self.extended_sequence)
+                    self._landing_confirmation_started = True
+                self._landing_last_request = now
+                self._landing_requests += 1
+                ok, reason = self.interfaces.set_mode("AUTO.LAND")
+                if not ok:
+                    rospy.logwarn("AUTO.LAND 请求 %d/%d 失败: %s",
+                                  self._landing_requests,
+                                  landing["mode_retry_count"], reason)
+            self._landing_timeout_if_needed("AUTO.LAND 未获 FCU 确认")
+            return
+        if not self._landing_confirmation_started:
+            self._landing_confirmation.begin(self.extended_sequence)
+            self._landing_confirmation_started = True
+        pose_z = None
+        if self.pose is not None and self.coord.ready:
+            pose_z = self.coord.map_to_field(
+                (self.pose.pose.position.x, self.pose.pose.position.y,
+                 self.pose.pose.position.z))[2]
+        velocity_z = (None if self.velocity is None else
+                      self.velocity.twist.linear.z)
+        landed = self._landing_confirmation.observe(
+            self.extended_sequence,
+            self.extended_state is not None and
+            self.extended_state.landed_state ==
+            ExtendedState.LANDED_STATE_ON_GROUND,
+            self.topic_age("extended_state"),
+            self.config["timing"]["topic_timeout"]["extended_state"],
+            self.fcu_state.armed, pose_z, self.topic_age("pose"),
+            self.config["timing"]["pose_timeout"], velocity_z,
+            self.topic_age("velocity"), landing["velocity_timeout"],
+            landing["max_height"], landing["max_vertical_speed"])
+        if landed:
+            if self.machine.state == MissionState.LAND:
+                self.machine.stage_done()
+            else:
+                self.machine.confirm_landed()
+            self.cancel_landing()
+            return
+        self._landing_timeout_if_needed("落地确认超时")
+
+    def _landing_timeout_if_needed(self, reason):
+        if self._landing_started is None or self._landing_failure_reported:
+            return
+        elapsed = (rospy.Time.now() - self._landing_started).to_sec()
+        if elapsed <= self.config["timing"]["land_confirm"]:
+            return
+        self._landing_failure_reported = True
+        if self.machine.state == MissionState.LAND:
+            self.machine.abort(reason + "，请立即人工接管")
+        rospy.logerr("%s；保持当前位置 setpoint，等待人工接管", reason)
 
     def _capture_home(self):
         """起飞时刻 map 位姿 + 偏航（起飞点局部归零锚点）。"""

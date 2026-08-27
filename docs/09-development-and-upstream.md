@@ -26,11 +26,12 @@
 
 | 工具 | 用途 |
 | --- | --- |
+| `setup_jetson_orin.sh` | 在 Jetson Orin Nano、Nano Super 或 NX 上完成软件部署 |
 | `install_ubuntu20.sh` | 安装 Ubuntu 20.04 与 ROS Noetic 依赖 |
-| `build.sh` | 执行默认比赛模式 catkin 增量构建 |
+| `build.sh` | 执行日常 catkin 增量构建 |
 | `build_full.sh` | 在独立目录执行全部源码包构建 |
 | `test_01_source.sh` | 静态结构和文档检查 |
-| `test_02_build.sh` | 比赛构建、系统包来源与包发现检查 |
+| `test_02_build.sh` | 比赛运行构建、系统包来源与包发现检查 |
 | `test_03_unit.sh` | 纯单元测试 |
 | `test_04_simulation.sh` | 简化假飞控 rostest |
 | `test_05_hardware_readonly.sh` | 真实设备只读检查 |

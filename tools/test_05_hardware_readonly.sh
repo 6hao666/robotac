@@ -10,7 +10,7 @@ source /opt/ros/noetic/setup.bash
 set -u
 
 echo "本检查只读取设备文件和 ROS 话题，不发布消息，不调用飞控服务。"
-for device in /dev/robotac_px4 /dev/robotac_rgb_camera /dev/robotac_servo; do
+for device in /dev/ttyACM0 /dev/robotac_rgb_camera /dev/robotac_servo; do
   if [[ ! -e "${device}" ]]; then
     echo "缺少设备：${device}" >&2
     exit 1
