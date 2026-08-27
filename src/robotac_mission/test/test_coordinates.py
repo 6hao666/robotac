@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """coordinates 单元测试：起飞点局部归零（方案 §16.2/§16.10）。"""
 
+import math
 import unittest
 
 from robotac_mission.coordinates import Coordinates, limit_step
@@ -41,6 +42,12 @@ class CoordinatesTest(unittest.TestCase):
         # 场地移动 (0, 1.0) = map 移动同量（平移不变）
         self.assertEqual(coord.map_to_field((10.0, 21.0, 30.0)),
                          (2.0, 1.8, 0.0))
+
+    def test_body_yaw_does_not_rotate_map_aligned_field(self):
+        coord = Coordinates()
+        coord.capture_home((10.0, 20.0, 30.0), (2.0, 0.8), yaw=math.pi / 2)
+        self.assertEqual(coord.field_to_map((0.475, 1.75, 0.8)),
+                         (8.475, 20.95, 30.8))
 
     def test_capture_validates_length(self):
         coord = Coordinates()

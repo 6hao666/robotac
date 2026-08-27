@@ -25,6 +25,7 @@ class FlightDriver(FlightStageMixin):
         self.return_point = config["waypoints"]["return"][0]
         self.tag = TagTracker(config, ctx.tf_buffer)
         self._health = {"soft_bad": 0, "prev_pose": None}
+        self._last_target = None
         self._reset_stage()
 
     def start(self, home_map_xyz, home_yaw):
@@ -38,7 +39,8 @@ class FlightDriver(FlightStageMixin):
         """一个 20Hz 控制步。返回当前机器状态。"""
         if (self.ctx.fcu_state is not None and
                 guards.manual_mode_active(self.ctx.fcu_state.mode,
-                                          self.ctx.fcu_state.armed)):
+                                          self.ctx.fcu_state.armed) and
+                not self.awaiting_offboard_confirmation()):
             self.machine.confirm_manual_takeover()
             self.ctx.cancel_landing()
             self.ctx.publish_all()
@@ -99,18 +101,21 @@ class FlightDriver(FlightStageMixin):
              self.ctx.pose.pose.position.z))
 
     def _send(self, target_field, is_map=False):
-        # 速度限幅：单 tick 位移 ≤ max_speed/rate（M5），令 limits.max_speed 生效
+        # 速度限幅：单 tick 位移 ≤ max_speed/rate（M5）。
+        #
+        # 必须从“上一次发布的 setpoint”推进，不能从实时 pose 推进：后者会把
+        # 位置误差永远钳在一个 tick 的距离（例如 0.6 / 20 = 3cm），PX4 几乎
+        # 不会加速，表现为悬停并被估计漂移带走。
         max_step = (self.config["limits"]["max_speed"] /
                     self.config["control"]["rate_hz"])
-        target = target_field
-        pose_field = self._field_pose()
-        if pose_field is not None and not is_map:
-            target = limit_step(pose_field, target_field, max_step)
         if is_map:
             # 直接 map 坐标（相对爬升等，不走 field_to_map——home_map_z 会漂移）
-            target_map = tuple(target)
+            target_map = tuple(target_field)
         else:
-            target_map = self.coord.field_to_map(target)
+            target_map = self.coord.field_to_map(target_field)
+            if self._last_target is not None:
+                target_map = limit_step(self._last_target[0], target_map,
+                                        max_step)
         self.interfaces.send_position(
             target_map, self.coord.home_yaw,
             self.config["frames"]["mission_frame"])
@@ -146,7 +151,11 @@ class FlightDriver(FlightStageMixin):
         return False
 
     def _advance(self):
-        ok, message = self.machine.stage_done()
+        if (self.machine.state == "SEARCH_TAG" and
+                self.config["mission"].get("route_only", False)):
+            ok, message = self.machine.skip_to_return()
+        else:
+            ok, message = self.machine.stage_done()
         if not ok:
             self._abort(message)
             return
@@ -163,15 +172,26 @@ class FlightDriver(FlightStageMixin):
 
     def _reset_stage(self):
         self._takeoff_armed = False
+        self._takeoff_offboard_requested = False
+        self._takeoff_offboard_confirmed = False
+        self._takeoff_arm_requested = False
         self._takeoff_map = None
         self._servo_called = False
         self._land_requested = False
         self._index = 0
-        self._reached_since = self._last_target = None
+        # _last_target 是速度限幅的积分起点，跨阶段保留才能避免新航点首帧跳变。
+        # 新 FlightDriver 在 start 前创建，初始值仍为 None。
+        self._reached_since = None
         self._stage_start = self._now()
 
     def _stage_timeout(self, seconds):
         return self._now() - self._stage_start > seconds
+
+    def awaiting_offboard_confirmation(self):
+        """OFFBOARD 请求已发出但飞控尚未确认的短暂窗口。"""
+        return (self.machine.state == "TAKEOFF" and
+                self._takeoff_offboard_requested and
+                not self._takeoff_offboard_confirmed)
 
     @staticmethod
     def _now():

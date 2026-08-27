@@ -198,6 +198,8 @@ def validate(data):
         raise ConfigError("mission.dry_run 必须为布尔")
     if not isinstance(mission.get("flight_enabled"), bool):
         raise ConfigError("mission.flight_enabled 必须为布尔")
+    if "route_only" in mission and not isinstance(mission["route_only"], bool):
+        raise ConfigError("mission.route_only 必须为布尔")
 
 
 def _is_number(value):
