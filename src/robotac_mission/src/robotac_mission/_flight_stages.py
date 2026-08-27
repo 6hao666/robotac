@@ -49,12 +49,16 @@ class FlightStageMixin(object):
 
         2026-08-23 修复：FC z 估计漂移使 home_map_z 失效，绝对场地坐标的起飞
         setpoint z 偏低（实测最高 0.15m，应为 1.0m）→ 飞控只看到小爬升误差 →
-        油门不够不升空 → 起飞超时。改为每 tick 按当前 FC z + 起飞高度发目标。"""
+        油门不够不升空 → 起飞超时。改为每 tick 按当前 FC z + 起飞高度发目标。
+        2026-08-27 修复：x/y 锚定起飞点（home_map 固定）。原 x/y 跟随 pose，
+        估计水平漂移时 setpoint 跟着漂 → PX4 看不到水平误差 → 起飞守位不修正
+        → 物理漂移（map -x 0.3m+）。仅 z 需相对爬升，x/y 必须锚定固定点。"""
         target = list(self.takeoff_target)  # [x, y, z] 场地坐标（x/y=起飞点）
         if self.ctx.pose is not None:
             # 场地 z 映射为 map z：当前 FC z + 起飞高度（相对爬升）
-            target[0] = self.ctx.pose.pose.position.x
-            target[1] = self.ctx.pose.pose.position.y
+            if self.coord.ready:
+                target[0] = self.coord.home_map[0]   # 锚定起飞 x
+                target[1] = self.coord.home_map[1]   # 锚定起飞 y
             target[2] = self.ctx.pose.pose.position.z + target[2]
         return target
 
