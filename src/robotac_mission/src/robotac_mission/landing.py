@@ -38,8 +38,8 @@ class LandingConfirmation(object):
             bool(on_ground) and
             0.0 <= extended_age <= extended_timeout and
             not bool(armed) and
-            pose_z is not None and 0.0 <= pose_age <= pose_timeout and
-            float(pose_z) <= max_height and
+            # 2026-08-28: 移除 pose_z <= max_height 判定。FAST-LIO z 漂移不可靠，
+            # 落地确认只信飞控 on_ground + 未上锁 + 垂直速度稳定。
             vertical_speed is not None and
             0.0 <= velocity_age <= velocity_timeout and
             abs(float(vertical_speed)) <= max_vertical_speed)

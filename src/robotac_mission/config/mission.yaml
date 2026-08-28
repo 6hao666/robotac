@@ -17,7 +17,7 @@ limits:
   field_min: [0.0, 0.0, 0.0]     # 有效飞行区下界（规则几何，待 map 原点标定校准）
   field_max: [4.0, 5.0, 3.0]     # 有效飞行区上界 4.00m x 5.00m x 3.00m
   field_tolerance: 0.1           # 边界容差 m（2026-08-23：防 map_to_field 浮点误差误报越界）
-  max_speed: 0.2                 # 2026-08-27: 0.2合适(与origin一致)。达不到速是旧 setpoint 钳位 bug, 已修 flight_driver._last_target
+  max_speed: 0.2                 # 保持 0.2（不调速度）
 
 obstacle:                        # 固定障碍（规则几何，参考值）
   center: [2.00, 2.50]           # 场地中部；结合 2.10m 长度与两侧 0.95m 净宽确定
@@ -55,8 +55,8 @@ timing:
     transit: 30.0
     search: 30.0
     align: 20.0
-    release: 10.0
-    return: 30.0
+    release: 30.0               # 三阶段（下降→释放确认→爬回）需更长
+    return: 45.0
     land: 20.0
 
 landing:                         # AUTO.LAND 握手与落地事实确认（安全关键）
@@ -83,7 +83,7 @@ tag:
   stable_time: 1.0               # 连续稳定时间 s，待实机验证
   stable_samples: 5              # 多样本均值窗口（示例 StableTag 5 样本），待实机验证
 
-waypoints:                       # z 相对起飞桌面；物理离地高度=0.75+0.55=1.30m
+waypoints:                       # z 相对起飞桌面；巡航 0.55m，投放下降 0.25m 到 0.30m 释放
   takeoff: [2.0, 0.80, 0.55]     # 起降台上方 0.55m
   # 障碍物横跨场地中部：x=[0.95, 3.05]、y=[2.425, 2.575]。
   # 左侧侧隙 x=[0, 0.95]；常规航点 x=0.475，靠障碍的两个点内移 10cm 至 0.575。
@@ -99,11 +99,12 @@ waypoints:                       # z 相对起飞桌面；物理离地高度=0.7
     gap_enter: [0.575, 2.70, 0.55]
     gap_cross: [0.575, 2.30, 0.55]
     resume: [0.475, 1.75, 0.55]
-  return: [[2.0, 0.80, 0.55]]    # 起降台上方 0.55m
+  return: [[2.0, 0.80, 0.55]]    # 起降台上方 0.75m
 
 payload:
   enable: true                   # 固定终点投放必须启用
   retry_count: 0
+  release_descend: 0.25          # 投放前从巡航 0.55 下降 0.25m 到 0.30m 释放，确认脱离后爬回再返航
   offset: [-0.04, 0.0, -0.09]    # 舵机相对 body 偏移 [x,y,z]（2026-08-26 实测：机尾 4cm、机下 9cm、中轴线 y=0）
   drop_target: [2.0, 4.24, 0.55] # 载荷的固定落点；飞机中心终点按 offset 反向补偿
 

@@ -131,14 +131,24 @@ class FlightDriver(FlightStageMixin):
         self._last_target = (target_map, self.coord.home_yaw)
 
     def _arrived_map(self, target_map, hold):
-        """相对 map 目标到达判定（用于相对爬升起飞）。"""
+        """相对 map 目标到达判定（用于相对爬升起飞）。
+
+        2026-08-28: 起飞到达判定不再依赖 z（FAST-LIO z 漂移不可靠）。改用
+        xy 到位 + 飞控判定已离地（extended_state.landed_state==IN_AIR，由飞控
+        加速度计可靠判离地）。爬升指令照发，飞控会响应。
+        """
         if self.ctx.pose is None:
             return False
         current = (self.ctx.pose.pose.position.x,
                    self.ctx.pose.pose.position.y,
                    self.ctx.pose.pose.position.z)
         tolerance = self.config["control"]["position_tolerance"]
-        if math.dist(current, target_map[:3]) <= tolerance:
+        dx = current[0] - target_map[0]
+        dy = current[1] - target_map[1]
+        # mavros_msgs/ExtendedState.LANDED_STATE_IN_AIR == 2
+        airborne = (self.ctx.extended_state is not None and
+                    self.ctx.extended_state.landed_state == 2)
+        if math.hypot(dx, dy) <= tolerance and airborne:
             if self._reached_since is None:
                 self._reached_since = self._now()
             if self._now() - self._reached_since >= hold:
@@ -147,12 +157,21 @@ class FlightDriver(FlightStageMixin):
             self._reached_since = None
         return False
 
-    def _arrived(self, target_field, hold):
+    def _arrived(self, target_field, hold, include_z=False):
         pose_field = self._field_pose()
         if pose_field is None:
             return False
         tolerance = self.config["control"]["position_tolerance"]
-        if math.dist(pose_field, target_field) <= tolerance:
+        if include_z:
+            # 投放下降/爬升：高度机动，须同时到位 z（相对下降，不受绝对 z 漂影响）
+            dist = math.dist(pose_field, target_field)
+        else:
+            # 2026-08-28: 导航到达判定只看 xy。FAST-LIO z 漂移不可靠（静置漂
+            # 0.6m），按 map 走位即可；z 不作为导航判据（起飞用 _arrived_map 仍含 z）。
+            dx = pose_field[0] - target_field[0]
+            dy = pose_field[1] - target_field[1]
+            dist = math.hypot(dx, dy)
+        if dist <= tolerance:
             if self._reached_since is None:
                 self._reached_since = self._now()
             return self._now() - self._reached_since >= hold
@@ -186,6 +205,10 @@ class FlightDriver(FlightStageMixin):
         self._takeoff_arm_requested = False
         self._takeoff_map = None
         self._servo_called = False
+        # 投放下降/回升阶段（投放前降 40cm 提高落点精度，确认脱离后爬回巡航高度再返航）
+        self._release_descended = False
+        self._release_ascended = False
+        self._release_base_z = None   # 进入 RELEASE 时的当前 z，下降/爬升相对它（抗 z 漂）
         self._land_requested = False
         self._index = 0
         # route_only 终点可配置为多个近距离航点；每次进入 SEARCH 从首点开始。

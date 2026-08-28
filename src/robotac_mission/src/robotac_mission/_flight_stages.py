@@ -164,6 +164,37 @@ class FlightStageMixin(object):
 
     def _stage_release(self):
         timing = self.config["timing"]
+        descend = float(self.config["payload"].get("release_descend", 0.0))
+        release_hold = timing.get("release_hold", 1.0)
+
+        # 捕获投放基准 z（field 系，相对起飞点）；下降/爬升都相对它（抗 z 漂）。
+        if self._release_base_z is None and self.ctx.pose is not None:
+            self._release_base_z = (self.ctx.pose.pose.position.z -
+                                    self.coord.home_map[2])
+
+        def _low_target():
+            point = self._release_target(0.0)
+            if self._release_base_z is not None:
+                point[2] = self._release_base_z - descend
+            return point
+
+        def _cruise_target():
+            point = self._release_target(0.0)
+            if self._release_base_z is not None:
+                point[2] = self._release_base_z
+            return point
+
+        # 阶段 A：先下降到投放低位（相对基准 z 下降 descend，落点精度）
+        if not self._release_descended:
+            low = _low_target()
+            self._send(low)
+            if self._arrived(low, release_hold, include_z=True):
+                self._release_descended = True
+            elif self._stage_timeout(timing["stage_timeout"]["release"]):
+                self._abort("投放下降超时")
+            return
+
+        # 阶段 B：低位到位后触发舵机释放
         if not self._servo_called:
             self._servo_called = True
             # 预审需要：打印假Tag检测日志
@@ -184,30 +215,41 @@ class FlightStageMixin(object):
             if not ok:
                 self._abort(reason)
                 return
-        release = self._release_target()   # 投放点 = 终点航点 - 舵机偏移（补偿）
-        self._send(release)                # 释放后保持，等待货物脱离
+
+        # 释放后保持低位，等待货物完全脱离确认
+        low = _low_target()
+        self._send(low)
         if not self.ctx.payload_confirmed_after(self._release_sequence):
             if self._stage_timeout(timing["stage_timeout"]["release"]):
                 self._abort("投放后未收到货物完全脱离确认")
             return
-        if self._arrived(release, timing["release_hold"]):
-            self._advance()
-        elif self._stage_timeout(timing["stage_timeout"]["release"]):
-            self._abort("投放等待超时")
 
-    def _release_target(self):
-        """投放目标：舵机偏移补偿。
+        # 阶段 C：确认脱离后爬回巡航高度（基准 z），再进入返航
+        if not self._release_ascended:
+            cruise = _cruise_target()
+            self._send(cruise)
+            if self._arrived(cruise, release_hold, include_z=True):
+                self._release_ascended = True
+                self._advance()
+            elif self._stage_timeout(timing["stage_timeout"]["release"]):
+                self._abort("投放后爬升超时")
+            return
+
+    def _release_target(self, descend=0.0):
+        """投放目标：舵机偏移补偿 + 可选投放前下降高度。
 
         drop_point 是载荷落点；最后一个终点航点已预先按此偏移补偿，飞机到达
         后才会进入 RELEASE。舵机相对 body
         有水平偏移 payload.offset（2026-08-26 实测：机尾 -0.04m），若飞机几何
         中心对准投放中心，舵机落点会偏 4cm。补偿：飞机往反方向偏 offset 的水平
         分量，使舵机正好在投放中心正上方（C4 落点精度）。
+        ``descend``：投放前从巡航高度下降的米数（payload.release_descend），
+        越低落点越准；确认货物脱离后再爬回巡航高度。
         """
         offset = self.config["payload"].get("offset", [0.0, 0.0, 0.0])
         return [self.drop_point[0] - offset[0],
                 self.drop_point[1] - offset[1],
-                self.drop_point[2]]
+                self.drop_point[2] - descend]
 
     def _stage_land(self):
         self.ctx.begin_landing(self._last_target)

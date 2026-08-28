@@ -55,8 +55,8 @@ timing:
     transit: 60.0
     search: 30.0
     align: 20.0
-    release: 10.0
-    return: 60.0
+    release: 30.0               # 三阶段（下降→释放确认→爬回）需更长
+    return: 45.0
     land: 20.0
 
 landing:                         # AUTO.LAND 握手与落地事实确认（安全关键）
@@ -104,6 +104,7 @@ waypoints:                       # z 相对起飞桌面；物理离地高度=0.7
 payload:
   enable: false                  # 本轮固定 false
   retry_count: 0
+  release_descend: 0.25          # 投放前从巡航 0.55 下降 0.25m 到 0.30m 释放，确认脱离后爬回再返航
   offset: [-0.04, 0.0, -0.09]    # 舵机相对 body 偏移 [x,y,z]（2026-08-26 实测：机尾 4cm、机下 9cm、中轴线 y=0）
 
 mission:

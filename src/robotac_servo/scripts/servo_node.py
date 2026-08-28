@@ -37,6 +37,11 @@ class ServoNode(object):
                                          latch=True)
         self.command_ok_pub = rospy.Publisher("~command_ok", Bool, queue_size=1,
                                               latch=True)
+        # 释放确认：释放动作成功完成后发 True（"舵机已到释放位"）；回到夹持位发
+        # False。语义=舵机动作完成，物理脱离由外部视频核验。非 latch：重复释放/
+        # mission 重启不残留旧确认。
+        self.release_confirmed_pub = rospy.Publisher(
+            "~release_confirmed", Bool, queue_size=1, latch=False)
         self.service = rospy.Service("~set_released", SetBool,
                                      self._set_released)
         self.timer = rospy.Timer(rospy.Duration(1.0), self._health_check)
@@ -117,6 +122,8 @@ class ServoNode(object):
                 return SetBoolResponse(False, "舵机动作失败")
             self.last_state = requested_state
             self._publish(True, requested_state, True)
+            self.release_confirmed_pub.publish(
+                Bool(data=(requested_state == "released")))
             rospy.loginfo("舵机动作完成: %s", requested_state)
             return SetBoolResponse(True, requested_state)
 
