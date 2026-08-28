@@ -72,19 +72,19 @@ tag:
   stable_time: 1.0
   stable_samples: 5
 waypoints:
-  takeoff: [2.0, 0.80, 1.30]
+  takeoff: [2.0, 0.80, 0.55]
   obstacle_routing:
-    approach: [0.475, 1.75, 1.30]
-    gap_enter: [0.475, 2.30, 1.30]
-    gap_cross: [0.475, 2.70, 1.30]
-    resume: [0.475, 3.25, 1.30]
-  mission: [[2.0, 4.20, 1.30]]
+    approach: [0.475, 1.75, 0.55]
+    gap_enter: [0.475, 2.30, 0.55]
+    gap_cross: [0.475, 2.70, 0.55]
+    resume: [0.475, 3.25, 0.55]
+  mission: [[2.0, 4.20, 0.55]]
   return_routing:
-    approach: [0.475, 3.25, 1.30]
-    gap_enter: [0.475, 2.70, 1.30]
-    gap_cross: [0.475, 2.30, 1.30]
-    resume: [0.475, 1.75, 1.30]
-  return: [[2.0, 0.80, 1.30]]
+    approach: [0.475, 3.25, 0.55]
+    gap_enter: [0.475, 2.70, 0.55]
+    gap_cross: [0.475, 2.30, 0.55]
+    resume: [0.475, 1.75, 0.55]
+  return: [[2.0, 0.80, 0.55]]
 payload:
   enable: false
   retry_count: 0
@@ -157,15 +157,15 @@ class ConfigTest(unittest.TestCase):
             config["timing"]["topic_timeout"]["estimator_status"], 2.0)
 
     def test_waypoint_out_of_field(self):
-        text = _minimal().replace("takeoff: [2.0, 0.80, 1.30]",
-                                  "takeoff: [2.0, 9.0, 1.30]")
+        text = _minimal().replace("takeoff: [2.0, 0.80, 0.55]",
+                                  "takeoff: [2.0, 9.0, 0.55]")
         with self.assertRaises(ConfigError):
             self._load(text)
 
     def test_tabletop_waypoint_below_table_rejected(self):
         # 飞行航点必须保留桌面上方 0.55m 的固定净空。
-        text = _minimal().replace("takeoff: [2.0, 0.80, 1.30]",
-                                  "takeoff: [2.0, 0.80, 1.29]")
+        text = _minimal().replace("takeoff: [2.0, 0.80, 0.55]",
+                                  "takeoff: [2.0, 0.80, 0.54]")
         with self.assertRaises(ConfigError):
             self._load(text)
 
@@ -190,8 +190,8 @@ class ConfigTest(unittest.TestCase):
 
     def test_routing_through_obstacle_clearance_rejected(self):
         text = _minimal().replace(
-            "gap_cross: [0.475, 2.70, 1.30]",
-            "gap_cross: [2.0, 2.70, 1.30]", 1)
+            "gap_cross: [0.475, 2.70, 0.55]",
+            "gap_cross: [2.0, 2.70, 0.55]", 1)
         with self.assertRaises(ConfigError):
             self._load(text)
 

@@ -32,8 +32,8 @@ _TOPIC_TIMEOUT_KEYS = (
 
 _ROUTING_KEYS = ("approach", "gap_enter", "gap_cross", "resume")
 
-# 当前场地约定：机体所有飞行航点保持在桌面上方 0.55m。
-_TABLE_FLIGHT_CLEARANCE = 0.55
+# 坐标系以起飞桌面为 z=0；所有飞行航点保持在桌面上方 0.55m。
+_RELATIVE_FLIGHT_CLEARANCE = 0.55
 
 
 def load_config(path):
@@ -176,10 +176,10 @@ def validate(data):
         obstacle_center, obstacle_size, obstacle["route_clearance"],
         "返程")
 
-    # 全部飞行航点均须保持在桌面上方 0.55m：降低顶部防护网碰撞风险，同时
-    # 保留对桌面的固定净空，不再把旧的 0.75m 直接当作飞行高度下限。
-    table_height = tables["height"]
-    minimum_flight_height = table_height + _TABLE_FLIGHT_CLEARANCE
+    # field z 是相对起飞桌面的高度：field_to_map 会把它加到 home_map.z。
+    # 因此物理离地高度为 tables.height + field z；不能把桌高再加进 field z，
+    # 否则起飞阶段会从桌面额外爬升 1.30m。
+    minimum_flight_height = _RELATIVE_FLIGHT_CLEARANCE
     flight_points = [("waypoints.takeoff", takeoff)]
     for name in ("obstacle_routing", "return_routing"):
         flight_points.extend(
@@ -192,8 +192,8 @@ def validate(data):
     for label, point in flight_points:
         if point[2] < minimum_flight_height:
             raise ConfigError(
-                "%s z=%g 低于桌面上方 %.2fm 的最低飞行高度 %g"
-                % (label, point[2], _TABLE_FLIGHT_CLEARANCE,
+                "%s z=%g 低于相对起飞桌面 %.2fm 的最低飞行高度 %g"
+                % (label, point[2], _RELATIVE_FLIGHT_CLEARANCE,
                    minimum_flight_height))
 
     payload = data["payload"]

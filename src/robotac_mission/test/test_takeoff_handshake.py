@@ -161,8 +161,8 @@ class FixedPointDropStageTest(unittest.TestCase):
             "timing": {"waypoint_hold": 1.0,
                        "stage_timeout": {"search": 20.0}},
         })
-        driver.mission_point = [2.0, 4.20, 1.30]
-        driver.mission_points = ([2.0, 4.20, 1.30],)
+        driver.mission_point = [2.0, 4.20, 0.55]
+        driver.mission_points = ([2.0, 4.20, 0.55],)
         driver._mission_index = 0
         driver.tag = SimpleNamespace(update=lambda *unused: (_ for _ in ()).throw(
             AssertionError("fixed_point_drop must not read Tag")))
@@ -173,15 +173,15 @@ class FixedPointDropStageTest(unittest.TestCase):
         driver._stage_search()
         driver._stage_align()
 
-        self.assertEqual(driver.sent[-1], ((2.0, 4.20, 1.30), False))
+        self.assertEqual(driver.sent[-1], ((2.0, 4.20, 0.55), False))
         self.assertEqual(advanced, [True, True])
 
     def test_release_target_uses_last_endpoint_with_servo_offset(self):
         driver = _Driver()
-        driver.drop_point = [2.0, 4.24, 1.30]
+        driver.drop_point = [2.0, 4.24, 0.55]
         driver.config["payload"] = {"offset": [-0.04, 0.0, -0.09]}
 
-        self.assertEqual(driver._release_target(), [2.04, 4.24, 1.30])
+        self.assertEqual(driver._release_target(), [2.04, 4.24, 0.55])
 
 
 if __name__ == "__main__":
