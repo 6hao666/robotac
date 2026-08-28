@@ -3,6 +3,8 @@
 source /opt/ros/noetic/setup.bash
 source /home/yundrone/robotac_ws/devel/setup.bash
 BRINGUP_PATH=$(rospack find robotac_bringup)
+# 等系统时钟同步（Jetson 开机 1970，组件时间戳会错）
+bash ${BRINGUP_PATH}/scripts/wait_clock.sh
 # 先加载配置到参数服务器
 rosparam load ${BRINGUP_PATH}/config/apriltag/settings.yaml /apriltag_detector
 rosparam load ${BRINGUP_PATH}/config/apriltag/tags.yaml /apriltag_detector

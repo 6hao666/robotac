@@ -3,6 +3,8 @@
 source /opt/ros/noetic/setup.bash
 source /home/yundrone/robotac_ws/devel/setup.bash
 BRINGUP_PATH=$(rospack find robotac_bringup)
+# 等系统时钟同步（Jetson 开机 1970，组件时间戳会错）
+bash ${BRINGUP_PATH}/scripts/wait_clock.sh
 exec /opt/ros/noetic/lib/mavros/mavros_node \
   _fcu_url:=serial:///dev/robotac_px4:921600 \
   _gcs_url:=udp://0.0.0.0:14555@192.168.1.100:14550 \

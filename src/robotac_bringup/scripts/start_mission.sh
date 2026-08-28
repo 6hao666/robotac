@@ -2,6 +2,8 @@
 # Mission启动脚本（处理PYTHONPATH）
 source /opt/ros/noetic/setup.bash
 source /home/yundrone/robotac_ws/devel/setup.bash
+# 等系统时钟同步（Jetson 开机 1970，组件时间戳会错）
+bash /home/yundrone/robotac_ws/src/robotac_bringup/scripts/wait_clock.sh
 # 关键：追加PYTHONPATH，不能覆盖
 export PYTHONPATH=/home/yundrone/robotac_ws/src/robotac_mission/src:${PYTHONPATH}
 exec python3 /home/yundrone/robotac_ws/src/robotac_mission/scripts/mission_node.py \

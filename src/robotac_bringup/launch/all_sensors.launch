@@ -5,6 +5,10 @@
        包含4个节点 + error_logger
        ======================================== -->
 
+  <!-- 0. 时钟同步校验（Jetson 开机 1970；start_*.sh 内也各自等，此处前置提示） -->
+  <node name="wait_clock" pkg="robotac_bringup" type="wait_clock.sh"
+        output="screen" respawn="false"/>
+
   <!-- 1. 原有的传感器启动（lidar + camera + TF桥） -->
   <include file="$(find robotac_bringup)/launch/sensors.launch">
     <arg name="video_device" value="/dev/robotac_rgb_camera"/>
