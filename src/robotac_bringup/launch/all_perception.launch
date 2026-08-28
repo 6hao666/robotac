@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- ========================================
+       感知与定位层
+       包含3个节点 + pose_logger
+       ======================================== -->
+
+  <!-- 1. FAST-LIO建图 -->
+  <include file="$(find robotac_bringup)/launch/fastlio_mid360s.launch">
+    <arg name="rviz" value="false"/>
+  </include>
+
+  <!-- 2. Vision定位桥 -->
+  <include file="$(find robotac_localization)/launch/vision_to_px4.launch"/>
+
+  <!-- 3. 位置日志记录器（0.5秒打印一次） -->
+  <node name="pose_logger" pkg="robotac_bringup" type="pose_logger.py"
+        output="screen" respawn="false"/>
+
+  <!-- 启动完成提示 -->
+  <node name="perception_startup_marker" pkg="rostopic" type="rostopic"
+        args="pub -1 /startup_status std_msgs/String 'data: STARTUP_all_perception_complete'"
+        output="screen"/>
+
+</launch>

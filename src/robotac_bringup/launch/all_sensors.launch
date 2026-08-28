@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- ========================================
+       传感器层 + MAVROS + AprilTag
+       包含4个节点 + error_logger
+       ======================================== -->
+
+  <!-- 1. 原有的传感器启动（lidar + camera + TF桥） -->
+  <include file="$(find robotac_bringup)/launch/sensors.launch">
+    <arg name="video_device" value="/dev/robotac_rgb_camera"/>
+  </include>
+
+  <!-- 2. MAVROS（直起二进制，绕过find_node bug） -->
+  <node name="mavros" pkg="robotac_bringup" type="start_mavros.sh" 
+        output="screen" respawn="false"/>
+
+  <!-- 3. AprilTag（直起二进制，绕过find_node bug） -->
+  <node name="apriltag_detector" pkg="robotac_bringup" type="start_apriltag.sh"
+        output="screen" respawn="false"/>
+
+  <!-- 4. 错误日志过滤器（监控全局ERROR和WARN） -->
+  <node name="error_logger" pkg="robotac_bringup" type="error_logger.py"
+        output="screen" respawn="false"/>
+
+  <!-- 启动完成提示 -->
+  <node name="sensors_startup_marker" pkg="rostopic" type="rostopic"
+        args="pub -1 /startup_status std_msgs/String 'data: STARTUP_all_sensors_complete'"
+        output="screen"/>
+
+</launch>

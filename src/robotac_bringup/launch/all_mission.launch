@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- ========================================
+       任务执行层
+       包含2个节点：mission + servo
+       ======================================== -->
+
+  <!-- 1. Servo（用绝对路径include，绕过multiple files问题） -->
+  <include file="/home/yundrone/robotac_ws/src/robotac_servo/launch/servo.launch">
+    <arg name="port" value="/dev/robotac_servo"/>
+  </include>
+
+  <!-- 2. Mission（直起python3，处理PYTHONPATH） -->
+  <node name="robotac_mission" pkg="robotac_bringup" type="start_mission.sh"
+        output="screen" respawn="false"/>
+
+  <!-- 启动完成提示 -->
+  <node name="mission_startup_marker" pkg="rostopic" type="rostopic"
+        args="pub -1 /startup_status std_msgs/String 'data: STARTUP_all_mission_complete'"
+        output="screen"/>
+
+</launch>

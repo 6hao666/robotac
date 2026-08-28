@@ -190,8 +190,8 @@ class ConfigTest(unittest.TestCase):
 
     def test_routing_through_obstacle_clearance_rejected(self):
         text = _minimal().replace(
-            "gap_cross: [0.475, 2.70, 0.8]",
-            "gap_cross: [2.0, 2.70, 0.8]", 1)
+            "gap_cross: [0.475, 2.70, 1.30]",
+            "gap_cross: [2.0, 2.70, 1.30]", 1)
         with self.assertRaises(ConfigError):
             self._load(text)
 

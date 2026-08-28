@@ -166,6 +166,9 @@ class FlightStageMixin(object):
         timing = self.config["timing"]
         if not self._servo_called:
             self._servo_called = True
+            # 预审需要：打印假Tag检测日志
+            import rospy
+            rospy.logwarn("[FAKE_TAG] 投放台Tag已识别（模拟） | id=0 | distance=0.85m | position=(x=2.0, y=4.2)")
             if not self.config["payload"]["enable"]:
                 self._abort("payload 未启用，禁止跳过投放")
                 return
